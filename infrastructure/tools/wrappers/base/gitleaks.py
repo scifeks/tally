@@ -98,18 +98,21 @@ class BaseGitleaksTool(ToolInterface):
 
     def build_execution_passes(self, context: ExecutionContext) -> list[ExecutionPass]:
         assert context.repo is not None
-        repo_path = context.registry.get_repo_path(self.name, context.repo)
-        exclude = build_excluded_dirs(context.repo)
+        assert context.service is not None
+        repo_path = context.registry.get_service_path(
+            self.name, context.service, context.repo.path
+        )
+        exclude = build_excluded_dirs(context.service)
 
         shared_kwargs: dict[str, object] = {"repo_path": repo_path}
         # .git must always be excluded: the dir scan walks the filesystem
         # and would crawl .git/objects/pack (potentially GBs of binary).
         all_excludes = [".git"] + exclude
         toml_content = _build_gitleaks_toml(all_excludes, extend_path=None)
-        if context.repo.docker_path and context.repo.path:
+        if context.service.docker_path and context.repo.path:
             config_file = Path(context.repo.path) / ".tally_gitleaks.toml"
             config_file.write_text(toml_content)
-            container_cfg = f"{context.repo.docker_path}/.tally_gitleaks.toml"
+            container_cfg = f"{context.service.docker_path}/.tally_gitleaks.toml"
             shared_kwargs["config_path"] = container_cfg
         else:
             fd, tmp = tempfile.mkstemp(suffix=".toml", prefix="tally_gitleaks_")

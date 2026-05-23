@@ -63,12 +63,16 @@ def iter_oas3_rows(
 
     Paths that look like vendor / dependency directories are dropped at
     this gate (single ingest boundary for every URL provider) so they
-    never enter ``url_findings``. ``Repository.ignore_dirs`` is folded
+    never enter ``url_findings``. Service ignore_dirs are folded
     in alongside the static indicators so user-configured exclusions
     also apply to URL discovery.
     """
     base_protocol, base_host, base_port = resolve_base(doc, ctx)
-    extra_indicators = tuple(getattr(ctx.repo, "ignore_dirs", ()) or ())
+    extra_indicators = (
+        tuple(ctx.repo.services[0].ignore_dirs)
+        if ctx.repo.services and ctx.repo.services[0].ignore_dirs
+        else ()
+    )
     paths = doc.get("paths") or {}
     if not isinstance(paths, dict):
         return
@@ -110,7 +114,7 @@ def resolve_base(
 
     Order of precedence:
     1. First entry of ``doc['servers']`` (if it has a parseable URL).
-    2. First entry of ``ctx.repo.base_urls``.
+    2. First entry of service base_urls from ctx.repo.services[0].
     3. Hard fallback: ``https://localhost:443``.
     """
     servers = doc.get("servers")
@@ -120,7 +124,9 @@ def resolve_base(
             url = first.get("url")
             if isinstance(url, str) and "://" in url:
                 return parse_url(url)
-    base_urls = list(ctx.repo.base_urls or [])
+    base_urls = []
+    if ctx.repo.services and ctx.repo.services[0].base_urls:
+        base_urls = list(ctx.repo.services[0].base_urls)
     if base_urls:
         return parse_url(base_urls[0])
     return ("https", "localhost", 443)

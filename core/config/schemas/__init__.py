@@ -16,6 +16,7 @@ from .global_config import (
 from .local_inference_config import LocalInferenceConfig
 from .opencode_config import OpenCodeConfig
 from .project_config import ProjectConfig
+from .repo_service import RepoService
 from .repository import _VALID_REPO_TYPES, RepoAuth, Repository, build_excluded_dirs
 
 __all__ = [
@@ -32,6 +33,7 @@ __all__ = [
     "OpenCodeConfig",
     "ProjectConfig",
     "RepoAuth",
+    "RepoService",
     "Repository",
     "_VALID_REPO_TYPES",
     "build_excluded_dirs",

@@ -92,13 +92,7 @@ class FindingRepository(FindingRepositoryPort):
             conn.executemany(sql, rows_with_ts)
 
     def delete_findings(self, tools: list[str] | None = None) -> None:
-        """Delete findings from the store.
-
-        tools=None: DELETE all rows from all tables (findings, run_tools,
-                    scan_runs, triage_batches, tool_audit_log).
-        tools=[...]: DELETE findings, triage_batches, and tool_audit_log
-                     records for those tools only.
-        """
+        """Delete findings, scoping to specific tools when provided."""
         if tools is not None:
             return self.delete_findings_by_tool_name(tools)
 
@@ -110,15 +104,7 @@ class FindingRepository(FindingRepositoryPort):
             conn.execute("DELETE FROM scan_runs")
 
     def delete_findings_by_tool_name(self, tools: list[str]) -> None:
-        """Delete all records related to specific tool(s).
-
-        Deletes:
-        - Findings where tool IN (tools)
-        - Triage batches whose finding_ids are all from those findings
-        - Tool audit log entries for those tools
-
-        Does NOT delete: scan_runs, run_tools.
-        """
+        """Delete findings and related triage/audit rows for the given tools."""
         if not tools:
             return
 

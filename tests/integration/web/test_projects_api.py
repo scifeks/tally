@@ -9,6 +9,7 @@ import httpx
 import pytest
 import pytest_asyncio
 
+from core.config.schemas.repo_service import RepoService
 from core.config.schemas.repository import RepoAuth, Repository
 from infrastructure.store.connection import ConnectionFactory
 from infrastructure.store.repositories.findings import FindingRepository
@@ -52,11 +53,17 @@ _PROJECT_CONFIG: dict[str, Any] = {
 def _seed_repo() -> Repository:
     return Repository(
         name="test-repo",
-        type=["api"],
-        docker_path="/app",
-        container_name="test_container",
-        languages=["python"],
-        base_urls=["http://localhost"],
+        path="",
+        services=[
+            RepoService(
+                name="default",
+                type=["api"],
+                docker_path="/app",
+                container_name="test_container",
+                languages=["python"],
+                base_urls=["http://localhost"],
+            )
+        ],
         auth=RepoAuth(
             login_url="http://localhost/login",
             username="admin",
@@ -292,7 +299,7 @@ class TestRepositoriesV1:
         resp = await client.get(f"/api/v1/projects/{project_id}/repositories")
         assert resp.status_code == 200
         raw = resp.text
-        assert "auth" not in raw
+        assert "login_url" not in raw
         assert "super-secret-key" not in raw
         assert len(resp.json()["items"]) >= 1
 
@@ -327,14 +334,13 @@ class TestRepositoriesV1:
         )
         assert detail_resp.status_code == 200
         raw = detail_resp.text
-        assert "auth" not in raw
+        assert "login_url" not in raw
         assert "super-secret-password" not in raw
 
         body = detail_resp.json()
         assert body["id"] == repo_id
         assert body["name"] == target["name"]
-        assert body["type"] == target["type"]
-        assert body["languages"] == target["languages"]
+        assert body["services"] == target["services"]
 
     async def test_repository_detail_unknown_project_returns_404(
         self, projects_v1_client

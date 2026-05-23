@@ -67,8 +67,8 @@ class TestInterviewSingleRepo:
             repo, _pending = result
         assert repo is not None
         assert repo.path == str(repo_dir)
-        assert repo.docker_path == ""
-        assert repo.container_name == ""
+        assert repo.services[0].docker_path == ""
+        assert repo.services[0].container_name == ""
 
     def test_add_docker_repo(self, tmp_path: Path) -> None:
         repo_dir = tmp_path / "repo"
@@ -95,8 +95,8 @@ class TestInterviewSingleRepo:
             assert result is not None
             repo, _pending = result
         assert repo is not None
-        assert repo.docker_path == "/mnt/repo"
-        assert repo.container_name == "my-container"
+        assert repo.services[0].docker_path == "/mnt/repo"
+        assert repo.services[0].container_name == "my-container"
         assert repo.path == str(repo_dir)
 
     def test_add_invalid_mode_then_valid(self, tmp_path: Path) -> None:
@@ -123,7 +123,7 @@ class TestInterviewSingleRepo:
             assert result is not None
             repo, _pending = result
         assert repo is not None
-        assert repo.docker_path == ""
+        assert repo.services[0].docker_path == ""
 
     def test_add_nonexistent_path_retries(self, tmp_path: Path) -> None:
         repo_dir = tmp_path / "repo"
@@ -176,8 +176,8 @@ class TestInterviewSingleRepo:
             assert result is not None
             repo, _pending = result
         assert repo is not None
-        assert repo.test_dirs == ["tests"]
-        assert repo.ignore_dirs == []
+        assert repo.services[0].test_dirs == ["tests"]
+        assert repo.services[0].ignore_dirs == []
 
     def test_test_dirs_overridden_by_user(self, tmp_path: Path) -> None:
         repo_dir = tmp_path / "repo"
@@ -204,8 +204,8 @@ class TestInterviewSingleRepo:
             assert result is not None
             repo, _pending = result
         assert repo is not None
-        assert repo.test_dirs == ["spec", "e2e"]
-        assert repo.ignore_dirs == []
+        assert repo.services[0].test_dirs == ["spec", "e2e"]
+        assert repo.services[0].ignore_dirs == []
 
     def test_no_test_dirs_empty_input(self, tmp_path: Path) -> None:
         repo_dir = tmp_path / "repo"
@@ -230,7 +230,7 @@ class TestInterviewSingleRepo:
             assert result is not None
             repo, _pending = result
         assert repo is not None
-        assert repo.test_dirs == []
+        assert repo.services[0].test_dirs == []
 
     def test_ignore_dirs_captured(self, tmp_path: Path) -> None:
         repo_dir = tmp_path / "repo"
@@ -256,7 +256,7 @@ class TestInterviewSingleRepo:
             assert result is not None
             repo, _pending = result
         assert repo is not None
-        assert repo.ignore_dirs == ["vendor", "node_modules"]
+        assert repo.services[0].ignore_dirs == ["vendor", "node_modules"]
 
     def test_both_test_and_ignore_dirs(self, tmp_path: Path) -> None:
         repo_dir = tmp_path / "repo"
@@ -282,5 +282,5 @@ class TestInterviewSingleRepo:
             assert result is not None
             repo, _pending = result
         assert repo is not None
-        assert repo.test_dirs == ["tests"]
-        assert repo.ignore_dirs == ["vendor", "mocks"]
+        assert repo.services[0].test_dirs == ["tests"]
+        assert repo.services[0].ignore_dirs == ["vendor", "mocks"]

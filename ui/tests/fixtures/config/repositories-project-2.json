@@ -4,30 +4,24 @@
       "id": 1,
       "name": "dvwa",
       "path": "/llm/code/repos/php/DVWA",
-      "docker_path": "/var/www/html",
-      "container_name": "dvwa-dvwa-1",
-      "dependencies_file": "",
-      "crawl_enabled": true,
+      "services": [
+        {
+          "name": "default",
+          "relative_path": "",
+          "type": ["ui", "api"],
+          "languages": ["python", "javascript/typescript", "php"],
+          "docker_path": "/var/www/html",
+          "container_name": "dvwa-dvwa-1",
+          "base_urls": ["http://localhost:4280"],
+          "test_dirs": ["tests", "vendor"],
+          "ignore_dirs": [],
+          "dependencies_file": "",
+          "crawl_enabled": true
+        }
+      ],
       "xsstrike_crawl_level": 10,
       "katana_headless": false,
       "katana_depth": 5,
-      "type": [
-        "ui",
-        "api"
-      ],
-      "languages": [
-        "python",
-        "javascript/typescript",
-        "php"
-      ],
-      "base_urls": [
-        "http://localhost:4280"
-      ],
-      "test_dirs": [
-        "tests",
-        "vendor"
-      ],
-      "ignore_dirs": [],
       "xsstrike_headers": {},
       "dalfox_headers": {},
       "katana_headers": {},
@@ -37,26 +31,24 @@
       "id": 2,
       "name": "dvpwa",
       "path": "/llm/code/repos/python/dvpwa",
-      "docker_path": "/app",
-      "container_name": "dvpwa-sqli-1",
-      "dependencies_file": "/app/requirements.txt",
-      "crawl_enabled": true,
+      "services": [
+        {
+          "name": "default",
+          "relative_path": "",
+          "type": ["api", "ui"],
+          "languages": ["python", "javascript/typescript"],
+          "docker_path": "/app",
+          "container_name": "dvpwa-sqli-1",
+          "base_urls": ["http://localhost:8080"],
+          "test_dirs": [],
+          "ignore_dirs": [],
+          "dependencies_file": "/app/requirements.txt",
+          "crawl_enabled": true
+        }
+      ],
       "xsstrike_crawl_level": 10,
       "katana_headless": false,
       "katana_depth": 5,
-      "type": [
-        "api",
-        "ui"
-      ],
-      "languages": [
-        "python",
-        "javascript/typescript"
-      ],
-      "base_urls": [
-        "http://localhost:8080"
-      ],
-      "test_dirs": [],
-      "ignore_dirs": [],
       "xsstrike_headers": {},
       "dalfox_headers": {},
       "katana_headers": {},
@@ -66,32 +58,24 @@
       "id": 3,
       "name": "juice-shop",
       "path": "/llm/code/juice-shop",
-      "docker_path": "",
-      "container_name": "",
-      "dependencies_file": "",
-      "crawl_enabled": true,
+      "services": [
+        {
+          "name": "default",
+          "relative_path": "",
+          "type": ["api", "ui"],
+          "languages": ["python", "javascript/typescript", "node", "php"],
+          "docker_path": "",
+          "container_name": "",
+          "base_urls": ["http://juice-shop.justinc.srv:3000/"],
+          "test_dirs": ["test"],
+          "ignore_dirs": ["node_modules"],
+          "dependencies_file": "",
+          "crawl_enabled": true
+        }
+      ],
       "xsstrike_crawl_level": 10,
       "katana_headless": true,
       "katana_depth": 5,
-      "type": [
-        "api",
-        "ui"
-      ],
-      "languages": [
-        "python",
-        "javascript/typescript",
-        "node",
-        "php"
-      ],
-      "base_urls": [
-        "http://juice-shop.justinc.srv:3000/"
-      ],
-      "test_dirs": [
-        "test"
-      ],
-      "ignore_dirs": [
-        "node_modules"
-      ],
       "xsstrike_headers": {},
       "dalfox_headers": {},
       "katana_headers": {},
@@ -101,25 +85,24 @@
       "id": 4,
       "name": "php-goof",
       "path": "/llm/code/repos/php/php-goof",
-      "docker_path": "/app",
-      "container_name": "php-goof-app-1",
-      "dependencies_file": "",
-      "crawl_enabled": true,
+      "services": [
+        {
+          "name": "default",
+          "relative_path": "",
+          "type": ["api", "ui"],
+          "languages": ["php"],
+          "docker_path": "/app",
+          "container_name": "php-goof-app-1",
+          "base_urls": ["http://127.0.0.1:8000/"],
+          "test_dirs": [],
+          "ignore_dirs": [],
+          "dependencies_file": "",
+          "crawl_enabled": true
+        }
+      ],
       "xsstrike_crawl_level": 10,
       "katana_headless": false,
       "katana_depth": 5,
-      "type": [
-        "api",
-        "ui"
-      ],
-      "languages": [
-        "php"
-      ],
-      "base_urls": [
-        "http://127.0.0.1:8000/"
-      ],
-      "test_dirs": [],
-      "ignore_dirs": [],
       "xsstrike_headers": {},
       "dalfox_headers": {},
       "katana_headers": {},

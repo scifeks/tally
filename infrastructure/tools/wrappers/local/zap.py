@@ -33,7 +33,6 @@ class ZAPLocalTool(BaseZapTool):
     def __init__(self, config=None) -> None:
         # Path to zap.sh from commands.json; falls back to bare "zap.sh" on PATH
         self._zap_path: str = config.path if config is not None else "zap.sh"
-        # Set by build_command(); read by parse_output()
         self._last_report_path: Path | None = None
 
     @property
@@ -156,6 +155,7 @@ class ZAPLocalTool(BaseZapTool):
         )
 
         assert context.repo is not None
+        assert context.service is not None
         repo = context.repo
 
         paths = ProjectPaths.from_canonical(context.base_path, context.project_name)
@@ -170,7 +170,7 @@ class ZAPLocalTool(BaseZapTool):
         output_file = str(output_dir / f"{repo.name}_{ts}_report.json")
 
         kwargs: dict[str, Any] = {
-            "base_url": repo.base_urls[0],
+            "base_url": context.service.base_urls[0],
             "output_file": output_file,
         }
 

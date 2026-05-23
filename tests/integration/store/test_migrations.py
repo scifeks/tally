@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import sqlite3
 import sys
 from pathlib import Path
@@ -35,18 +36,10 @@ CREATE TABLE repositories (
 
 _EXPECTED_NEW_COLUMNS = {
     "path",
-    "docker_path",
-    "container_name",
-    "dependencies_file",
-    "crawl_enabled",
+    "services_json",
     "xsstrike_crawl_level",
     "katana_headless",
     "katana_depth",
-    "type_json",
-    "languages_json",
-    "base_urls_json",
-    "test_dirs_json",
-    "ignore_dirs_json",
     "xsstrike_headers_json",
     "dalfox_headers_json",
     "katana_headers_json",
@@ -129,9 +122,13 @@ class TestMigrationRunnerOnOldDB:
         factory.init_schema()
 
         with factory.connect() as conn:
-            row = conn.execute("SELECT name, docker_path FROM repositories").fetchone()
+            row = conn.execute(
+                "SELECT name, services_json FROM repositories"
+            ).fetchone()
         assert row[0] == "my-repo"
-        assert row[1] == ""
+        services = json.loads(row[1])
+        assert len(services) == 1
+        assert services[0]["name"] == "default"
 
 
 class TestMigrationIdempotency:

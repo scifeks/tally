@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
 from application.tools.executor import ToolExecutor
@@ -47,7 +48,9 @@ def _build_tool_execution_config(
     )
 
 
-def should_skip_sca_tool(tool: Any, repo: Any) -> tuple[bool, str]:
+def should_skip_sca_tool(
+    tool: Any, service: Any, repo_path: str = ""
+) -> tuple[bool, str]:
     """Return (skip, reason) for an SCA tool that has no matching manifests.
 
     Returns (False, "") when the tool should proceed.  Returns (True, reason)
@@ -57,18 +60,25 @@ def should_skip_sca_tool(tool: Any, repo: Any) -> tuple[bool, str]:
         return False, ""
     if getattr(tool, "scan_segment", "") != "sca":
         return False, ""
-    if repo.path:
-        mpath, mcontainer = repo.path, ""
-    elif repo.docker_path and repo.container_name:
-        mpath, mcontainer = repo.docker_path, repo.container_name
+    if service.docker_path and service.container_name:
+        mpath, mcontainer = service.docker_path, service.container_name
+    elif repo_path or service.relative_path:
+        base = repo_path or ""
+        if service.relative_path:
+            mpath = str(Path(base) / service.relative_path) if base else ""
+        else:
+            mpath = base
+        mcontainer = ""
     else:
-        return True, f"no manifest found for {repo.name}"
+        return True, f"no manifest found for {service.name}"
+    if not mpath:
+        return True, f"no manifest found for {service.name}"
     has = any(
         has_manifests_for_language(mpath, lang, mcontainer)
         for lang in tool.language_gates
     )
     if not has:
-        return True, f"no manifest found for {repo.name}"
+        return True, f"no manifest found for {service.name}"
     return False, ""
 
 
@@ -78,12 +88,14 @@ def make_context(
     base_path: str,
     registry: ToolRegistry,
     repo: Any,
+    service: Any,
     command_config: Any,
 ) -> ExecutionContext:
     return ExecutionContext(
         project_name=project_name,
         base_path=base_path,
         repo=repo,
+        service=service,
         tool_config=tool_config,
         registry=registry,
         is_docker=(command_config.location == "docker" if command_config else False),

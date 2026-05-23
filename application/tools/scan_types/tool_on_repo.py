@@ -54,8 +54,11 @@ class ToolOnRepoScan(ScanType):
                 f" project '{config.project_name}'"
             )
 
-        # Skip Noir when the repo uses a framework it doesn't support.
-        _noir_skip = noir_skip_reason(repo)
+        if not repo.services:
+            raise ValueError(f"Repository '{repo.name}' has no services")
+        service = repo.services[0]
+
+        _noir_skip = noir_skip_reason(service)
         if self.tool_name == "noir" and _noir_skip is not None:
             raise ValueError(f"Noir does not support '{repo.name}': {_noir_skip}.")
 
@@ -71,14 +74,13 @@ class ToolOnRepoScan(ScanType):
         if not tool.check_available():
             raise ValueError(f"Tool '{self.tool_name}' is not installed.")
 
-        if tool.requires_base_urls and not repo.base_urls:
+        if tool.requires_base_urls and not service.base_urls:
             raise ValueError(
                 f"Tool '{self.tool_name}' requires base_urls but none are"
-                f" configured for repository '{repo.name}'."
+                f" configured for service '{service.name}'."
             )
 
-        # Warn when explicitly running an SCA tool on a repo with no manifests.
-        skip_sca, skip_reason = should_skip_sca_tool(tool, repo)
+        skip_sca, skip_reason = should_skip_sca_tool(tool, service, repo.path)
         if skip_sca:
             logger.warning(
                 "SCA tool %r has no matching manifests for repo %r"
@@ -111,6 +113,7 @@ class ToolOnRepoScan(ScanType):
             config.base_path,
             registry,
             repo,
+            service,
             tool_config,
         )
         result = execute_tool_passes(

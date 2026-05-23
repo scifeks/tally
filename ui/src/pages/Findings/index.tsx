@@ -88,9 +88,7 @@ export default function Findings() {
     return f
   }, [domain, filters.severity, filters.status, filters.tool, debouncedSearch, sort])
 
-  // Filter-aware option counts for the severity chips and FilterHeader
-  // dropdowns (Phase 12.1). Strict semantics: every count reflects every
-  // active filter; zero-count options are dropped by the backend.
+  // Counts reflect all active filters; zero-count options are dropped by the backend.
   const filterOptionsQuery = useFindingsFilterOptions(projectIdParam, serverFilters)
 
   const findingsQuery = useFindings({ projectId: projectIdParam, filters: serverFilters })

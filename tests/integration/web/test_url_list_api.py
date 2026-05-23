@@ -10,6 +10,7 @@ import httpx
 import pytest
 import pytest_asyncio
 
+from core.config.schemas.repo_service import RepoService
 from core.config.schemas.repository import Repository
 from domain.url_inventory.entry import UrlFinding, UrlSource
 from infrastructure.store.connection import ConnectionFactory
@@ -36,10 +37,15 @@ def _project_config() -> dict[str, Any]:
 def _seed_repo(repo_path: str) -> Repository:
     return Repository(
         name="alpha",
-        type=["api"],
         path=repo_path,
-        languages=["python"],
-        base_urls=["http://localhost"],
+        services=[
+            RepoService(
+                name="default",
+                type=["api"],
+                languages=["python"],
+                base_urls=["http://localhost"],
+            )
+        ],
     )
 
 

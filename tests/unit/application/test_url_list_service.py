@@ -360,6 +360,8 @@ class _FakeRepository:
     def __init__(self, name: str) -> None:
         self.name = name
         self.base_urls: list[str] = []
+        service = SimpleNamespace(base_urls=[])
+        self.services = [service]
 
 
 class TestUrlListServiceIngestUploadedEndpointFile:

@@ -13,20 +13,26 @@ from unittest.mock import MagicMock
 from application.url_inventory.ports import UrlProviderContext
 from application.url_inventory.providers._oas3_to_findings import iter_oas3_rows
 from core.config.schemas import Repository
+from core.config.schemas.repo_service import RepoService
 from domain.url_inventory.entry import UrlSource, UrlTool
 
 
 def _make_repo(ignore_dirs: list[str] | None = None) -> Repository:
-    return Repository.model_construct(
-        name="dvna",
+    service = RepoService.model_construct(
+        name="default",
+        relative_path="",
         type=["api"],
-        path="/tmp/dvna",
-        docker_path="",
-        container_name="",
         languages=["python"],
         base_urls=["http://localhost:9090"],
         test_dirs=[],
         ignore_dirs=ignore_dirs or [],
+        docker_path="",
+        container_name="",
+    )
+    return Repository.model_construct(
+        name="dvna",
+        path="/tmp/dvna",
+        services=[service],
     )
 
 
@@ -129,9 +135,18 @@ class TestVendorFilterAtIngestBoundary:
     def test_repo_without_ignore_dirs_attr_is_safe(self) -> None:
         # Defensive: getattr fallback path when a stripped-down stub repo
         # is wired in.
+        service = MagicMock()
+        service.base_urls = ["http://localhost"]
+        service.docker_path = ""
+        service.container_name = ""
+        service.relative_path = ""
+        service.dependencies_file = ""
+        service.crawl_enabled = True
+        service.type = []
+        service.test_dirs = []
+        service.ignore_dirs = []
         repo = MagicMock(spec=Repository)
-        repo.base_urls = ["http://localhost"]
-        repo.ignore_dirs = []
+        repo.services = [service]
         ctx = UrlProviderContext(
             repo=repo,
             repo_id=1,

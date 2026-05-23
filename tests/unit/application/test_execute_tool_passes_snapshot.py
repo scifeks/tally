@@ -7,6 +7,7 @@ from unittest.mock import MagicMock, patch
 
 from application.tools.scan_types.execution import execute_tool_passes
 from application.tools.scan_types.models import ScanTypeConfig
+from core.config.schemas.repo_service import RepoService
 from domain.tools.base import ToolResult
 from domain.tools.execution_config import ToolExecutionConfig
 from domain.tools.interface import ExecutionContext
@@ -31,10 +32,12 @@ class TestExecuteToolPassesSnapshot:
 
     def _make_context(self) -> ExecutionContext:
         """Create a minimal ExecutionContext for testing."""
+        service = RepoService(name="default", type=["api"])
         return ExecutionContext(
             project_name="test",
             base_path="/tmp/test",
             repo=None,
+            service=service,
             tool_config=ToolExecutionConfig(noir_provider=None),
             registry=MagicMock(),
             is_docker=False,

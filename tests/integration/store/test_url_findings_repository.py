@@ -11,6 +11,7 @@ _TALLY_ROOT = Path(__file__).resolve().parents[3]
 if str(_TALLY_ROOT) not in sys.path:
     sys.path.insert(0, str(_TALLY_ROOT))
 
+from core.config.schemas.repo_service import RepoService  # noqa: E402
 from core.config.schemas.repository import Repository  # noqa: E402
 from domain.url_inventory.entry import UrlFinding, UrlSource, UrlTool  # noqa: E402
 from infrastructure.store.connection import ConnectionFactory  # noqa: E402
@@ -28,10 +29,16 @@ def _repo(name: str) -> Repository:
     """Minimal Repository for tests that only need a row id."""
     return Repository(
         name=name,
-        type=["api"],
-        languages=["python"],
-        docker_path="/app",
-        container_name="ctr",
+        path="",
+        services=[
+            RepoService(
+                name="default",
+                type=["api"],
+                languages=["python"],
+                docker_path="/app",
+                container_name="ctr",
+            )
+        ],
     )
 
 

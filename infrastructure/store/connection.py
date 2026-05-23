@@ -2,10 +2,95 @@
 
 from __future__ import annotations
 
+import json
 import sqlite3
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
+
+
+def _migrate_repositories_to_services(conn: sqlite3.Connection) -> None:
+    """Collapse flat repo columns into services_json for pre-TAL-143 databases."""
+    cursor = conn.cursor()
+    table_info = cursor.execute("PRAGMA table_info(repositories)").fetchall()
+    column_names = {row[1] for row in table_info}
+
+    if "docker_path" not in column_names:
+        return
+
+    rows = cursor.execute("SELECT * FROM repositories").fetchall()
+    col_names = [description[0] for description in cursor.description]
+
+    cursor.execute(
+        """CREATE TABLE repositories_new (
+            id                       INTEGER PRIMARY KEY AUTOINCREMENT,
+            name                     TEXT NOT NULL,
+            path                     TEXT NOT NULL DEFAULT '',
+            services_json            TEXT NOT NULL DEFAULT '[]',
+            xsstrike_crawl_level     INTEGER NOT NULL DEFAULT 10,
+            katana_headless          INTEGER NOT NULL DEFAULT 0,
+            katana_depth             INTEGER NOT NULL DEFAULT 5,
+            xsstrike_headers_json    TEXT NOT NULL DEFAULT '{}',
+            dalfox_headers_json      TEXT NOT NULL DEFAULT '{}',
+            katana_headers_json      TEXT NOT NULL DEFAULT '{}',
+            auth_json                TEXT,
+            url_seed_file            TEXT,
+            created_at               TEXT NOT NULL DEFAULT (
+                strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
+            ),
+            deleted_at               TEXT
+        )"""
+    )
+
+    for row in rows:
+        row_dict = dict(zip(col_names, row))
+
+        service_entry = {
+            "name": "default",
+            "relative_path": "",
+            "type": json.loads(row_dict.get("type_json", "[]")),
+            "languages": json.loads(row_dict.get("languages_json", "[]")),
+            "docker_path": row_dict.get("docker_path", ""),
+            "container_name": row_dict.get("container_name", ""),
+            "base_urls": json.loads(row_dict.get("base_urls_json", "[]")),
+            "test_dirs": json.loads(row_dict.get("test_dirs_json", "[]")),
+            "ignore_dirs": json.loads(row_dict.get("ignore_dirs_json", "[]")),
+            "dependencies_file": row_dict.get("dependencies_file", ""),
+            "crawl_enabled": bool(row_dict.get("crawl_enabled", 1)),
+        }
+
+        cursor.execute(
+            """INSERT INTO repositories_new (
+                id, name, path, services_json,
+                xsstrike_crawl_level, katana_headless, katana_depth,
+                xsstrike_headers_json, dalfox_headers_json,
+                katana_headers_json, auth_json, url_seed_file,
+                created_at, deleted_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                row_dict.get("id"),
+                row_dict.get("name"),
+                row_dict.get("path", ""),
+                json.dumps([service_entry]),
+                row_dict.get("xsstrike_crawl_level", 10),
+                row_dict.get("katana_headless", 0),
+                row_dict.get("katana_depth", 5),
+                row_dict.get("xsstrike_headers_json", "{}"),
+                row_dict.get("dalfox_headers_json", "{}"),
+                row_dict.get("katana_headers_json", "{}"),
+                row_dict.get("auth_json"),
+                row_dict.get("url_seed_file"),
+                row_dict.get("created_at"),
+                row_dict.get("deleted_at"),
+            ),
+        )
+
+    cursor.execute("DROP TABLE repositories")
+    cursor.execute("ALTER TABLE repositories_new RENAME TO repositories")
+    cursor.execute(
+        "CREATE INDEX IF NOT EXISTS idx_repositories_deleted "
+        "ON repositories (deleted_at)"
+    )
 
 
 class ConnectionFactory:
@@ -256,18 +341,10 @@ class ConnectionFactory:
                     id                       INTEGER PRIMARY KEY AUTOINCREMENT,
                     name                     TEXT NOT NULL,
                     path                     TEXT NOT NULL DEFAULT '',
-                    docker_path              TEXT NOT NULL DEFAULT '',
-                    container_name           TEXT NOT NULL DEFAULT '',
-                    dependencies_file        TEXT NOT NULL DEFAULT '',
-                    crawl_enabled            INTEGER NOT NULL DEFAULT 1,
+                    services_json            TEXT NOT NULL DEFAULT '[]',
                     xsstrike_crawl_level     INTEGER NOT NULL DEFAULT 10,
                     katana_headless          INTEGER NOT NULL DEFAULT 0,
                     katana_depth             INTEGER NOT NULL DEFAULT 5,
-                    type_json                TEXT NOT NULL DEFAULT '[]',
-                    languages_json           TEXT NOT NULL DEFAULT '[]',
-                    base_urls_json           TEXT NOT NULL DEFAULT '[]',
-                    test_dirs_json           TEXT NOT NULL DEFAULT '[]',
-                    ignore_dirs_json         TEXT NOT NULL DEFAULT '[]',
                     xsstrike_headers_json    TEXT NOT NULL DEFAULT '{{}}',
                     dalfox_headers_json      TEXT NOT NULL DEFAULT '{{}}',
                     katana_headers_json      TEXT NOT NULL DEFAULT '{{}}',
@@ -406,6 +483,7 @@ class ConnectionFactory:
             from infrastructure.store.migrations import run_pending
 
             run_pending(conn)
+            _migrate_repositories_to_services(conn)
 
     def purge_operational_tables(self) -> None:
         """Clear operational data tables, preserving configuration.

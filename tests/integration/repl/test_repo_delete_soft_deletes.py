@@ -8,6 +8,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from core.config.schemas.repo_service import RepoService
 from core.config.schemas.repository import Repository
 from domain.projects.entry import ProjectRow
 from infrastructure.store.connection import ConnectionFactory
@@ -50,9 +51,14 @@ def test_delete_repository_soft_deletes_db_row(tmp_path: Path) -> None:
     repo_id = repo_repo.insert(
         Repository(
             name="myrepo",
-            type=["api"],
-            languages=["python"],
             path=str(tmp_path),
+            services=[
+                RepoService(
+                    name="default",
+                    type=["api"],
+                    languages=["python"],
+                )
+            ],
         )
     )
 

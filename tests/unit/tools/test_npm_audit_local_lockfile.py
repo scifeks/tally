@@ -5,6 +5,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 from core.config.schemas import Repository
+from core.config.schemas.repo_service import RepoService
 from domain.tools.execution_config import ToolExecutionConfig
 from domain.tools.interface import ExecutionContext
 from infrastructure.tools.wrappers.local.npm_audit import NpmAuditLocalTool
@@ -12,27 +13,39 @@ from infrastructure.tools.wrappers.utils.install_fallback import reset_attempted
 
 
 def _make_repo(path: str) -> Repository:
-    return Repository.model_construct(
-        name="my-repo",
+    service = RepoService.model_construct(
+        name="default",
+        relative_path="",
         type=["api"],
-        path=path,
-        docker_path="",
-        container_name="",
         languages=["javascript"],
         base_urls=[],
         test_dirs=[],
         ignore_dirs=[],
+        docker_path="",
+        container_name="",
         dependencies_file="",
+    )
+    return Repository.model_construct(
+        name="my-repo",
+        path=path,
+        services=[service],
     )
 
 
 def _make_context(repo: Repository, repo_path: str) -> ExecutionContext:
     registry = MagicMock()
     registry.get_repo_path.return_value = repo_path
+    registry.get_service_path.return_value = repo_path
+    service = (
+        repo.services[0]
+        if repo.services
+        else RepoService.model_construct(name="default")
+    )
     return ExecutionContext(
         project_name="test",
         base_path="/tmp",
         repo=repo,
+        service=service,
         tool_config=ToolExecutionConfig(noir_provider=None),
         registry=registry,
         is_docker=False,

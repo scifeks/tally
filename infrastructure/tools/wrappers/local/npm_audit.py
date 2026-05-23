@@ -53,7 +53,10 @@ class NpmAuditLocalTool(BaseNpmAuditTool):
 
     def build_execution_passes(self, context: ExecutionContext) -> list[ExecutionPass]:
         assert context.repo is not None
-        repo_path = context.registry.get_repo_path(self.name, context.repo)
+        assert context.service is not None
+        repo_path = context.registry.get_service_path(
+            self.name, context.service, context.repo.path
+        )
 
         if not (Path(repo_path) / "package.json").exists():
             logger.info(

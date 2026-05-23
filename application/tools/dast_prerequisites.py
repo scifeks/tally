@@ -36,7 +36,9 @@ class DastPrerequisiteService:
             return None
 
         missing = [
-            r for r in target_repos if r.crawl_enabled and not has_url_findings_fn(r)
+            r
+            for r in target_repos
+            if any(s.crawl_enabled for s in r.services) and not has_url_findings_fn(r)
         ]
         if not missing:
             return None
@@ -46,8 +48,11 @@ class DastPrerequisiteService:
     def resolve_discovery_tools(self, missing_repos: list[Repository]) -> list[str]:
         """Katana always; noir only when at least one repo supports it."""
         to_prepend: list[str] = ["katana"]
-        if any(noir_skip_reason(r) is None for r in missing_repos):
-            to_prepend.append("noir")
+        for r in missing_repos:
+            for s in r.services:
+                if noir_skip_reason(s, r.path) is None:
+                    to_prepend.append("noir")
+                    return to_prepend
         return to_prepend
 
     def prepend_prerequisites(

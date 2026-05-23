@@ -32,10 +32,6 @@ def _resolve_and_copy_deps(
     """Resolve a pip-audit-compatible requirements file from the local repo
     and copy it into the container at dest_path.
 
-    Delegates format detection and lock-file export to
-    find_or_generate_requirements, which handles requirements.txt,
-    poetry.lock, Pipfile.lock, pyproject.toml, setup.py, uv.lock, etc.
-
     Returns dest_path on success, None if nothing could be resolved or
     the docker cp fails.
     """
@@ -124,9 +120,12 @@ class PipAuditDockerTool(BasePipAuditTool):
 
     def build_execution_passes(self, context: ExecutionContext) -> list[ExecutionPass]:
         assert context.repo is not None
+        assert context.service is not None
         repo = context.repo
-        repo_path = context.registry.get_repo_path(self.name, repo)
-        deps_file = repo.dependencies_file
+        repo_path = context.registry.get_service_path(
+            self.name, context.service, repo.path
+        )
+        deps_file = context.service.dependencies_file
 
         # If a dependencies_file is configured but absent from the container,
         # attempt to copy the local requirements.txt into the container.

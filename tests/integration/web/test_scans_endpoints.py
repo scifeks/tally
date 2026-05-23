@@ -40,6 +40,7 @@ def _seed_global_config(base_path: str) -> None:
 
 def _seed_project_config(base_path: str, project_name: str) -> None:
     """Write a minimal project.json and seed a single repo row in the project DB."""
+    from core.config.schemas.repo_service import RepoService
     from core.config.schemas.repository import Repository
     from infrastructure.store.connection import ConnectionFactory
     from infrastructure.store.repositories.repositories import RepositoryRepository
@@ -66,9 +67,14 @@ def _seed_project_config(base_path: str, project_name: str) -> None:
     RepositoryRepository(factory).insert(
         Repository(
             name="test-repo",
-            type=["api"],
             path=str(repo_path),
-            languages=["python"],
+            services=[
+                RepoService(
+                    name="default",
+                    type=["api"],
+                    languages=["python"],
+                )
+            ],
         )
     )
 

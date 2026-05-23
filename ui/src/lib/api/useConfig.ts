@@ -17,11 +17,13 @@ import type {
   RepoType,
   RepositoryAuthUpdate,
   RepositoryConfig,
+  ServiceConfig,
   ToolCatalogEntry,
   ToolLocationMode,
   ToolOverrideConfig,
   ToolType,
 } from '../types'
+import { emptyService } from '../types'
 
 // ─── Wire types (snake_case mirrors of backend Pydantic models) ──────────────
 
@@ -38,27 +40,46 @@ interface ProjectInfoApi {
   finding_count: number
 }
 
-interface RepositoryApi {
-  id: number
+interface ServiceApi {
   name: string
+  relative_path: string
   type: string[]
-  path: string
+  languages: string[]
   docker_path: string
   container_name: string
-  languages: string[]
   base_urls: string[]
   test_dirs: string[]
   ignore_dirs: string[]
   dependencies_file: string
   crawl_enabled: boolean
+  katana_headless?: boolean | null
+  katana_depth?: number | null
+}
+
+interface RepositoryApi {
+  id: number
+  name: string
+  path: string
+  services: ServiceApi[]
   xsstrike_crawl_level: number
   xsstrike_headers: Record<string, string>
   dalfox_headers: Record<string, string>
   katana_headless: boolean
   katana_depth: number
   katana_headers: Record<string, string>
+  auth_configured?: boolean
   endpoint_file: string | null
   garak_config_file: string | null
+  // Flat fields kept for backward-compat with pre-migration responses
+  type?: string[]
+  docker_path?: string
+  container_name?: string
+  languages?: string[]
+  base_urls?: string[]
+  test_dirs?: string[]
+  ignore_dirs?: string[]
+  dependencies_file?: string
+  crawl_enabled?: boolean
 }
 
 interface RepositoryListResponseApi {
@@ -116,54 +137,106 @@ function mapProjectInfo(api: ProjectInfoApi): ProjectInfo {
   }
 }
 
+function mapServiceApi(svc: ServiceApi): ServiceConfig {
+  const locationMode: RepoLocationMode = svc.container_name ? 'docker' : 'local'
+  return {
+    name: svc.name,
+    relativePath: svc.relative_path || '',
+    type: (svc.type || []) as RepoType[],
+    languages: svc.languages || [],
+    locationMode,
+    docker: svc.container_name
+      ? {
+          containerName: svc.container_name,
+          mountPoint: svc.docker_path,
+        }
+      : undefined,
+    baseUrls: svc.base_urls || [],
+    testDirectories: svc.test_dirs || [],
+    ignoreDirectories: svc.ignore_dirs || [],
+    dependenciesFile: svc.dependencies_file || '',
+    crawlEnabled: svc.crawl_enabled !== false,
+    katanaHeadless: svc.katana_headless ?? null,
+    katanaCrawlDepth: svc.katana_depth ?? null,
+  }
+}
+
 function mapRepository(api: RepositoryApi, projectId: number): RepositoryConfig {
-  const types = api.type as RepoType[]
-  const locationMode: RepoLocationMode = api.container_name ? 'docker' : 'local'
-  const docker = api.container_name
-    ? { containerName: api.container_name, mountPoint: api.docker_path }
-    : undefined
+  let services: ServiceConfig[]
+  if (api.services && api.services.length > 0) {
+    services = api.services.map(mapServiceApi)
+  } else {
+    // Fallback for pre-migration responses with flat fields
+    const svc = emptyService()
+    svc.type = (api.type || []) as RepoType[]
+    svc.languages = api.languages || []
+    svc.locationMode = api.container_name ? 'docker' : 'local'
+    if (api.container_name) {
+      svc.docker = {
+        containerName: api.container_name,
+        mountPoint: api.docker_path || '',
+      }
+    }
+    svc.baseUrls = api.base_urls || []
+    svc.testDirectories = api.test_dirs || []
+    svc.ignoreDirectories = api.ignore_dirs || []
+    svc.dependenciesFile = api.dependencies_file || ''
+    svc.crawlEnabled = api.crawl_enabled !== false
+    services = [svc]
+  }
+
   const result: RepositoryConfig = {
     id: api.id,
     projectId,
     name: api.name,
-    types,
-    locationMode,
     localPath: api.path,
-    docker,
-    languages: api.languages,
-    testDirectories: api.test_dirs,
-    ignoreDirectories: api.ignore_dirs,
-    baseUrls: api.base_urls,
-    alsoRunCrawlers: api.crawl_enabled,
+    services,
+    alsoRunCrawlers: services[0]?.crawlEnabled ?? true,
     katana: {
       headless: api.katana_headless,
       crawlDepth: api.katana_depth,
     },
   }
+  if (api.auth_configured) result.authConfigured = true
   if (api.endpoint_file) result.endpointFile = api.endpoint_file
-  if (api.garak_config_file) result.garakConfigFile = api.garak_config_file
+  if (api.garak_config_file) {
+    result.garakConfigFile = api.garak_config_file
+  }
   return result
+}
+
+function serviceToWire(svc: ServiceConfig): Record<string, unknown> {
+  return {
+    name: svc.name,
+    relative_path: svc.relativePath,
+    type: svc.type,
+    languages: svc.languages,
+    docker_path: svc.docker?.mountPoint ?? '',
+    container_name: svc.docker?.containerName ?? '',
+    base_urls: svc.baseUrls,
+    test_dirs: svc.testDirectories,
+    ignore_dirs: svc.ignoreDirectories,
+    dependencies_file: svc.dependenciesFile,
+    crawl_enabled: svc.crawlEnabled,
+    katana_headless: svc.katanaHeadless,
+    katana_depth: svc.katanaCrawlDepth,
+  }
 }
 
 function toRepositoryPayload(repo: RepositoryConfig): Record<string, unknown> {
   const payload: Record<string, unknown> = {
     name: repo.name,
-    type: repo.types,
     path: repo.localPath,
-    languages: repo.languages,
-    base_urls: repo.baseUrls,
-    test_dirs: repo.testDirectories,
-    ignore_dirs: repo.ignoreDirectories,
-    crawl_enabled: repo.alsoRunCrawlers,
+    services: repo.services.map(serviceToWire),
     katana_headless: repo.katana.headless,
     katana_depth: repo.katana.crawlDepth,
   }
-  if (repo.locationMode === 'docker') {
-    payload.docker_path = repo.docker?.mountPoint ?? ''
-    payload.container_name = repo.docker?.containerName ?? ''
-  } else {
-    payload.docker_path = ''
-    payload.container_name = ''
+  if (repo.auth?.loginUrl) {
+    payload.auth = {
+      login_url: repo.auth.loginUrl,
+      username: repo.auth.inlineUsername || '',
+      password: repo.auth.inlinePassword || '',
+    }
   }
   return payload
 }

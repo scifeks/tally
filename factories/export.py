@@ -170,7 +170,11 @@ def create_export_service(
     )
 
     active_repos = repo_repo.list_active()
-    repo_base_urls = {r.id: r.base_urls for r in active_repos if r.id is not None}
+    repo_base_urls = {
+        r.id: (r.services[0].base_urls if r.services else [])
+        for r in active_repos
+        if r.id is not None
+    }
 
     finding_repo = FindingRepository(factory)
     url_finding_repo = UrlFindingRepository(factory)
@@ -232,7 +236,11 @@ def create_export_service_for_project(
         or dd_config.engagement_type
     )
 
-    repo_base_urls = {r.id: r.base_urls for r in active_repos if r.id is not None}
+    repo_base_urls = {
+        r.id: (r.services[0].base_urls if r.services else [])
+        for r in active_repos
+        if r.id is not None
+    }
 
     finding_repo = FindingRepository(factory)
     url_finding_repo = UrlFindingRepository(factory)

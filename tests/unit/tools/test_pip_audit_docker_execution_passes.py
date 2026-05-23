@@ -15,6 +15,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from core.config.schemas import Repository
+from core.config.schemas.repo_service import RepoService
 from domain.tools.execution_config import ToolExecutionConfig
 from domain.tools.interface import ExecutionContext
 from infrastructure.tools.wrappers.docker.pip_audit import PipAuditDockerTool
@@ -32,27 +33,39 @@ def _make_config():
 def _make_repo(
     local_path: str, docker_path: str, dependencies_file: str = ""
 ) -> Repository:
-    return Repository.model_construct(
-        name="dvpa",
+    service = RepoService.model_construct(
+        name="default",
+        relative_path="",
         type=["api"],
-        path=local_path,
+        languages=["python"],
         docker_path=docker_path,
         container_name="dvpwa-sqli-1",
-        languages=["python"],
         base_urls=[],
         test_dirs=[],
         ignore_dirs=[],
         dependencies_file=dependencies_file,
+    )
+    return Repository.model_construct(
+        name="dvpa",
+        path=local_path,
+        services=[service],
     )
 
 
 def _make_context(repo: Repository, docker_path: str) -> ExecutionContext:
     registry = MagicMock()
     registry.get_repo_path.return_value = docker_path
+    registry.get_service_path.return_value = docker_path
+    service = (
+        repo.services[0]
+        if repo.services
+        else RepoService.model_construct(name="default")
+    )
     return ExecutionContext(
         project_name="DVPA",
         base_path="/tmp",
         repo=repo,
+        service=service,
         tool_config=ToolExecutionConfig(noir_provider=None),
         registry=registry,
         is_docker=True,

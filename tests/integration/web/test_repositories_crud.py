@@ -230,7 +230,9 @@ class TestPatchRepository:
             f"/api/v1/projects/{project_id}/repositories/{repo_id}"
         )
         assert detail.status_code == 200
-        assert "http://updated" in detail.json()["base_urls"]
+        body = detail.json()
+        svc = body["services"][0]
+        assert "http://updated" in svc["base_urls"]
 
 
 class TestDeleteRepository:

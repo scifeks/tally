@@ -11,10 +11,7 @@ def add_column_if_missing(
     column: str,
     definition: str,
 ) -> bool:
-    """Add a column to a table if it does not already exist.
-
-    Returns True if the column was added, False if it already existed.
-    """
+    """Add a column to a table if it does not already exist."""
     existing = {
         row[1] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()
     }

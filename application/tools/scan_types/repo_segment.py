@@ -85,7 +85,6 @@ class RepoSegmentScan(ScanType):
         findings_by_tool: dict[str, int] = {}
 
         _reg_tools: list[Any] = registry.get_all_tools()
-        # Used only for non-SCA segments where language detection still applies.
         _lang_specific: set[str] = {
             t.name for t in _reg_tools if t.name in self.tool_names and t.language_gates
         }
@@ -94,314 +93,331 @@ class RepoSegmentScan(ScanType):
         _invocation = 0
 
         for repo in repos:
-            resources.display.print_status(f"[bold]Repository:[/bold] {repo.name}")
+            for service in repo.services:
+                repo_label = repo.name
+                if len(repo.services) > 1:
+                    repo_label = f"{repo.name} [{service.name}]"
+                resources.display.print_status(f"[bold]Repository:[/bold] {repo_label}")
 
-            repo_results: list[ToolResult] = []
+                repo_results: list[ToolResult] = []
 
-            for tool_name in self.tool_names:
-                _invocation += 1
+                for tool_name in self.tool_names:
+                    _invocation += 1
 
-                if self.segment_name == "sca":
-                    # Gate on manifest presence, not language detection.
-                    tool_inst_check: Any = registry.get_tool(tool_name)
-                    skip_sca, skip_reason = should_skip_sca_tool(tool_inst_check, repo)
-                    if skip_sca:
-                        resources.display.print_tool_line(
-                            ToolDisplayRow(
-                                tool_name,
-                                False,
-                                True,
-                                0,
-                                0.0,
-                                skip_reason,
+                    if self.segment_name == "sca":
+                        tool_inst_check: Any = registry.get_tool(tool_name)
+                        skip_sca, skip_reason = should_skip_sca_tool(
+                            tool_inst_check, service, repo.path
+                        )
+                        if skip_sca:
+                            resources.display.print_tool_line(
+                                ToolDisplayRow(
+                                    tool_name,
+                                    False,
+                                    True,
+                                    0,
+                                    0.0,
+                                    skip_reason,
+                                )
                             )
-                        )
-                        _emit_skipped(
-                            resources,
-                            config,
-                            self.segment_name,
-                            repo.name,
-                            tool_name,
-                            skip_reason,
-                        )
-                        total_skipped += 1
-                        continue
-                elif tool_name in _lang_specific:
-                    # Non-SCA: gate on language detection.
-                    repo_langs = {lang.lower() for lang in (repo.languages or [])}
-                    tool_inst: Any = registry.get_tool(tool_name)
-                    gates = (
-                        [g.lower() for g in tool_inst.language_gates]
-                        if tool_inst is not None
-                        else []
-                    )
-                    if not any(lang in gates for lang in repo_langs):
-                        skip_reason = f"not applicable for {repo.name} languages"
-                        resources.display.print_tool_line(
-                            ToolDisplayRow(
-                                tool_name,
-                                False,
-                                True,
-                                0,
-                                0.0,
-                                skip_reason,
-                            )
-                        )
-                        _emit_skipped(
-                            resources,
-                            config,
-                            self.segment_name,
-                            repo.name,
-                            tool_name,
-                            skip_reason,
-                        )
-                        total_skipped += 1
-                        continue
-
-                tool_config = registry.get_tool_config(tool_name)
-                if tool_config is None:
-                    resources.display.print_tool_line(
-                        ToolDisplayRow(tool_name, False, True, 0, 0.0, "not registered")
-                    )
-                    _emit_skipped(
-                        resources,
-                        config,
-                        self.segment_name,
-                        repo.name,
-                        tool_name,
-                        "not registered",
-                    )
-                    total_skipped += 1
-                    continue
-
-                try:
-                    tool: Any = factory.create(tool_name, tool_config)
-                except Exception as exc:
-                    logger.warning("Factory failed for %r: %s", tool_name, exc)
-                    resources.display.print_tool_line(
-                        ToolDisplayRow(tool_name, False, True, 0, 0.0, "factory error")
-                    )
-                    _emit_skipped(
-                        resources,
-                        config,
-                        self.segment_name,
-                        repo.name,
-                        tool_name,
-                        "factory error",
-                    )
-                    total_skipped += 1
-                    continue
-
-                # Skip live crawlers when the user opted out of crawling.
-                if tool_name in ("noir", "katana") and not repo.crawl_enabled:
-                    skip_reason = "skipped (live crawling disabled)"
-                    resources.display.print_tool_line(
-                        ToolDisplayRow(
-                            tool_name,
-                            False,
-                            True,
-                            0,
-                            0.0,
-                            skip_reason,
-                        )
-                    )
-                    _emit_skipped(
-                        resources,
-                        config,
-                        self.segment_name,
-                        repo.name,
-                        tool_name,
-                        skip_reason,
-                    )
-                    total_skipped += 1
-                    continue
-
-                # Skip Noir when the repo uses a framework it doesn't support.
-                _noir_skip = noir_skip_reason(repo)
-                if tool_name == "noir" and _noir_skip is not None:
-                    skip_reason = f"skipped ({_noir_skip})"
-                    resources.display.print_tool_line(
-                        ToolDisplayRow(
-                            tool_name,
-                            False,
-                            True,
-                            0,
-                            0.0,
-                            skip_reason,
-                        )
-                    )
-                    _emit_skipped(
-                        resources,
-                        config,
-                        self.segment_name,
-                        repo.name,
-                        tool_name,
-                        skip_reason,
-                    )
-                    total_skipped += 1
-                    continue
-
-                if tool.requires_base_urls and not repo.base_urls:
-                    resources.display.print_tool_line(
-                        ToolDisplayRow(tool_name, False, True, 0, 0.0, "no base_urls")
-                    )
-                    _emit_skipped(
-                        resources,
-                        config,
-                        self.segment_name,
-                        repo.name,
-                        tool_name,
-                        "no base_urls",
-                    )
-                    total_skipped += 1
-                    continue
-
-                if not tool.check_available():
-                    resources.display.print_tool_line(
-                        ToolDisplayRow(tool_name, False, True, 0, 0.0, "not installed")
-                    )
-                    _emit_skipped(
-                        resources,
-                        config,
-                        self.segment_name,
-                        repo.name,
-                        tool_name,
-                        "not installed",
-                    )
-                    total_skipped += 1
-                    continue
-
-                resources.display.print_running(tool_name, repo.name)
-                resources.event_sink.emit(
-                    se.ToolStarted(
-                        run_id=config.run_id or 0,
-                        project_id=config.project_id,
-                        segment=self.segment_name,
-                        repo=repo.name,
-                        tool=tool_name,
-                        message=f"{tool_name} on {repo.name} started",
-                    )
-                )
-                context = make_context(
-                    config.tool_config,
-                    config.project_name,
-                    config.base_path,
-                    registry,
-                    repo,
-                    tool_config,
-                )
-                _remaining = (_total_invocations - _invocation) + config.remaining_peers
-                result = execute_tool_passes(
-                    tool,
-                    context,
-                    config,
-                    executor,
-                    remaining_tools=_remaining,
-                    command_config=tool_config,
-                )
-
-                if result is None:
-                    resources.display.print_tool_line(
-                        ToolDisplayRow(f"{tool_name}/{repo.name}", False, True, 0, 0.0)
-                    )
-                    _emit_skipped(
-                        resources,
-                        config,
-                        self.segment_name,
-                        repo.name,
-                        tool_name,
-                        "no result",
-                    )
-                    total_skipped += 1
-                else:
-                    result = normalize_success(result, tool)
-                    result.repo = repo.name
-                    repo_results.append(result)
-                    findings = tool.count_findings(result.parsed_data or {})
-                    result.finding_count = findings
-                    findings_by_tool[result.tool_name] = (
-                        findings_by_tool.get(result.tool_name, 0) + findings
-                    )
-                    if result.success:
-                        total_run += 1
-                        total_ingested += dispatch_and_count_ingested(
-                            resources.event_bus,
-                            ToolCompleted(
-                                result,
+                            _emit_skipped(
+                                resources,
+                                config,
+                                self.segment_name,
                                 repo.name,
-                                config.run_id,
-                                config.project_name,
-                                config.base_path,
-                                repo=repo.name,
-                            ),
+                                tool_name,
+                                skip_reason,
+                            )
+                            total_skipped += 1
+                            continue
+                    elif tool_name in _lang_specific:
+                        service_langs = {
+                            lang.lower() for lang in (service.languages or [])
+                        }
+                        tool_inst: Any = registry.get_tool(tool_name)
+                        gates = (
+                            [g.lower() for g in tool_inst.language_gates]
+                            if tool_inst is not None
+                            else []
                         )
+                        if not any(lang in gates for lang in service_langs):
+                            skip_reason = f"not applicable for {service.name} languages"
+                            resources.display.print_tool_line(
+                                ToolDisplayRow(
+                                    tool_name,
+                                    False,
+                                    True,
+                                    0,
+                                    0.0,
+                                    skip_reason,
+                                )
+                            )
+                            _emit_skipped(
+                                resources,
+                                config,
+                                self.segment_name,
+                                repo.name,
+                                tool_name,
+                                skip_reason,
+                            )
+                            total_skipped += 1
+                            continue
+
+                    tool_config = registry.get_tool_config(tool_name)
+                    if tool_config is None:
                         resources.display.print_tool_line(
                             ToolDisplayRow(
-                                f"{tool_name}/{repo.name}",
-                                True,
+                                tool_name, False, True, 0, 0.0, "not registered"
+                            )
+                        )
+                        _emit_skipped(
+                            resources,
+                            config,
+                            self.segment_name,
+                            repo.name,
+                            tool_name,
+                            "not registered",
+                        )
+                        total_skipped += 1
+                        continue
+
+                    try:
+                        tool: Any = factory.create(tool_name, tool_config)
+                    except Exception as exc:
+                        logger.warning("Factory failed for %r: %s", tool_name, exc)
+                        resources.display.print_tool_line(
+                            ToolDisplayRow(
+                                tool_name, False, True, 0, 0.0, "factory error"
+                            )
+                        )
+                        _emit_skipped(
+                            resources,
+                            config,
+                            self.segment_name,
+                            repo.name,
+                            tool_name,
+                            "factory error",
+                        )
+                        total_skipped += 1
+                        continue
+
+                    if tool_name in ("noir", "katana") and not service.crawl_enabled:
+                        skip_reason = "skipped (live crawling disabled)"
+                        resources.display.print_tool_line(
+                            ToolDisplayRow(
+                                tool_name,
                                 False,
-                                findings,
-                                result.duration_seconds,
+                                True,
+                                0,
+                                0.0,
+                                skip_reason,
                             )
                         )
-                        resources.event_sink.emit(
-                            se.ToolCompleted(
-                                run_id=config.run_id or 0,
-                                project_id=config.project_id,
-                                segment=self.segment_name,
-                                repo=repo.name,
-                                tool=tool_name,
-                                message=f"{tool_name} on {repo.name} complete",
-                                findings_count=findings,
-                                duration=result.duration_seconds,
-                                exit_code=0,
+                        _emit_skipped(
+                            resources,
+                            config,
+                            self.segment_name,
+                            repo.name,
+                            tool_name,
+                            skip_reason,
+                        )
+                        total_skipped += 1
+                        continue
+
+                    _noir_skip = noir_skip_reason(service, repo.path)
+                    if tool_name == "noir" and _noir_skip is not None:
+                        skip_reason = f"skipped ({_noir_skip})"
+                        resources.display.print_tool_line(
+                            ToolDisplayRow(
+                                tool_name,
+                                False,
+                                True,
+                                0,
+                                0.0,
+                                skip_reason,
                             )
                         )
-                        if tool_name == "noir" and findings == 0:
-                            resources.display.print_status(
-                                "    [yellow]⚠ noir found 0 endpoints. "
-                                "The framework may not be supported by noir.[/yellow]"
+                        _emit_skipped(
+                            resources,
+                            config,
+                            self.segment_name,
+                            repo.name,
+                            tool_name,
+                            skip_reason,
+                        )
+                        total_skipped += 1
+                        continue
+
+                    if tool.requires_base_urls and not service.base_urls:
+                        resources.display.print_tool_line(
+                            ToolDisplayRow(
+                                tool_name, False, True, 0, 0.0, "no base_urls"
                             )
-                            resources.display.print_status(
-                                "    [dim]ZAP will fall back to spider-only "
-                                "mode for this repository.[/dim]"
+                        )
+                        _emit_skipped(
+                            resources,
+                            config,
+                            self.segment_name,
+                            repo.name,
+                            tool_name,
+                            "no base_urls",
+                        )
+                        total_skipped += 1
+                        continue
+
+                    if not tool.check_available():
+                        resources.display.print_tool_line(
+                            ToolDisplayRow(
+                                tool_name, False, True, 0, 0.0, "not installed"
                             )
+                        )
+                        _emit_skipped(
+                            resources,
+                            config,
+                            self.segment_name,
+                            repo.name,
+                            tool_name,
+                            "not installed",
+                        )
+                        total_skipped += 1
+                        continue
+
+                    resources.display.print_running(tool_name, repo.name)
+                    resources.event_sink.emit(
+                        se.ToolStarted(
+                            run_id=config.run_id or 0,
+                            project_id=config.project_id,
+                            segment=self.segment_name,
+                            repo=repo.name,
+                            tool=tool_name,
+                            message=f"{tool_name} on {repo.name} started",
+                        )
+                    )
+                    context = make_context(
+                        config.tool_config,
+                        config.project_name,
+                        config.base_path,
+                        registry,
+                        repo,
+                        service,
+                        tool_config,
+                    )
+                    _remaining = (
+                        _total_invocations - _invocation
+                    ) + config.remaining_peers
+                    result = execute_tool_passes(
+                        tool,
+                        context,
+                        config,
+                        executor,
+                        remaining_tools=_remaining,
+                        command_config=tool_config,
+                    )
+
+                    if result is None:
+                        resources.display.print_tool_line(
+                            ToolDisplayRow(
+                                f"{tool_name}/{repo.name}", False, True, 0, 0.0
+                            )
+                        )
+                        _emit_skipped(
+                            resources,
+                            config,
+                            self.segment_name,
+                            repo.name,
+                            tool_name,
+                            "no result",
+                        )
+                        total_skipped += 1
                     else:
-                        total_failed += 1
-                        total_ingested += dispatch_and_count_ingested(
-                            resources.event_bus,
-                            ToolCompleted(
-                                result,
-                                repo.name,
-                                config.run_id,
-                                config.project_name,
-                                config.base_path,
-                                repo=repo.name,
-                            ),
+                        result = normalize_success(result, tool)
+                        result.repo = repo.name
+                        repo_results.append(result)
+                        findings = tool.count_findings(result.parsed_data or {})
+                        result.finding_count = findings
+                        findings_by_tool[result.tool_name] = (
+                            findings_by_tool.get(result.tool_name, 0) + findings
                         )
-                        resources.display.print_tool_line(
-                            ToolDisplayRow(
-                                f"{tool_name}/{repo.name}",
-                                False,
-                                False,
-                                0,
-                                result.duration_seconds,
+                        if result.success:
+                            total_run += 1
+                            total_ingested += dispatch_and_count_ingested(
+                                resources.event_bus,
+                                ToolCompleted(
+                                    result,
+                                    repo.name,
+                                    config.run_id,
+                                    config.project_name,
+                                    config.base_path,
+                                    repo=repo.name,
+                                ),
                             )
-                        )
-                        resources.event_sink.emit(
-                            se.ToolFailed(
-                                run_id=config.run_id or 0,
-                                project_id=config.project_id,
-                                segment=self.segment_name,
-                                repo=repo.name,
-                                tool=tool_name,
-                                message=f"{tool_name} on {repo.name} failed",
-                                exit_code=1,
-                                duration=result.duration_seconds,
+                            resources.display.print_tool_line(
+                                ToolDisplayRow(
+                                    f"{tool_name}/{repo.name}",
+                                    True,
+                                    False,
+                                    findings,
+                                    result.duration_seconds,
+                                )
                             )
-                        )
+                            resources.event_sink.emit(
+                                se.ToolCompleted(
+                                    run_id=config.run_id or 0,
+                                    project_id=config.project_id,
+                                    segment=self.segment_name,
+                                    repo=repo.name,
+                                    tool=tool_name,
+                                    message=f"{tool_name} on {repo.name} complete",
+                                    findings_count=findings,
+                                    duration=result.duration_seconds,
+                                    exit_code=0,
+                                )
+                            )
+                            if tool_name == "noir" and findings == 0:
+                                resources.display.print_status(
+                                    "    [yellow]⚠ noir found 0 endpoints. "
+                                    "Framework not supported by noir.[/yellow]"
+                                )
+                                resources.display.print_status(
+                                    "    [dim]ZAP will fall back to spider-only "
+                                    "mode for this repository.[/dim]"
+                                )
+                        else:
+                            total_failed += 1
+                            total_ingested += dispatch_and_count_ingested(
+                                resources.event_bus,
+                                ToolCompleted(
+                                    result,
+                                    repo.name,
+                                    config.run_id,
+                                    config.project_name,
+                                    config.base_path,
+                                    repo=repo.name,
+                                ),
+                            )
+                            resources.display.print_tool_line(
+                                ToolDisplayRow(
+                                    f"{tool_name}/{repo.name}",
+                                    False,
+                                    False,
+                                    0,
+                                    result.duration_seconds,
+                                )
+                            )
+                            resources.event_sink.emit(
+                                se.ToolFailed(
+                                    run_id=config.run_id or 0,
+                                    project_id=config.project_id,
+                                    segment=self.segment_name,
+                                    repo=repo.name,
+                                    tool=tool_name,
+                                    message=f"{tool_name} on {repo.name} failed",
+                                    exit_code=1,
+                                    duration=result.duration_seconds,
+                                )
+                            )
 
-            all_results.extend(repo_results)
+                all_results.extend(repo_results)
 
         return ScanSummary(
             total_tools_run=total_run,

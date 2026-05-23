@@ -2,30 +2,24 @@
   "id": 1,
   "name": "dvwa",
   "path": "/llm/code/repos/php/DVWA",
-  "docker_path": "/var/www/html",
-  "container_name": "dvwa-dvwa-1",
-  "dependencies_file": "",
-  "crawl_enabled": true,
+  "services": [
+    {
+      "name": "default",
+      "relative_path": "",
+      "type": ["ui", "api"],
+      "languages": ["python", "javascript/typescript", "php"],
+      "docker_path": "/var/www/html",
+      "container_name": "dvwa-dvwa-1",
+      "base_urls": ["http://localhost:4280"],
+      "test_dirs": ["tests", "vendor"],
+      "ignore_dirs": [],
+      "dependencies_file": "",
+      "crawl_enabled": true
+    }
+  ],
   "xsstrike_crawl_level": 10,
   "katana_headless": false,
   "katana_depth": 5,
-  "type": [
-    "ui",
-    "api"
-  ],
-  "languages": [
-    "python",
-    "javascript/typescript",
-    "php"
-  ],
-  "base_urls": [
-    "http://localhost:4280"
-  ],
-  "test_dirs": [
-    "tests",
-    "vendor"
-  ],
-  "ignore_dirs": [],
   "xsstrike_headers": {},
   "dalfox_headers": {},
   "katana_headers": {},

@@ -65,9 +65,14 @@ def _make_pm(base_path: Path) -> ProjectManager:
 def _make_repo(**kwargs: object) -> Repository:
     defaults: dict[str, object] = {
         "name": "test-repo",
-        "type": ["api"],
         "path": str(_TALLY_ROOT),
-        "languages": ["python"],
+        "services": [
+            {
+                "name": "default",
+                "type": ["api"],
+                "languages": ["python"],
+            }
+        ],
     }
     defaults.update(kwargs)
     return Repository(**defaults)  # type: ignore[arg-type]

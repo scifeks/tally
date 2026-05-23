@@ -1,12 +1,4 @@
-"""Application service for findings persistence + analyst access.
-
-Owns per-request construction of repos so routes avoid direct imports
-of infrastructure persistence. Composes ``FindingAnalystService`` and
-exposes history repo + ``repo_name_lookup`` helper. Owns the
-``patch_finding`` / ``batch_patch_findings`` orchestration: lock holder
-construction, ChromaDB best-effort sync, and ``FindingUpdated`` event
-emission via the injected sink.
-"""
+"""Application service for findings persistence and analyst access."""
 
 from __future__ import annotations
 

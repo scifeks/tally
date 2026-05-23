@@ -94,6 +94,7 @@ class ZAPDockerTool(BaseZapTool):
         )
 
         assert context.repo is not None
+        assert context.service is not None
         repo = context.repo
 
         paths = ProjectPaths.from_canonical(
@@ -104,7 +105,7 @@ class ZAPDockerTool(BaseZapTool):
         url_repo = UrlFindingRepository(factory)
 
         kwargs: dict[str, Any] = {
-            "base_url": repo.base_urls[0],
+            "base_url": context.service.base_urls[0],
         }
 
         _seeds_path, oas3_path = jit_rebuild_artifacts(

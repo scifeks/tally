@@ -90,6 +90,7 @@ class BaseNucleiTool(ToolInterface):
         )
 
         assert context.repo is not None
+        assert context.service is not None
         repo = context.repo
 
         paths = ProjectPaths.from_canonical(
@@ -106,8 +107,10 @@ class BaseNucleiTool(ToolInterface):
         output_file_auto = str(output_dir / f"{repo.name}_{ts}_auto.json")
         output_file_dast = str(output_dir / f"{repo.name}_{ts}_dast.json")
 
-        repo_path = context.registry.get_repo_path(self.name, repo)
-        shared_kwargs: dict[str, Any] = {"base_url": repo.base_urls[0]}
+        repo_path = context.registry.get_service_path(
+            self.name, context.service, repo.path
+        )
+        shared_kwargs: dict[str, Any] = {"base_url": context.service.base_urls[0]}
 
         seeds_path, _oas3_path = jit_rebuild_artifacts(
             context.base_path,

@@ -99,11 +99,13 @@ class BaseSemgrepTool(ToolInterface):
         context: ExecutionContext,
     ) -> list[ExecutionPass]:
         assert context.repo is not None
-        repo_path = context.registry.get_repo_path(
+        assert context.service is not None
+        repo_path = context.registry.get_service_path(
             self.name,
-            context.repo,
+            context.service,
+            context.repo.path,
         )
-        exclude = build_excluded_dirs(context.repo)
+        exclude = build_excluded_dirs(context.service)
         kwargs: dict[str, object] = {"repo_path": repo_path}
         if exclude:
             kwargs["exclude"] = exclude

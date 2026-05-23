@@ -13,6 +13,7 @@ from application.project.repositories_service import (
 )
 from core.config import Repository
 from core.config.manager import ConfigManager
+from core.config.schemas.repo_service import RepoService
 from domain.projects.entry import ProjectRow
 from infrastructure.store.connection import ConnectionFactory
 from infrastructure.store.repositories.repositories import RepositoryRepository
@@ -23,10 +24,15 @@ pytestmark = pytest.mark.integration
 def _make_repo(*, name: str) -> Repository:
     return Repository(
         name=name,
-        type=["api"],
-        languages=["python"],
-        docker_path="/app",
-        container_name="ctr",
+        services=[
+            RepoService(
+                name=f"{name}-service",
+                type=["api"],
+                languages=["python"],
+                docker_path="/app",
+                container_name="ctr",
+            )
+        ],
     )
 
 

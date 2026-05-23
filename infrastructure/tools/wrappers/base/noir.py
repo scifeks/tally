@@ -4,14 +4,6 @@ Noir is a Crystal binary (``/usr/bin/noir``) that performs static analysis
 on source code and emits discovered API endpoints as an OAS3 JSON document.
 It is a **pre-DAST** step: its output feeds into ZAP via the
 ``-openapifile`` flag rather than being a vulnerability scanner itself.
-
-Architecture note
------------------
-Because Noir writes its report to a file specified by ``-o`` (not to stdout),
-the concrete ``NoirLocalTool`` subclass overrides ``parse_output`` exactly as
-``GitleaksLocalTool`` does for its JSON report path.  The base class
-``parse_output`` is a safe fallback that handles the stdout path in case
-a future Docker wrapper captures output differently.
 """
 
 from __future__ import annotations
@@ -152,7 +144,7 @@ class BaseNoirTool(ToolInterface):
     def scan_segment(self) -> str:
         return "web"
 
-    # ToolInterface: behaviour flags
+    # ToolInterface: behavior flags
 
     @property
     def skip(self) -> bool:
@@ -213,7 +205,10 @@ class BaseNoirTool(ToolInterface):
     def build_execution_passes(self, context: ExecutionContext) -> list[ExecutionPass]:
         """Return one ExecutionPass that scans the repo source tree."""
         assert context.repo is not None
-        repo_path = context.registry.get_repo_path(self.name, context.repo)
+        assert context.service is not None
+        repo_path = context.registry.get_service_path(
+            self.name, context.service, context.repo.path
+        )
         output_dir = ProjectPaths.from_canonical(
             context.base_path, context.project_name
         ).tool_output_dir("noir")
@@ -221,7 +216,7 @@ class BaseNoirTool(ToolInterface):
         ts = datetime.now(UTC).strftime("%Y%m%dT%H%M%S")
         output_file = str(output_dir / f"{context.repo.name}_{ts}_oas3.json")
 
-        techs = _compute_noir_techs(context.repo.languages or [])
+        techs = _compute_noir_techs(context.service.languages or [])
 
         kwargs: dict[str, object] = {
             "source_path": repo_path,

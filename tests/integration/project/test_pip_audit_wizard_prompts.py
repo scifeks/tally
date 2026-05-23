@@ -24,6 +24,7 @@ from application.project import (  # noqa: E402
 )
 from application.project.wizard import InteractiveProjectWizard  # noqa: E402
 from core.config.schemas import Repository  # noqa: E402
+from core.config.schemas.repo_service import RepoService  # noqa: E402
 
 pytestmark = pytest.mark.integration
 
@@ -49,14 +50,30 @@ def _make_pm(base_path: Path) -> ProjectManager:
 
 
 def _make_repo(**kwargs: object) -> Repository:
-    defaults: dict[str, object] = {
+    service_kwargs: dict[str, object] = {}
+    repo_kwargs: dict[str, object] = {
         "name": "test-repo",
-        "type": ["api"],
         "path": str(_TALLY_ROOT),
+    }
+    service_defaults = {
+        "name": "default",
+        "type": ["api"],
         "languages": ["python"],
     }
-    defaults.update(kwargs)
-    return Repository(**defaults)  # type: ignore[arg-type]
+    for key, val in kwargs.items():
+        if key in ("type", "languages", "dependencies_file"):
+            service_kwargs[key] = val
+        else:
+            repo_kwargs[key] = val
+    service_kwargs.update(service_defaults)
+    for key in ("type", "languages", "dependencies_file"):
+        if key in service_kwargs:
+            continue
+        service_kwargs[key] = service_defaults.get(
+            key, "" if key == "dependencies_file" else []
+        )
+    repo_kwargs["services"] = [RepoService(**service_kwargs)]  # type: ignore[arg-type]
+    return Repository(**repo_kwargs)  # type: ignore[arg-type]
 
 
 class TestInterviewSingleRepoDependenciesFile:
@@ -84,7 +101,7 @@ class TestInterviewSingleRepoDependenciesFile:
             assert result is not None
             repo, _pending = result
         assert repo is not None
-        assert repo.dependencies_file == "requirements.txt"
+        assert repo.services[0].dependencies_file == "requirements.txt"
 
     def test_python_local_repo_no_dependencies_file(self, tmp_path: Path) -> None:
         """User skips the dependencies file prompt; field is empty."""
@@ -110,7 +127,7 @@ class TestInterviewSingleRepoDependenciesFile:
             assert result is not None
             repo, _pending = result
         assert repo is not None
-        assert repo.dependencies_file == ""
+        assert repo.services[0].dependencies_file == ""
 
     def test_python_docker_repo_with_dependencies_file(self, tmp_path: Path) -> None:
         """User provides a container-path dependencies file; stored on the repo."""
@@ -138,7 +155,7 @@ class TestInterviewSingleRepoDependenciesFile:
             assert result is not None
             repo, _pending = result
         assert repo is not None
-        assert repo.dependencies_file == "/app/requirements.txt"
+        assert repo.services[0].dependencies_file == "/app/requirements.txt"
 
     def test_python_docker_repo_no_dependencies_file(self, tmp_path: Path) -> None:
         """Docker repo with no dependencies file falls back to full env scan."""
@@ -166,7 +183,7 @@ class TestInterviewSingleRepoDependenciesFile:
             assert result is not None
             repo, _pending = result
         assert repo is not None
-        assert repo.dependencies_file == ""
+        assert repo.services[0].dependencies_file == ""
 
     def test_non_python_repo_no_dependencies_file_prompt(self, tmp_path: Path) -> None:
         """Non-Python repo consumes no extra input for dependencies_file."""
@@ -192,7 +209,7 @@ class TestInterviewSingleRepoDependenciesFile:
             assert result is not None
             repo, _pending = result
         assert repo is not None
-        assert repo.dependencies_file == ""
+        assert repo.services[0].dependencies_file == ""
 
 
 class TestEditRepositoryDependenciesFile:
@@ -228,7 +245,7 @@ class TestEditRepositoryDependenciesFile:
                 "test-project", "my-repo"
             )
         assert updated is not None
-        assert updated.dependencies_file == "requirements/prod.txt"
+        assert updated.services[0].dependencies_file == "requirements/prod.txt"
 
     def test_edit_keeps_existing_dependencies_file(self, tmp_path: Path) -> None:
         """Pressing Enter keeps the existing dependencies_file value."""
@@ -241,7 +258,7 @@ class TestEditRepositoryDependenciesFile:
                 "test-project", "my-repo"
             )
         assert updated is not None
-        assert updated.dependencies_file == "requirements.txt"
+        assert updated.services[0].dependencies_file == "requirements.txt"
 
     def test_edit_clears_dependencies_file(self, tmp_path: Path) -> None:
         """User clears the dependencies file by entering a space (empty after strip)."""
@@ -259,4 +276,4 @@ class TestEditRepositoryDependenciesFile:
             )
         assert updated is not None
         # Empty input → _prompt returns default ("requirements.txt")
-        assert updated.dependencies_file == "requirements.txt"
+        assert updated.services[0].dependencies_file == "requirements.txt"
