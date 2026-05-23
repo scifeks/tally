@@ -2,7 +2,10 @@
 """Main entry point for tally security auditing REPL."""
 
 import argparse
+import atexit
+import fcntl
 import logging
+import os
 import sys
 from datetime import date
 from pathlib import Path
@@ -33,6 +36,27 @@ CO Privacy Act). By continuing, you attest that you are not accessing
 this tool from either of those states.
 
 Continue? [y/N]: """
+
+
+_LOCK_PATH = Path.home() / ".tally-instance.lock"
+
+
+def acquire_instance_lock() -> None:
+    """Acquire an exclusive lock to prevent concurrent Tally instances."""
+    fd = os.open(str(_LOCK_PATH), os.O_CREAT | os.O_RDWR, 0o644)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        os.close(fd)
+        print(
+            "Another Tally instance is already running. "
+            "Stop it before starting a new one.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    os.write(fd, f"{os.getpid()}\n".encode())
+    os.ftruncate(fd, os.lseek(fd, 0, os.SEEK_CUR))
+    atexit.register(os.close, fd)
 
 
 def check_location_attestation(base_path: str) -> None:
@@ -69,6 +93,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     _BASE_PATH = args.base_path
 
+    acquire_instance_lock()
     check_location_attestation(_BASE_PATH)
 
     _logs_dir = Path("logs")
