@@ -429,12 +429,6 @@ class ConnectionFactory:
                     created_at          TEXT    NOT NULL DEFAULT (datetime('now')),
                     updated_at          TEXT    NOT NULL DEFAULT (datetime('now'))
                 );
-                CREATE UNIQUE INDEX IF NOT EXISTS uq_tool_overrides_global
-                    ON tool_overrides (tool_name)
-                    WHERE scope = 'global';
-                CREATE UNIQUE INDEX IF NOT EXISTS uq_tool_overrides_service
-                    ON tool_overrides (tool_name, repo_id, service_name)
-                    WHERE scope = 'service';
 
                 CREATE TABLE IF NOT EXISTS saved_scans (
                     id              INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -493,6 +487,14 @@ class ConnectionFactory:
             from infrastructure.store.migrations import run_pending
 
             run_pending(conn)
+            conn.executescript("""
+                CREATE UNIQUE INDEX IF NOT EXISTS uq_tool_overrides_global
+                    ON tool_overrides (tool_name)
+                    WHERE scope = 'global';
+                CREATE UNIQUE INDEX IF NOT EXISTS uq_tool_overrides_service
+                    ON tool_overrides (tool_name, repo_id, service_name)
+                    WHERE scope = 'service';
+            """)
             _migrate_repositories_to_services(conn)
 
     def purge_operational_tables(self) -> None:

@@ -70,6 +70,30 @@ export class TallyApi {
     return res.json();
   }
 
+  async uploadEndpointFile(
+    projectId: number,
+    repoId: number,
+    filePath: string
+  ): Promise<unknown> {
+    const fs = await import("fs");
+    const path = await import("path");
+    const buffer = fs.readFileSync(filePath);
+    const filename = path.basename(filePath);
+    const response = await this.request.patch(
+      `${API_BASE}/projects/${projectId}/repositories/${repoId}`,
+      {
+        multipart: {
+          endpoint_file: {
+            name: filename,
+            mimeType: "application/x-jsonl",
+            buffer,
+          },
+        },
+      }
+    );
+    return response.json();
+  }
+
   async createToolOverride(
     projectId: number,
     override: Record<string, unknown>

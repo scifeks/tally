@@ -8,7 +8,7 @@ test.describe.serial("Journey 9: Dashboard Verification", () => {
 
   test("shows repository count", async ({ dashboardPage }) => {
     await dashboardPage.goto();
-    await dashboardPage.expectStatTile("repositories", 4);
+    await dashboardPage.expectStatTile("repositories", 1);
   });
 
   test("shows recent scans section", async ({

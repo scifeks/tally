@@ -95,61 +95,108 @@ test.describe.serial("Journey 2b: DVEca Scan-Target Configuration", () => {
   let projectId: number;
   let dvecaRepoId: number;
 
-  test("looks up DVEca repo ID", async ({ request }) => {
-    const api = new TallyApi(request);
-    const { items: projects } = await api.listProjects();
-    projectId = projects[0].id;
+  test("looks up DVEca repo ID", async ({ page }) => {
+    await page.goto("/");
+    const { pid, repoId } = await page.evaluate(async () => {
+      const projRes = await fetch("/api/v1/projects");
+      const projBody = await projRes.json();
+      const projects = projBody.items ?? projBody;
+      const pid = projects[0].id;
 
-    const repos = await api.getRepositories(projectId);
-    const dveca = repos.find((r) => r.name === "DVEca");
-    expect(dveca).toBeDefined();
-    dvecaRepoId = dveca!.id;
+      const repoRes = await fetch(`/api/v1/projects/${pid}/repositories`);
+      const repoBody = await repoRes.json();
+      const repos = repoBody.items ?? repoBody;
+      const dveca = repos.find((r: { name: string }) => r.name === "DVEca");
+      return { pid, repoId: dveca?.id };
+    });
+
+    expect(repoId).toBeDefined();
+    projectId = pid;
+    dvecaRepoId = repoId!;
   });
 
   test("adds scan-target services to DVEca repo", async ({
-    request,
+    page,
   }) => {
-    const api = new TallyApi(request);
-    const repos = await api.getRepositories(projectId);
-    const dveca = repos.find((r) => r.name === "DVEca");
+    await page.goto("/");
+    const services = DVECA_SCAN_TARGET_SERVICES;
+    await page.evaluate(
+      async ({ pid, rid, svcs }) => {
+        const csrf = document.cookie
+          .split("; ")
+          .find((c) => c.startsWith("tally_csrf="))
+          ?.split("=")[1] ?? "";
+        const repoRes = await fetch(`/api/v1/projects/${pid}/repositories`);
+        const repoBody = await repoRes.json();
+        const repos = repoBody.items ?? repoBody;
+        const dveca = repos.find((r: { name: string }) => r.name === "DVEca");
+        const existing = (dveca as Record<string, unknown>)?.services ?? [];
+        const merged = [...(existing as unknown[]), ...svcs];
 
-    const existingServices = (dveca as unknown as Record<string, unknown>)
-      .services as Record<string, unknown>[];
-    const merged = [
-      ...(existingServices ?? []),
-      ...DVECA_SCAN_TARGET_SERVICES,
-    ];
-
-    await api.patchRepository(projectId, dvecaRepoId, {
-      services: merged,
-    });
+        const form = new URLSearchParams();
+        form.set("payload", JSON.stringify({ services: merged }));
+        await fetch(`/api/v1/projects/${pid}/repositories/${rid}`, {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/x-www-form-urlencoded",
+            "x-csrf-token": csrf,
+          },
+          body: form.toString(),
+        });
+      },
+      { pid: projectId, rid: dvecaRepoId, svcs: [...services] }
+    );
   });
 
   test("creates service-scoped tool overrides for SCA", async ({
-    request,
+    page,
   }) => {
-    const api = new TallyApi(request);
+    await page.goto("/");
     const overrides = buildScaOverrides(dvecaRepoId);
+    const createdOverrides = await page.evaluate(
+      async ({ pid, ovrs }) => {
+        const csrf = document.cookie
+          .split("; ")
+          .find((c) => c.startsWith("tally_csrf="))
+          ?.split("=")[1] ?? "";
+        const created: { id: number; scope: string }[] = [];
+        for (const ovr of ovrs) {
+          const response = await fetch(`/api/v1/projects/${pid}/tools/overrides`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "x-csrf-token": csrf,
+            },
+            body: JSON.stringify(ovr),
+          });
+          created.push(await response.json());
+        }
+        return created;
+      },
+      { pid: projectId, ovrs: overrides }
+    );
 
-    for (const override of overrides) {
-      const result = await api.createToolOverride(
-        projectId,
-        override
-      );
-      expect(result.id).toBeGreaterThan(0);
-      expect(result.scope).toBe("service");
+    for (const override of createdOverrides) {
+      expect(override.id).toBeGreaterThan(0);
+      expect(override.scope).toBe("service");
     }
   });
 
   test("verifies all 3 service-scoped overrides exist", async ({
-    request,
+    page,
   }) => {
-    const api = new TallyApi(request);
-    const { items } = await api.listToolOverrides(projectId);
-    const scoped = items.filter((o) => o.scope === "service");
-    expect(scoped.length).toBe(3);
+    await page.goto("/");
+    const scoped = await page.evaluate(async (pid) => {
+      const res = await fetch(`/api/v1/projects/${pid}/tools/overrides`);
+      const payload = await res.json();
+      const allOverrides = payload.items ?? payload;
+      return allOverrides.filter((o: { scope: string }) => o.scope === "service");
+    }, projectId);
 
-    const toolNames = scoped.map((o) => o.toolName).sort();
+    expect(scoped.length).toBe(3);
+    const toolNames = scoped
+      .map((o: { toolName: string }) => o.toolName)
+      .sort();
     expect(toolNames).toEqual([
       "composer-audit",
       "npm-audit",

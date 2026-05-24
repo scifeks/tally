@@ -1,12 +1,7 @@
 import { test, expect } from "../fixtures/base";
-import { API_DIRECT, TIMEOUTS, TEST_REPOS } from "../fixtures/constants";
+import { API_DIRECT, TIMEOUTS } from "../fixtures/constants";
 
 test.describe.serial("Journey 3: Scan Execution", () => {
-  test.skip(
-    true,
-    "Full scan requires DVEca rebuild for fast completion"
-  );
-
   test("starts scan and waits for completion", async ({
     scansPage,
     page,

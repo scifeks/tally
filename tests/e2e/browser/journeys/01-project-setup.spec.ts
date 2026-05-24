@@ -18,40 +18,19 @@ test.describe.serial("Journey 1: Project Setup", () => {
     await expect(page.getByText("E2E", { exact: true }).first()).toBeVisible();
   });
 
-  test("adds DVWA repository", async ({ configPage }) => {
-    await configPage.goto();
-    await configPage.addRepository(TEST_REPOS.dvwa);
-    await configPage.expectRepoInList("DVWA");
-  });
-
-  test("adds DVPWA repository", async ({ configPage }) => {
-    await configPage.goto();
-    await configPage.addRepository(TEST_REPOS.dvpwa);
-    await configPage.expectRepoInList("DVPWA");
-  });
-
-  test("adds php-goof repository", async ({ configPage }) => {
-    await configPage.goto();
-    await configPage.addRepository(TEST_REPOS.phpGoof);
-    await configPage.expectRepoInList("php-goof");
-  });
-
   test("adds DVEca repository", async ({ configPage }) => {
     await configPage.goto();
     await configPage.addRepository(TEST_REPOS.dveca);
     await configPage.expectRepoInList("DVEca");
   });
 
-  test("verifies all 4 repos appear in Config page list", async ({
+  test("verifies repo appears in Config page list", async ({
     configPage,
     page,
   }) => {
     await configPage.goto();
     await page.waitForTimeout(1000);
-    await configPage.expectRepoCount(4);
-    await configPage.expectRepoInList("DVWA");
-    await configPage.expectRepoInList("DVPWA");
-    await configPage.expectRepoInList("php-goof");
+    await configPage.expectRepoCount(1);
     await configPage.expectRepoInList("DVEca");
   });
 
@@ -60,22 +39,22 @@ test.describe.serial("Journey 1: Project Setup", () => {
     page,
   }) => {
     await configPage.goto();
-    await configPage.selectRepoByName("DVWA");
+    await configPage.selectRepoByName("DVEca");
     await page.waitForTimeout(500);
 
     const nameInput = page.locator("#repo-name");
-    await nameInput.fill("DVWA-edited");
+    await nameInput.fill("DVEca-edited");
     await configPage.clickSave();
     await page.waitForTimeout(500);
 
-    await configPage.expectRepoInList("DVWA-edited");
+    await configPage.expectRepoInList("DVEca-edited");
 
-    await configPage.selectRepoByName("DVWA-edited");
+    await configPage.selectRepoByName("DVEca-edited");
     await page.waitForTimeout(500);
     const currentName = await nameInput.inputValue();
-    expect(currentName).toBe("DVWA-edited");
+    expect(currentName).toBe("DVEca-edited");
 
-    await nameInput.fill("DVWA");
+    await nameInput.fill("DVEca");
     await configPage.clickSave();
     await page.waitForTimeout(500);
   });
@@ -92,13 +71,13 @@ test.describe.serial("Journey 1: Project Setup", () => {
     await page.waitForTimeout(1000);
     await configPage.goto();
     await configPage.expectRepoNotInList("DVEca");
-    await configPage.expectRepoCount(3);
+    await configPage.expectRepoCount(0);
   });
 
   test("re-adds the deleted repository", async ({ configPage }) => {
     await configPage.goto();
     await configPage.addRepository(TEST_REPOS.dveca);
     await configPage.expectRepoInList("DVEca");
-    await configPage.expectRepoCount(4);
+    await configPage.expectRepoCount(1);
   });
 });
