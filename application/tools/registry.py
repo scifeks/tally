@@ -37,6 +37,7 @@ class ToolRegistry:
     def __init__(self) -> None:
         self._tools: dict[str, Any] = {}
         self._configs: dict[str, Any] = {}  # CommandEntry per tool
+        self._service_overrides: list[ToolOverride] = []
 
     def register(self, tool: Any, config=None) -> None:
         self._tools[tool.name] = tool
@@ -46,6 +47,7 @@ class ToolRegistry:
     def clear(self) -> None:
         self._tools.clear()
         self._configs.clear()
+        self._service_overrides.clear()
 
     def snapshot(self) -> tuple[dict[str, Any], dict[str, Any]]:
         return (dict(self._tools), dict(self._configs))
@@ -62,6 +64,27 @@ class ToolRegistry:
 
     def get_tool_config(self, name: str):
         return self._configs.get(name)
+
+    def resolve_tool_config(
+        self,
+        tool_name: str,
+        repo_id: int | None = None,
+        service_name: str | None = None,
+    ):
+        """Resolve tool config with service scope taking precedence over global.
+
+        Returns the service-scoped override if repo_id and service_name are
+        provided and a match exists, otherwise the global config, or None.
+        """
+        if repo_id is not None and service_name is not None:
+            for o in self._service_overrides:
+                if (
+                    o.tool_name == tool_name
+                    and o.repo_id == repo_id
+                    and o.service_name == service_name
+                ):
+                    return _override_to_command_entry(o)
+        return self._configs.get(tool_name)
 
     def get_service_path(self, tool_name: str, service, repo_path: str) -> str:
         config = self.get_tool_config(tool_name)
@@ -96,12 +119,9 @@ def discover_tools(
     project_name: str | None = None,
     overrides_repo: "ToolOverridesRepositoryPort | None" = None,
 ) -> None:
-    """Populate *registry* with tool wrappers driven by commands.json.
-
-    Clears the registry first. When commands.json is missing, falls
-    back to registering every wrapper in wrappers/local/. When both
-    project_name and overrides_repo are provided, DB rows overlay
-    the global config entry for entry by tool_name.
+    """Populate registry with tool wrappers from commands.json or fallback to
+    local discovery. Applies per-tool overrides from the repository when
+    available to tailor execution to specific projects and services.
     """
     import json as _json
 
@@ -136,9 +156,12 @@ def discover_tools(
             for override in rows:
                 if override.args_mode == "custom" and not override.path:
                     continue
-                commands_config[override.tool_name] = _override_to_command_entry(
-                    override
-                )
+                if override.scope == "service":
+                    registry._service_overrides.append(override)
+                else:
+                    commands_config[override.tool_name] = _override_to_command_entry(
+                        override
+                    )
 
     if commands_config is not None:
         _discover_from_config(registry, commands_config, wrappers_dir)

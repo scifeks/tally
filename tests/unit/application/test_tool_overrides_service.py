@@ -36,6 +36,9 @@ def _make_override(
         path=path,
         container_name=container_name,
         container_tool_path=container_tool_path,
+        scope="global",
+        repo_id=None,
+        service_name=None,
         created_at="2026-05-03T00:00:00+00:00",
         updated_at="2026-05-03T00:00:00+00:00",
     )

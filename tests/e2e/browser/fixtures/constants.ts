@@ -54,6 +54,74 @@ export const TEST_REPOS = {
   },
 } as const;
 
+export const DVECA_SCAN_TARGET_SERVICES = [
+  {
+    name: "sca-php",
+    container_name: "dveca-scan-target-1",
+    docker_path: "/scan-targets/php",
+    languages: ["PHP"],
+    type: ["library"],
+  },
+  {
+    name: "sca-node",
+    container_name: "dveca-scan-target-1",
+    docker_path: "/scan-targets/node",
+    languages: ["JavaScript"],
+    type: ["library"],
+  },
+  {
+    name: "sca-python",
+    container_name: "dveca-scan-target-1",
+    docker_path: "/scan-targets/python",
+    languages: ["Python"],
+    type: ["library"],
+  },
+] as const;
+
+export function buildScaOverrides(repoId: number) {
+  return [
+    {
+      toolName: "composer-audit",
+      argsMode: "stock",
+      type: "repo",
+      location: "docker",
+      scope: "service",
+      repoId: repoId,
+      serviceName: "sca-php",
+      container: {
+        name: "dveca-scan-target-1",
+        toolPath: "/usr/local/bin/composer",
+      },
+    },
+    {
+      toolName: "npm-audit",
+      argsMode: "stock",
+      type: "repo",
+      location: "docker",
+      scope: "service",
+      repoId: repoId,
+      serviceName: "sca-node",
+      container: {
+        name: "dveca-scan-target-1",
+        toolPath: "/usr/bin/npm",
+      },
+    },
+    {
+      toolName: "pip-audit",
+      argsMode: "stock",
+      type: "repo",
+      location: "docker",
+      scope: "service",
+      repoId: repoId,
+      serviceName: "sca-python",
+      container: {
+        name: "dveca-scan-target-1",
+        toolPath: "/usr/bin/pip-audit",
+      },
+    },
+  ];
+}
+
 export const TIMEOUTS = {
   default: 60_000,
   scan: 600_000,

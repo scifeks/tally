@@ -16,5 +16,8 @@ class ToolOverride:
     path: str | None
     container_name: str | None
     container_tool_path: str | None
+    scope: Literal["global", "service"]
+    repo_id: int | None
+    service_name: str | None
     created_at: str
     updated_at: str

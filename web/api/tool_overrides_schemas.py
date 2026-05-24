@@ -53,6 +53,17 @@ class ToolOverrideCreateRequest(BaseModel):
     location: Literal["local", "docker"]
     path: str | None = None
     container: ToolOverrideContainerRequest | None = None
+    scope: Literal["global", "service"] = "global"
+    repo_id: int | None = Field(
+        default=None,
+        validation_alias=AliasChoices("repoId", "repo_id"),
+        serialization_alias="repoId",
+    )
+    service_name: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("serviceName", "service_name"),
+        serialization_alias="serviceName",
+    )
 
 
 class ToolOverrideReplaceRequest(BaseModel):
@@ -77,6 +88,17 @@ class ToolOverrideReplaceRequest(BaseModel):
     location: Literal["local", "docker"]
     path: str | None = None
     container: ToolOverrideContainerRequest | None = None
+    scope: Literal["global", "service"] = "global"
+    repo_id: int | None = Field(
+        default=None,
+        validation_alias=AliasChoices("repoId", "repo_id"),
+        serialization_alias="repoId",
+    )
+    service_name: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("serviceName", "service_name"),
+        serialization_alias="serviceName",
+    )
 
 
 class ToolOverrideResponse(BaseModel):
@@ -91,6 +113,9 @@ class ToolOverrideResponse(BaseModel):
     location: Literal["local", "docker"]
     path: str | None = None
     container: ToolOverrideContainerResponse | None = None
+    scope: Literal["global", "service"] = "global"
+    repo_id: int | None = Field(default=None, serialization_alias="repoId")
+    service_name: str | None = Field(default=None, serialization_alias="serviceName")
 
 
 class ToolOverrideListResponse(BaseModel):

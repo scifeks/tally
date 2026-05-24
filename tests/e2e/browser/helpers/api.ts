@@ -52,6 +52,43 @@ export class TallyApi {
     const body = await res.json();
     return body.items ?? body;
   }
+
+  async patchRepository(
+    projectId: number,
+    repoId: number,
+    data: Record<string, unknown>
+  ): Promise<unknown> {
+    const form = new URLSearchParams();
+    form.set("payload", JSON.stringify(data));
+    const res = await this.request.patch(
+      `${API_BASE}/projects/${projectId}/repositories/${repoId}`,
+      {
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        data: form.toString(),
+      }
+    );
+    return res.json();
+  }
+
+  async createToolOverride(
+    projectId: number,
+    override: Record<string, unknown>
+  ): Promise<ToolOverrideResponse> {
+    const res = await this.request.post(
+      `${API_BASE}/projects/${projectId}/tools/overrides`,
+      { data: override }
+    );
+    return res.json();
+  }
+
+  async listToolOverrides(
+    projectId: number
+  ): Promise<{ items: ToolOverrideResponse[]; total: number }> {
+    const res = await this.request.get(
+      `${API_BASE}/projects/${projectId}/tools/overrides`
+    );
+    return res.json();
+  }
 }
 
 interface ProjectSummary {
@@ -84,4 +121,13 @@ interface ToolCatalogEntry {
   name: string;
   domain: string;
   enabled: boolean;
+}
+
+interface ToolOverrideResponse {
+  id: number;
+  toolName: string;
+  scope: string;
+  repoId: number | null;
+  serviceName: string | null;
+  location: string;
 }

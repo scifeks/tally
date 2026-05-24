@@ -18,6 +18,9 @@ class TestToolOverride:
             path="/usr/local/bin/semgrep",
             container_name=None,
             container_tool_path=None,
+            scope="global",
+            repo_id=None,
+            service_name=None,
             created_at="2026-05-03T12:00:00Z",
             updated_at="2026-05-03T12:00:00Z",
         )
@@ -36,6 +39,9 @@ class TestToolOverride:
             path=None,
             container_name="tally-semgrep",
             container_tool_path="/usr/local/bin/semgrep",
+            scope="global",
+            repo_id=None,
+            service_name=None,
             created_at="2026-05-03T12:00:00Z",
             updated_at="2026-05-03T12:00:00Z",
         )
@@ -55,6 +61,9 @@ class TestToolOverride:
             path="/usr/bin/semgrep",
             container_name=None,
             container_tool_path=None,
+            scope="global",
+            repo_id=None,
+            service_name=None,
             created_at="2026-05-03T12:00:00Z",
             updated_at="2026-05-03T12:00:00Z",
         )

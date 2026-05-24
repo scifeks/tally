@@ -412,7 +412,7 @@ class ConnectionFactory:
 
                 CREATE TABLE IF NOT EXISTS tool_overrides (
                     id                  INTEGER PRIMARY KEY AUTOINCREMENT,
-                    tool_name           TEXT    NOT NULL UNIQUE,
+                    tool_name           TEXT    NOT NULL,
                     args_mode           TEXT    NOT NULL DEFAULT 'stock'
                                           CHECK (args_mode IN ('stock', 'custom')),
                     type                TEXT    NOT NULL
@@ -422,9 +422,19 @@ class ConnectionFactory:
                     path                TEXT,
                     container_name      TEXT,
                     container_tool_path TEXT,
+                    scope               TEXT    NOT NULL DEFAULT 'global'
+                                          CHECK (scope IN ('global', 'service')),
+                    repo_id             INTEGER,
+                    service_name        TEXT,
                     created_at          TEXT    NOT NULL DEFAULT (datetime('now')),
                     updated_at          TEXT    NOT NULL DEFAULT (datetime('now'))
                 );
+                CREATE UNIQUE INDEX IF NOT EXISTS uq_tool_overrides_global
+                    ON tool_overrides (tool_name)
+                    WHERE scope = 'global';
+                CREATE UNIQUE INDEX IF NOT EXISTS uq_tool_overrides_service
+                    ON tool_overrides (tool_name, repo_id, service_name)
+                    WHERE scope = 'service';
 
                 CREATE TABLE IF NOT EXISTS saved_scans (
                     id              INTEGER PRIMARY KEY AUTOINCREMENT,

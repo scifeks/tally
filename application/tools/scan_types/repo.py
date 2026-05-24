@@ -128,7 +128,11 @@ class RepoScan(ScanType):
                     else ""
                 )
 
-                tool_config = registry.get_tool_config(tool_name)
+                tool_config = registry.resolve_tool_config(
+                    tool_name,
+                    repo_id=repo.id,
+                    service_name=service.name,
+                )
                 if tool_config is None:
                     resources.display.print_tool_line(
                         ToolDisplayRow(tool_name, False, True, 0, 0.0, "not registered")

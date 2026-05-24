@@ -117,6 +117,9 @@ def _to_response(override) -> ToolOverrideResponse:
         location=override.location,
         path=override.path,
         container=container,
+        scope=override.scope,
+        repo_id=override.repo_id,
+        service_name=override.service_name,
     )
 
 
@@ -219,6 +222,9 @@ async def create_tool_override(
             path=body.path,
             container_name=container_name,
             container_tool_path=container_tool_path,
+            scope=body.scope,
+            repo_id=body.repo_id,
+            service_name=body.service_name,
         )
     except ToolOverrideValidationError as exc:
         raise ApiValidationError(
@@ -269,6 +275,9 @@ async def replace_tool_override(
             path=body.path,
             container_name=container_name,
             container_tool_path=container_tool_path,
+            scope=body.scope,
+            repo_id=body.repo_id,
+            service_name=body.service_name,
         )
     except ToolOverrideValidationError as exc:
         raise ApiValidationError(

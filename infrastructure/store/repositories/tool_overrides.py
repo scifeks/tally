@@ -19,6 +19,7 @@ if TYPE_CHECKING:
 _COLUMNS = (
     "id, tool_name, args_mode, type, location,"
     " path, container_name, container_tool_path,"
+    " scope, repo_id, service_name,"
     " created_at, updated_at"
 )
 
@@ -47,8 +48,24 @@ class ToolOverridesRepository(ToolOverridesRepositoryPort):
     def get_by_tool_name(self, tool_name: str) -> ToolOverride | None:
         with self._factory.connect() as conn:
             row = conn.execute(
-                f"SELECT {_COLUMNS} FROM tool_overrides WHERE tool_name = ?",
+                f"SELECT {_COLUMNS} FROM tool_overrides"
+                " WHERE tool_name = ? AND scope = 'global'",
                 (tool_name,),
+            ).fetchone()
+        return _row_to_override(row) if row else None
+
+    def find_service_scoped(
+        self,
+        tool_name: str,
+        repo_id: int,
+        service_name: str,
+    ) -> ToolOverride | None:
+        with self._factory.connect() as conn:
+            row = conn.execute(
+                f"SELECT {_COLUMNS} FROM tool_overrides"
+                " WHERE tool_name = ? AND scope = 'service'"
+                " AND repo_id = ? AND service_name = ?",
+                (tool_name, repo_id, service_name),
             ).fetchone()
         return _row_to_override(row) if row else None
 
@@ -62,6 +79,9 @@ class ToolOverridesRepository(ToolOverridesRepositoryPort):
         path: str | None = None,
         container_name: str | None = None,
         container_tool_path: str | None = None,
+        scope: Literal["global", "service"] = "global",
+        repo_id: int | None = None,
+        service_name: str | None = None,
     ) -> int:
         now = datetime.now(UTC).isoformat()
         try:
@@ -70,8 +90,9 @@ class ToolOverridesRepository(ToolOverridesRepositoryPort):
                     "INSERT INTO tool_overrides ("
                     "tool_name, args_mode, type, location,"
                     " path, container_name, container_tool_path,"
+                    " scope, repo_id, service_name,"
                     " created_at, updated_at"
-                    ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (
                         tool_name,
                         args_mode,
@@ -80,6 +101,9 @@ class ToolOverridesRepository(ToolOverridesRepositoryPort):
                         path,
                         container_name,
                         container_tool_path,
+                        scope,
+                        repo_id,
+                        service_name,
                         now,
                         now,
                     ),
@@ -100,6 +124,9 @@ class ToolOverridesRepository(ToolOverridesRepositoryPort):
         path: str | None = None,
         container_name: str | None = None,
         container_tool_path: str | None = None,
+        scope: Literal["global", "service"] = "global",
+        repo_id: int | None = None,
+        service_name: str | None = None,
     ) -> None:
         now = datetime.now(UTC).isoformat()
         with self._factory.connect() as conn:
@@ -107,8 +134,11 @@ class ToolOverridesRepository(ToolOverridesRepositoryPort):
                 "UPDATE tool_overrides SET"
                 " args_mode = ?, type = ?, location = ?,"
                 " path = ?, container_name = ?, container_tool_path = ?,"
+                " scope = ?, repo_id = ?, service_name = ?,"
                 " updated_at = ?"
-                " WHERE tool_name = ?",
+                " WHERE tool_name = ? AND scope = ? AND"
+                " COALESCE(repo_id, 0) = COALESCE(?, 0) AND"
+                " COALESCE(service_name, '') = COALESCE(?, '')",
                 (
                     args_mode,
                     type,
@@ -116,8 +146,14 @@ class ToolOverridesRepository(ToolOverridesRepositoryPort):
                     path,
                     container_name,
                     container_tool_path,
+                    scope,
+                    repo_id,
+                    service_name,
                     now,
                     tool_name,
+                    scope,
+                    repo_id,
+                    service_name,
                 ),
             )
 
@@ -130,7 +166,8 @@ class ToolOverridesRepository(ToolOverridesRepositoryPort):
 
 
 def _is_tool_name_conflict(err: sqlite3.IntegrityError) -> bool:
-    return "tool_overrides.tool_name" in str(err)
+    msg = str(err)
+    return "tool_overrides.tool_name" in msg or "uq_tool_overrides" in msg
 
 
 def _row_to_override(row: sqlite3.Row) -> ToolOverride:
@@ -143,6 +180,9 @@ def _row_to_override(row: sqlite3.Row) -> ToolOverride:
         path=row["path"],
         container_name=row["container_name"],
         container_tool_path=row["container_tool_path"],
+        scope=row["scope"],
+        repo_id=row["repo_id"],
+        service_name=row["service_name"],
         created_at=row["created_at"],
         updated_at=row["updated_at"],
     )
