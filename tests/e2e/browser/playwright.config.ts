@@ -22,8 +22,8 @@ export default defineConfig({
   globalSetup: "./global-setup.ts",
 
   webServer: {
-    command: `python start-tally.py --api-port ${API_PORT} --vite-port ${VITE_PORT}`,
-    port: VITE_PORT,
+    command: `../../../.venv/bin/python start-tally.py --api-port ${API_PORT} --vite-port ${VITE_PORT}`,
+    port: API_PORT,
     timeout: 30_000,
     reuseExistingServer: false,
     env: {

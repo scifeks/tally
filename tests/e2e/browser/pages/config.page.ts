@@ -5,16 +5,12 @@ import type { RepoConfig } from "../helpers/repos";
 export class ConfigPage {
   private readonly repoSelect: Locator;
   private readonly newRepoButton: Locator;
-  private readonly saveButton: Locator;
-  private readonly deleteButton: Locator;
   private readonly nameInput: Locator;
   private readonly localPathInput: Locator;
 
   constructor(private page: Page) {
     this.repoSelect = page.locator("select").first();
     this.newRepoButton = page.getByRole("button", { name: "New" });
-    this.saveButton = page.getByRole("button", { name: /^(Save|Create)$/ });
-    this.deleteButton = page.getByRole("button", { name: "Delete" });
     this.nameInput = page.locator("#repo-name");
     this.localPathInput = page.locator("#repo-local-path");
   }
@@ -35,51 +31,60 @@ export class ConfigPage {
     await this.localPathInput.fill(path);
   }
 
-  async fillBaseUrl(url: string): Promise<void> {
-    const input = this.page.locator("#svc-base-url");
-    await input.fill(url);
-  }
-
-  async fillDockerPath(path: string): Promise<void> {
-    const input = this.page.locator("#svc-docker-path");
-    await input.fill(path);
-  }
-
-  async fillContainerName(name: string): Promise<void> {
-    const input = this.page.locator("#svc-container-name");
-    await input.fill(name);
-  }
-
   async selectServiceType(type: string): Promise<void> {
-    const typeSelect = this.page.locator("#svc-type");
-    await typeSelect.selectOption(type);
-  }
-
-  async selectLocationMode(mode: "local" | "docker"): Promise<void> {
-    const radio = this.page.getByLabel(mode, { exact: false });
-    await radio.click();
-  }
-
-  async toggleLanguage(language: string): Promise<void> {
     await this.page
-      .getByRole("button", { name: language, exact: true })
+      .getByRole("button", { name: type, exact: true })
+      .first()
       .click();
   }
 
-  async toggleCrawlEnabled(): Promise<void> {
-    const checkbox = this.page.getByText(
-      "Also run live crawlers",
-      { exact: false }
-    );
-    await checkbox.click();
+  async selectLocationMode(mode: "local" | "docker"): Promise<void> {
+    await this.page
+      .getByRole("button", { name: mode, exact: true })
+      .first()
+      .click();
+  }
+
+  async fillContainerName(name: string): Promise<void> {
+    await this.page.locator("#svc-container-name").fill(name);
+  }
+
+  async fillMountPoint(path: string): Promise<void> {
+    await this.page.locator("#svc-mount-point").fill(path);
+  }
+
+  async addLanguage(language: string): Promise<void> {
+    const langLabel = this.page
+      .getByText("Languages", { exact: false })
+      .first();
+    const input = langLabel.locator("..").getByRole("textbox");
+    await input.scrollIntoViewIfNeeded();
+    await input.fill(language);
+    await input.press("Enter");
+  }
+
+  async addBaseUrl(url: string): Promise<void> {
+    const urlLabel = this.page
+      .getByText("Base URLs", { exact: false })
+      .first();
+    const input = urlLabel.locator("..").getByRole("textbox");
+    await input.scrollIntoViewIfNeeded();
+    await input.fill(url);
+    await input.press("Enter");
   }
 
   async clickSave(): Promise<void> {
-    await this.saveButton.click();
+    await this.page
+      .getByRole("button", { name: /^(Save|Create)$/i })
+      .first()
+      .click();
   }
 
   async clickDelete(): Promise<void> {
-    await this.deleteButton.click();
+    await this.page
+      .getByRole("button", { name: /Delete/i })
+      .first()
+      .click();
   }
 
   async selectRepoByName(name: string): Promise<void> {
@@ -92,7 +97,7 @@ export class ConfigPage {
     const count = await options.count();
     for (let i = 0; i < count; i++) {
       const label = await options.nth(i).textContent();
-      if (label && !label.includes("Select repository")) {
+      if (label && !label.includes("Select")) {
         repoNames.push(label.trim());
       }
     }
@@ -100,18 +105,23 @@ export class ConfigPage {
   }
 
   async expectRepoCount(count: number): Promise<void> {
-    const repos = await this.getRepoOptions();
-    expect(repos.length).toBe(count);
+    await expect
+      .poll(() => this.getRepoOptions().then((r) => r.length), {
+        timeout: 10_000,
+      })
+      .toBe(count);
   }
 
   async expectRepoInList(name: string): Promise<void> {
-    const repos = await this.getRepoOptions();
-    expect(repos).toContain(name);
+    await expect
+      .poll(() => this.getRepoOptions(), { timeout: 10_000 })
+      .toContain(name);
   }
 
   async expectRepoNotInList(name: string): Promise<void> {
-    const repos = await this.getRepoOptions();
-    expect(repos).not.toContain(name);
+    await expect
+      .poll(() => this.getRepoOptions(), { timeout: 10_000 })
+      .not.toContain(name);
   }
 
   async addRepository(repo: RepoConfig): Promise<void> {
@@ -119,18 +129,24 @@ export class ConfigPage {
     await this.fillRepoName(repo.name);
     await this.fillLocalPath(repo.localPath);
 
-    if (repo.baseUrl) {
-      await this.fillBaseUrl(repo.baseUrl);
+    for (const svcType of repo.serviceTypes) {
+      await this.selectServiceType(svcType);
     }
-    if (repo.dockerPath) {
-      await this.fillDockerPath(repo.dockerPath);
-    }
-    if (repo.containerName) {
+
+    if (repo.locationMode === "docker" && repo.containerName) {
+      await this.selectLocationMode("docker");
       await this.fillContainerName(repo.containerName);
+      if (repo.mountPoint) {
+        await this.fillMountPoint(repo.mountPoint);
+      }
     }
 
     for (const lang of repo.languages) {
-      await this.toggleLanguage(lang);
+      await this.addLanguage(lang);
+    }
+
+    if (repo.baseUrl) {
+      await this.addBaseUrl(repo.baseUrl);
     }
 
     await this.clickSave();
@@ -142,10 +158,72 @@ export class ConfigPage {
   }
 
   async expectSaveButtonDisabled(): Promise<void> {
-    await expect(this.saveButton).toBeDisabled();
+    await expect(
+      this.page
+        .getByRole("button", { name: /^(Save|Create)$/i })
+        .first()
+    ).toBeDisabled();
   }
 
   async expectSaveButtonEnabled(): Promise<void> {
-    await expect(this.saveButton).toBeEnabled();
+    await expect(
+      this.page
+        .getByRole("button", { name: /^(Save|Create)$/i })
+        .first()
+    ).toBeEnabled();
+  }
+
+  async addToolOverride(toolName: string): Promise<void> {
+    const addSelect = this.page.locator("select").last();
+    await addSelect.selectOption({ label: toolName });
+  }
+
+  async selectToolOverride(toolName: string): Promise<void> {
+    const overrides = this.page.locator("select").nth(1);
+    await overrides.selectOption({ label: toolName });
+  }
+
+  async setOverrideType(type: "repo" | "api"): Promise<void> {
+    await this.page
+      .getByRole("button", { name: type, exact: true })
+      .last()
+      .click();
+  }
+
+  async setOverrideLocation(location: "local" | "docker"): Promise<void> {
+    await this.page
+      .getByRole("button", { name: location, exact: true })
+      .last()
+      .click();
+  }
+
+  async setOverrideArgsMode(mode: "stock" | "custom"): Promise<void> {
+    await this.page
+      .getByRole("button", { name: mode, exact: true })
+      .click();
+  }
+
+  async fillToolPath(path: string): Promise<void> {
+    await this.page.locator("#tool-path").fill(path);
+  }
+
+  async saveToolOverride(): Promise<void> {
+    await this.page
+      .getByRole("button", { name: /^(Save|Create)$/i })
+      .last()
+      .click();
+  }
+
+  async deleteToolOverride(): Promise<void> {
+    await this.page
+      .getByRole("button", { name: /Remove Override/i })
+      .click();
+  }
+
+  async addArgumentTemplate(name: string): Promise<void> {
+    await this.page
+      .getByRole("button", { name: /Add Template/i })
+      .click();
+    await this.page.locator("input[id^='tmpl-name-']").last().fill(name);
   }
 }

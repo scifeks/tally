@@ -2,12 +2,12 @@ import { type Locator, type Page, expect } from "@playwright/test";
 
 export class TopBar {
   private readonly nav: Locator;
-  private readonly projectButton: Locator;
+  private readonly projectDropdown: Locator;
   private readonly scansIndicator: Locator;
 
   constructor(private page: Page) {
     this.nav = page.locator("nav");
-    this.projectButton = page.getByText("project:");
+    this.projectDropdown = page.getByRole("button", { name: /project:/i });
     this.scansIndicator = page.getByLabel("Open running scans");
   }
 
@@ -22,29 +22,32 @@ export class TopBar {
       | "CHAT"
       | "CONFIG"
   ): Promise<void> {
-    await this.nav.getByText(tab, { exact: true }).click();
+    await this.nav
+      .getByRole("link", { name: new RegExp(tab, "i") })
+      .click();
   }
 
   async getActiveTab(): Promise<string> {
-    const active = this.nav.locator("a.text-accent, a[aria-current='page']");
+    const active = this.nav.locator(
+      "a.text-accent, a[aria-current='page']"
+    );
     return (await active.textContent()) ?? "";
   }
 
   async selectProject(projectName: string): Promise<void> {
-    await this.projectButton.click();
     await this.page
-      .getByRole("menu")
       .getByText(projectName, { exact: false })
       .click();
+    await this.page.waitForTimeout(1000);
   }
 
   async getSelectedProjectName(): Promise<string> {
-    return (await this.projectButton.textContent()) ?? "";
+    return (await this.projectDropdown.textContent()) ?? "";
   }
 
   async isNoProjectSelected(): Promise<boolean> {
     const text = await this.getSelectedProjectName();
-    return text.includes("select project");
+    return text.toLowerCase().includes("select project");
   }
 
   async getRunningScansText(): Promise<string> {
@@ -56,10 +59,14 @@ export class TopBar {
   }
 
   async expectTabVisible(tab: string): Promise<void> {
-    await expect(this.nav.getByText(tab, { exact: true })).toBeVisible();
+    await expect(
+      this.nav.getByText(tab, { exact: true })
+    ).toBeVisible();
   }
 
   async expectTabHidden(tab: string): Promise<void> {
-    await expect(this.nav.getByText(tab, { exact: true })).toBeHidden();
+    await expect(
+      this.nav.getByText(tab, { exact: true })
+    ).toBeHidden();
   }
 }

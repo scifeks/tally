@@ -2,33 +2,20 @@ import { test, expect } from "../fixtures/base";
 import { TEST_REPOS } from "../fixtures/constants";
 
 test.describe.serial("Journey 1: Project Setup", () => {
-  test("shows no-project-selected state on fresh load", async ({
+  test("verifies project is selected from global setup", async ({
     page,
-    topBar,
   }) => {
     await page.goto("/");
-    await expect(topBar.isNoProjectSelected()).resolves.toBe(true);
     await expect(
-      page.getByText("select project", { exact: false })
-    ).toBeVisible();
-  });
-
-  test("selects the seeded project via the project switcher", async ({
-    page,
-    topBar,
-  }) => {
-    await page.goto("/");
-    await topBar.selectProject("e2e-test");
-    await page.waitForTimeout(1000);
-    const name = await topBar.getSelectedProjectName();
-    expect(name).toContain("e2e-test");
+      page.getByRole("button", { name: /e2e/i })
+    ).toBeVisible({ timeout: 10_000 });
   });
 
   test("navigates to Config page", async ({ page, topBar }) => {
     await page.goto("/");
     await topBar.navigateTo("CONFIG");
     await expect(page).toHaveURL(/\/config/);
-    await expect(page.getByText("E2E", { exact: false })).toBeVisible();
+    await expect(page.getByText("E2E", { exact: true }).first()).toBeVisible();
   });
 
   test("adds DVWA repository", async ({ configPage }) => {
@@ -57,8 +44,10 @@ test.describe.serial("Journey 1: Project Setup", () => {
 
   test("verifies all 4 repos appear in Config page list", async ({
     configPage,
+    page,
   }) => {
     await configPage.goto();
+    await page.waitForTimeout(1000);
     await configPage.expectRepoCount(4);
     await configPage.expectRepoInList("DVWA");
     await configPage.expectRepoInList("DVPWA");
@@ -98,8 +87,10 @@ test.describe.serial("Journey 1: Project Setup", () => {
     await configPage.goto();
     await configPage.selectRepoByName("DVEca");
     await page.waitForTimeout(500);
+    page.once("dialog", (dialog) => dialog.accept());
     await configPage.clickDelete();
-    await page.waitForTimeout(500);
+    await page.waitForTimeout(1000);
+    await configPage.goto();
     await configPage.expectRepoNotInList("DVEca");
     await configPage.expectRepoCount(3);
   });

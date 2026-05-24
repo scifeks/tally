@@ -2,18 +2,20 @@ import { type Locator, type Page, expect } from "@playwright/test";
 import { ROUTES, TIMEOUTS } from "../fixtures/constants";
 
 export class ChatPage {
-  private readonly newSessionButton: Locator;
   private readonly messageInput: Locator;
   private readonly sendButton: Locator;
   private readonly cancelButton: Locator;
 
   constructor(private page: Page) {
-    this.newSessionButton = page.getByRole("button", { name: /New/i });
-    this.messageInput = page.locator(
-      "textarea, input[type='text']"
-    ).last();
-    this.sendButton = page.getByRole("button", { name: /SEND/i });
-    this.cancelButton = page.getByRole("button", { name: /CANCEL/i });
+    this.messageInput = page.getByPlaceholder(
+      "Ask about your security findings..."
+    );
+    this.sendButton = page.locator(
+      "button[aria-label='send message']"
+    );
+    this.cancelButton = page.locator(
+      "button[aria-label='cancel stream']"
+    );
   }
 
   async goto(): Promise<void> {
@@ -21,7 +23,9 @@ export class ChatPage {
   }
 
   async createSession(): Promise<void> {
-    await this.newSessionButton.click();
+    await this.page
+      .getByRole("button", { name: /new/i })
+      .click();
   }
 
   async sendMessage(text: string): Promise<void> {
@@ -35,34 +39,39 @@ export class ChatPage {
 
   async waitForResponse(timeoutMs?: number): Promise<void> {
     await expect(
-      this.page.locator("[data-role='assistant']").last()
+      this.page.getByText("TALLY").last()
     ).toBeVisible({ timeout: timeoutMs ?? TIMEOUTS.chatStream });
   }
 
   async selectSession(index: number): Promise<void> {
-    const sessions = this.page.locator(
-      "[data-testid^='chat-session-']"
-    );
-    await sessions.nth(index).click();
+    await this.page
+      .locator("[data-testid^='chat-session-']")
+      .nth(index)
+      .click();
   }
 
-  async deleteSession(sessionId: number): Promise<void> {
-    const session = this.page.locator(
-      `[data-testid='chat-session-${sessionId}']`
-    );
-    await session.getByRole("button").click();
+  async deleteSession(): Promise<void> {
+    await this.page
+      .locator("button[aria-label='delete session']")
+      .first()
+      .click();
   }
 
   async expectSessionCount(count: number): Promise<void> {
-    const sessions = this.page.locator(
-      "[data-testid^='chat-session-']"
-    );
-    await expect(sessions).toHaveCount(count);
+    await expect(
+      this.page.locator("[data-testid^='chat-session-']")
+    ).toHaveCount(count);
   }
 
   async expectSealedBadge(): Promise<void> {
     await expect(
       this.page.locator("[data-testid='sealed-badge']")
+    ).toBeVisible();
+  }
+
+  async expectMessageVisible(text: string): Promise<void> {
+    await expect(
+      this.page.getByText(text, { exact: false })
     ).toBeVisible();
   }
 }

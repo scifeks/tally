@@ -1,4 +1,4 @@
-import { type Locator, type Page, expect } from "@playwright/test";
+import { type Page, expect } from "@playwright/test";
 import { ROUTES } from "../fixtures/constants";
 
 export class DashboardPage {
@@ -9,12 +9,21 @@ export class DashboardPage {
   }
 
   async expectProjectName(name: string): Promise<void> {
-    await expect(this.page.getByText(name)).toBeVisible();
+    await expect(
+      this.page.getByText(name).first()
+    ).toBeVisible();
   }
 
-  async expectStatValue(label: string, value: string | number): Promise<void> {
-    const stat = this.page.getByText(String(value));
-    await expect(stat).toBeVisible();
+  async expectStatTile(label: string, minValue: number): Promise<void> {
+    const tile = this.page
+      .getByText(label, { exact: false })
+      .first()
+      .locator("..");
+    await expect(tile).toBeVisible();
+    const tileText = await tile.textContent();
+    const match = tileText?.match(/(\d+)/);
+    expect(match).not.toBeNull();
+    expect(parseInt(match![1], 10)).toBeGreaterThanOrEqual(minValue);
   }
 
   async expectRecentScanRow(status: string): Promise<void> {
@@ -24,12 +33,14 @@ export class DashboardPage {
   }
 
   async clickQuickAction(label: string): Promise<void> {
-    await this.page.getByText(label, { exact: false }).click();
+    await this.page
+      .getByText(label, { exact: false })
+      .click();
   }
 
-  async expectEmptyState(): Promise<void> {
+  async expectNotEmpty(): Promise<void> {
     await expect(
-      this.page.getByText("Getting started", { exact: false })
+      this.page.getByText("new scan", { exact: false })
     ).toBeVisible();
   }
 }

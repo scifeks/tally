@@ -1,4 +1,4 @@
-import { type Locator, type Page, expect } from "@playwright/test";
+import { type Page, expect } from "@playwright/test";
 import { ROUTES } from "../fixtures/constants";
 
 export class UrlListsPage {
@@ -9,29 +9,46 @@ export class UrlListsPage {
   }
 
   async searchUrls(query: string): Promise<void> {
-    const input = this.page.getByPlaceholder(/search/i);
-    await input.fill(query);
-  }
-
-  async filterByMethod(method: string): Promise<void> {
-    await this.page.getByText(method, { exact: true }).click();
-  }
-
-  async filterByHost(host: string): Promise<void> {
-    await this.page.getByText(host, { exact: true }).click();
-  }
-
-  async filterByRepo(repo: string): Promise<void> {
-    await this.page.getByText(repo, { exact: true }).click();
-  }
-
-  async clearFilters(): Promise<void> {
     await this.page
-      .getByRole("button", { name: /clear/i })
+      .locator("input[aria-label='Search URLs']")
+      .fill(query);
+  }
+
+  async clearSearch(): Promise<void> {
+    await this.page
+      .locator("button[aria-label='Clear search']")
       .click();
   }
 
+  async openFilterDropdown(column: string): Promise<void> {
+    await this.page
+      .getByText(column, { exact: true })
+      .locator("..")
+      .locator("button")
+      .last()
+      .click();
+  }
+
+  async selectFilterOption(option: string): Promise<void> {
+    await this.page.getByText(option, { exact: true }).click();
+  }
+
+  async clearFilters(): Promise<void> {
+    await this.page.getByText("clear filters").click();
+  }
+
   async expectUrlsVisible(): Promise<void> {
-    await expect(this.page.locator("table, [role='grid']")).toBeVisible();
+    await expect(
+      this.page.getByText(/\d+ of \d+ loaded/)
+    ).toBeVisible({ timeout: 10_000 });
+  }
+
+  async expectUrlCount(minCount: number): Promise<void> {
+    const countText = await this.page
+      .getByText(/\d+ of \d+ loaded/)
+      .textContent();
+    const match = countText?.match(/(\d+) of (\d+)/);
+    expect(match).not.toBeNull();
+    expect(parseInt(match![2], 10)).toBeGreaterThanOrEqual(minCount);
   }
 }

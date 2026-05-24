@@ -2,51 +2,61 @@ export const API_PORT = 8181;
 export const VITE_PORT = 3100;
 export const BASE_URL = `http://127.0.0.1:${VITE_PORT}`;
 export const API_BASE = `http://127.0.0.1:${VITE_PORT}/api/v1`;
+export const API_DIRECT = `http://127.0.0.1:${API_PORT}/api/v1`;
 
-export const REPOS_DIR = `${process.env.HOME}/code/repos`;
+export const HOME = process.env.HOME ?? "/home/justin";
+export const REPOS_DIR = `${HOME}/code/repos`;
 
 export const TEST_REPOS = {
   dvwa: {
     name: "DVWA",
-    localPath: `${REPOS_DIR}/DVWA`,
+    localPath: `${REPOS_DIR}/php/DVWA`,
     languages: ["PHP", "Python", "JavaScript"],
+    serviceTypes: ["api", "ui"],
+    locationMode: "docker",
     containerName: "dvwa-dvwa-1",
+    mountPoint: "/var/www/html",
     baseUrl: "http://localhost:4280",
-    dockerPath: "/var/www/html",
     crawlEnabled: true,
   },
   dvpwa: {
     name: "DVPWA",
-    localPath: `${REPOS_DIR}/DVPWA`,
+    localPath: `${REPOS_DIR}/python/dvpwa`,
     languages: ["Python", "JavaScript"],
+    serviceTypes: ["api"],
+    locationMode: "docker",
     containerName: "dvpwa-sqli-1",
+    mountPoint: "/app",
     baseUrl: "http://localhost:8080",
-    dockerPath: "/app",
     crawlEnabled: true,
   },
   phpGoof: {
     name: "php-goof",
-    localPath: `${REPOS_DIR}/php-goof`,
+    localPath: `${REPOS_DIR}/php/php-goof`,
     languages: ["PHP"],
+    serviceTypes: ["api"],
+    locationMode: "docker",
     containerName: "php-goof-app-1",
+    mountPoint: "/app",
     baseUrl: "http://127.0.0.1:8000/",
-    dockerPath: "/app",
     crawlEnabled: true,
   },
   dveca: {
     name: "DVEca",
-    localPath: `${REPOS_DIR}/DVEca`,
+    localPath: `${HOME}/code/dveca`,
     languages: ["PHP"],
-    containerName: "",
+    serviceTypes: ["api", "ui"],
+    locationMode: "docker",
+    containerName: "dveca-web-1",
+    mountPoint: "/var/www/html/public",
     baseUrl: "http://127.0.0.1:8082",
-    dockerPath: "/var/www/html/public",
     crawlEnabled: true,
   },
 } as const;
 
 export const TIMEOUTS = {
   default: 60_000,
-  scan: 300_000,
+  scan: 600_000,
   reportGeneration: 180_000,
   chatStream: 120_000,
   authSetup: 30_000,

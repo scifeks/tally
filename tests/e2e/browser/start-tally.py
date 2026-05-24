@@ -64,10 +64,15 @@ def wait_for_port(host: str, port: int, timeout: float) -> bool:
     return False
 
 
-def start_vite(ui_dir: Path) -> subprocess.Popen[bytes]:
-    env = {**os.environ, "FORCE_COLOR": "0"}
+def start_vite(ui_dir: Path, host: str, vite_port: int) -> subprocess.Popen[bytes]:
+    env = {
+        **os.environ,
+        "FORCE_COLOR": "0",
+        "TALLY_HOST": host,
+        "TALLY_VITE_PORT": str(vite_port),
+    }
     proc = subprocess.Popen(
-        ["npm", "run", "dev"],
+        ["npx", "vite", "--host", host, "--port", str(vite_port)],
         cwd=ui_dir,
         env=env,
         stdout=subprocess.DEVNULL,
@@ -91,6 +96,42 @@ def main() -> None:
     base_path = str(_SCRIPT_DIR / ".tally-data")
     Path(base_path).mkdir(exist_ok=True)
     (_SCRIPT_DIR / ".auth").mkdir(exist_ok=True)
+
+    import json
+
+    config_dir = Path(base_path) / "config"
+    config_dir.mkdir(exist_ok=True)
+    config_path = config_dir / "global.json"
+    if not config_path.exists():
+        config_path.write_text(
+            json.dumps(
+                {
+                    "ollama": {
+                        "base_url": "http://localhost:11434",
+                        "model": "qwen2.5:14b",
+                        "timeout_seconds": 60,
+                    },
+                    "chat_inference": {"provider": "ollama"},
+                    "enrichment_inference": {
+                        "provider": "ollama",
+                        "timeout_seconds": 5,
+                        "retry_count": 1,
+                    },
+                    "report_inference": {"provider": "ollama"},
+                    "embedding_inference": {
+                        "provider": "ollama",
+                        "model": "nomic-embed-text:latest",
+                    },
+                    "projects_dir": "./projects",
+                    "location_attestation_confirmed": False,
+                    "web_ui_host": args.host,
+                    "web_ui_port": args.api_port,
+                    "web_ui_vite_port": args.vite_port,
+                },
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
 
     from application.bootstrap import BootstrapService
     from application.project.registry_service import ProjectRegistryService
@@ -141,7 +182,7 @@ def main() -> None:
 
     ui_dir = _PROJECT_ROOT / "ui"
     write_env_local(ui_dir, args.host, args.api_port, args.vite_port)
-    start_vite(ui_dir)
+    start_vite(ui_dir, args.host, args.vite_port)
 
     vite_url = f"http://{args.host}:{args.vite_port}"
     if not wait_for_port(args.host, args.vite_port, timeout=15.0):

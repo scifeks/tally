@@ -1,4 +1,4 @@
-import { type Locator, type Page, expect } from "@playwright/test";
+import { type Page, expect } from "@playwright/test";
 import { ROUTES } from "../fixtures/constants";
 
 export class FindingsPage {
@@ -9,55 +9,126 @@ export class FindingsPage {
   }
 
   async selectSegment(segment: string): Promise<void> {
-    await this.page.getByText(segment, { exact: true }).click();
+    await this.page
+      .getByRole("button", { name: segment.toUpperCase() })
+      .click();
   }
 
-  async toggleSeverity(severity: string): Promise<void> {
-    await this.page.getByText(severity, { exact: true }).click();
+  async toggleSeverityFilter(severity: string): Promise<void> {
+    await this.page
+      .locator("button[aria-pressed]")
+      .filter({ hasText: new RegExp(severity, "i") })
+      .click();
   }
 
   async searchFindings(query: string): Promise<void> {
-    const input = this.page.getByPlaceholder(/search/i);
-    await input.fill(query);
+    await this.page
+      .locator("input[aria-label='Search findings']")
+      .fill(query);
+  }
+
+  async clearSearch(): Promise<void> {
+    await this.page
+      .locator("button[aria-label='Clear search']")
+      .click();
   }
 
   async clearFilters(): Promise<void> {
-    await this.page
-      .getByRole("button", { name: /clear/i })
-      .click();
+    await this.page.getByText("clear filters", { exact: false }).click();
   }
 
-  async clickFinding(index: number): Promise<void> {
-    const rows = this.page.locator("[data-finding-row]");
+  async clickFindingRow(index: number): Promise<void> {
+    const rows = this.page.locator("[role='button'][data-index]");
     await rows.nth(index).click();
   }
 
-  async selectFinding(index: number): Promise<void> {
-    const checkboxes = this.page.locator(
-      "input[type='checkbox']"
-    );
-    await checkboxes.nth(index).check();
+  async selectFindingCheckbox(index: number): Promise<void> {
+    await this.page
+      .locator("input[type='checkbox'][aria-label^='Select ']")
+      .nth(index)
+      .check();
   }
 
-  async bulkMarkFalsePositive(): Promise<void> {
+  async editTitle(newTitle: string): Promise<void> {
     await this.page
-      .getByRole("button", { name: /MARK FALSE-POS/i })
+      .locator("[aria-label='Edit finding title']")
+      .first()
+      .click();
+    const titleInput = this.page.locator(
+      "input[aria-label='Edit finding title']"
+    );
+    await titleInput.fill(newTitle);
+    await titleInput.press("Enter");
+  }
+
+  async editNotes(notes: string): Promise<void> {
+    await this.page
+      .locator("[aria-label='Edit notes']")
+      .first()
+      .click();
+    const notesInput = this.page.locator(
+      "textarea[aria-label='Edit notes']"
+    );
+    await notesInput.fill(notes);
+    await notesInput.press("Enter");
+  }
+
+  async markFixed(): Promise<void> {
+    await this.page.getByText("mark fixed", { exact: true }).click();
+  }
+
+  async markFalsePositive(): Promise<void> {
+    await this.page.getByText("false-pos", { exact: true }).click();
+  }
+
+  async markWontFix(): Promise<void> {
+    await this.page.getByText("wontfix", { exact: true }).click();
+  }
+
+  async deleteFinding(): Promise<void> {
+    await this.page
+      .getByText("delete finding", { exact: true })
       .click();
   }
 
-  async bulkMarkFixed(): Promise<void> {
+  async confirmDelete(): Promise<void> {
     await this.page
-      .getByRole("button", { name: /MARK FIXED/i })
+      .getByText("confirm delete", { exact: true })
       .click();
   }
 
   async openCreateFindingModal(): Promise<void> {
     await this.page
-      .getByRole("button", { name: /ADD ISSUE/i })
+      .getByText("+ add issue", { exact: false })
+      .click();
+  }
+
+  async fillManualFindingTitle(title: string): Promise<void> {
+    await this.page.getByPlaceholder("finding title").fill(title);
+  }
+
+  async selectManualFindingSeverity(severity: string): Promise<void> {
+    await this.page
+      .getByLabel("SEVERITY", { exact: false })
+      .selectOption(severity);
+  }
+
+  async submitManualFinding(): Promise<void> {
+    await this.page
+      .getByRole("button", { name: /create/i })
+      .last()
       .click();
   }
 
   async expectFindingsVisible(): Promise<void> {
-    await expect(this.page.locator("table, [role='grid']")).toBeVisible();
+    await expect(
+      this.page.locator("[role='button'][data-index]").first()
+    ).toBeVisible({ timeout: 10_000 });
+  }
+
+  async expectDetailPanelVisible(): Promise<void> {
+    await expect(
+      this.page.getByText("detail ::", { exact: false })
+    ).toBeVisible();
   }
 }
