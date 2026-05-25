@@ -93,4 +93,79 @@ export class ReportsPage {
       this.page.getByText(filename, { exact: false })
     ).toBeVisible();
   }
+
+  async waitForDraftComplete(
+    section: string,
+    timeoutMs: number = TIMEOUTS.reportGeneration
+  ): Promise<void> {
+    const draftCard = this.page.locator(
+      `[data-testid='report-draft-${section}-generate']`
+    );
+    await expect(draftCard).toBeEnabled({ timeout: timeoutMs });
+  }
+
+  async waitForReportComplete(
+    timeoutMs: number = TIMEOUTS.reportGeneration
+  ): Promise<void> {
+    const resetButton = this.page.locator(
+      "[data-testid='report-reset-button']"
+    );
+    await expect(resetButton).toBeVisible({ timeout: timeoutMs });
+  }
+
+  async getDraftStatus(section: string): Promise<string | null> {
+    const statusText = this.page.locator(
+      `[data-testid='report-draft-${section}-status']`
+    );
+    return statusText.textContent();
+  }
+
+  async clickRegenerate(section: string): Promise<void> {
+    await this.page
+      .locator(`[data-testid='report-draft-${section}-regenerate']`)
+      .click();
+  }
+
+  async getReportHistoryCount(): Promise<number> {
+    const rows = this.page.locator(
+      "[data-testid^='report-history-row-']"
+    );
+    return rows.count();
+  }
+
+  async editReportName(newName: string): Promise<void> {
+    const nameInput = this.page.locator(
+      "[data-testid='report-detail-name']"
+    );
+    await nameInput.click();
+    await nameInput.fill(newName);
+    await nameInput.blur();
+  }
+
+  async editReportNotes(newNotes: string): Promise<void> {
+    const notesInput = this.page.locator(
+      "[data-testid='report-detail-notes']"
+    );
+    await notesInput.click();
+    await notesInput.fill(newNotes);
+    await notesInput.blur();
+  }
+
+  async deleteReport(): Promise<void> {
+    await this.page
+      .locator("[data-testid='report-detail-delete']")
+      .click();
+  }
+
+  async confirmDelete(): Promise<void> {
+    this.page.once("dialog", dialog => {
+      void dialog.accept();
+    });
+  }
+
+  async selectReportFromHistory(reportId: number): Promise<void> {
+    await this.page
+      .locator(`[data-testid='report-history-row-${reportId}']`)
+      .click();
+  }
 }

@@ -1,5 +1,6 @@
 import { test, expect } from "../fixtures/base";
 import { TEST_REPOS } from "../fixtures/constants";
+import { getProjectId, apiGet } from "../helpers/common";
 
 test.describe.serial("Journey 1: Project Setup", () => {
   test("verifies project is selected from global setup", async ({
@@ -18,10 +19,18 @@ test.describe.serial("Journey 1: Project Setup", () => {
     await expect(page.getByText("E2E", { exact: true }).first()).toBeVisible();
   });
 
-  test("adds DVEca repository", async ({ configPage }) => {
+  test("adds DVEca repository", async ({ configPage, page }) => {
     await configPage.goto();
     await configPage.addRepository(TEST_REPOS.dveca);
     await configPage.expectRepoInList("DVEca");
+
+    const pid = await getProjectId(page);
+    const repos = await apiGet<{ items: any[] }>(
+      page,
+      `/projects/${pid}/repositories`
+    );
+    const repoNames = repos.items.map((r: any) => r.name);
+    expect(repoNames).toContain("DVEca");
   });
 
   test("verifies repo appears in Config page list", async ({
@@ -49,6 +58,14 @@ test.describe.serial("Journey 1: Project Setup", () => {
 
     await configPage.expectRepoInList("DVEca-edited");
 
+    const pid = await getProjectId(page);
+    const repos = await apiGet<{ items: any[] }>(
+      page,
+      `/projects/${pid}/repositories`
+    );
+    const repoNames = repos.items.map((r: any) => r.name);
+    expect(repoNames).toContain("DVEca-edited");
+
     await configPage.selectRepoByName("DVEca-edited");
     await page.waitForTimeout(500);
     const currentName = await nameInput.inputValue();
@@ -72,6 +89,13 @@ test.describe.serial("Journey 1: Project Setup", () => {
     await configPage.goto();
     await configPage.expectRepoNotInList("DVEca");
     await configPage.expectRepoCount(0);
+
+    const pid = await getProjectId(page);
+    const repos = await apiGet<{ items: any[] }>(
+      page,
+      `/projects/${pid}/repositories`
+    );
+    expect(repos.items.length).toBe(0);
   });
 
   test("re-adds the deleted repository", async ({ configPage }) => {

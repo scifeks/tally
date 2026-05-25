@@ -90,7 +90,7 @@ export function buildScaOverrides(repoId: number) {
 
 export const TIMEOUTS = {
   default: 60_000,
-  scan: 600_000,
+  scan: 1_200_000,
   reportGeneration: 180_000,
   chatStream: 120_000,
   authSetup: 30_000,

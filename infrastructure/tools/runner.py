@@ -42,6 +42,7 @@ class SubprocessRunner(SubprocessRunnerPort):
         try:
             proc = subprocess.Popen(
                 cmd,
+                stdin=subprocess.DEVNULL,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,

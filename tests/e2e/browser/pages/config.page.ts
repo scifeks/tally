@@ -226,4 +226,129 @@ export class ConfigPage {
       .click();
     await this.page.locator("input[id^='tmpl-name-']").last().fill(name);
   }
+
+  async fillAuthLoginUrl(url: string): Promise<void> {
+    await this.page.locator("#repo-auth-login-url").fill(url);
+  }
+
+  async fillAuthUsername(username: string): Promise<void> {
+    await this.page.locator("#repo-auth-username").fill(username);
+  }
+
+  async fillAuthPassword(password: string): Promise<void> {
+    await this.page.locator("#repo-auth-password").fill(password);
+  }
+
+  async saveAuth(): Promise<void> {
+    await this.page
+      .getByRole("button", { name: /Save Auth/i })
+      .click();
+  }
+
+  async expectAuthSaved(): Promise<void> {
+    await expect(
+      this.page.getByText("Saved", { exact: false }).first()
+    ).toBeVisible({ timeout: 5000 });
+  }
+
+  async toggleHeadlessMode(): Promise<void> {
+    const headlessCheckbox = this.page
+      .getByText("Katana headless mode", { exact: false })
+      .locator("..");
+    const button = headlessCheckbox.locator("button").first();
+    await button.click();
+  }
+
+  async setCrawlDepth(depth: number): Promise<void> {
+    await this.page.locator("#repo-crawl-depth").fill(String(depth));
+  }
+
+  async uploadEndpointFile(filePath: string): Promise<void> {
+    await this.page.locator("#repo-endpoint-file").setInputFiles(filePath);
+  }
+
+  async uploadGarakConfig(filePath: string): Promise<void> {
+    await this.page.locator("#repo-garak-config").setInputFiles(filePath);
+  }
+
+  async toggleAdvancedMode(): Promise<void> {
+    await this.page
+      .getByRole("button", { name: "advanced", exact: true })
+      .first()
+      .click();
+  }
+
+  async addService(name: string): Promise<void> {
+    const addBtn = this.page
+      .getByRole("button", { name: /Add|Add Service/i })
+      .filter({ hasText: /add|plus/i });
+    await addBtn.first().click();
+    await this.page.waitForTimeout(300);
+  }
+
+  async removeService(name: string): Promise<void> {
+    const servicePanel = this.page
+      .locator("div")
+      .filter({ hasText: new RegExp(`^${name}$`) });
+    const removeBtn = servicePanel.getByRole("button", { name: /remove|delete/i });
+    await removeBtn.click();
+  }
+
+  async fillServiceBaseUrl(url: string): Promise<void> {
+    const urlLabel = this.page
+      .getByText("Base URLs", { exact: false })
+      .first();
+    const input = urlLabel.locator("..").getByRole("textbox");
+    await input.scrollIntoViewIfNeeded();
+    await input.fill(url);
+    await input.press("Enter");
+  }
+
+  async openArgumentTemplates(): Promise<void> {
+    await this.page
+      .getByText("Argument Templates", { exact: false })
+      .first()
+      .click();
+  }
+
+  async addTemplateArg(
+    flag: string,
+    valueType: string,
+    value?: string
+  ): Promise<void> {
+    await this.page
+      .getByRole("button", { name: /Add|plus/i })
+      .filter({ hasText: /arg/i })
+      .last()
+      .click();
+    await this.page.waitForTimeout(200);
+
+    const lastArgRow = this.page.locator("input[placeholder*='flag']").last();
+    await lastArgRow.fill(flag);
+
+    if (valueType !== "none") {
+      const typeSelect = this.page.locator("select").last();
+      await typeSelect.selectOption(valueType);
+    }
+
+    if (value && valueType !== "file") {
+      const valueInput = this.page.locator("input[placeholder*='value']").last();
+      await valueInput.fill(value);
+    }
+  }
+
+  async saveArgumentTemplate(): Promise<void> {
+    await this.page
+      .getByRole("button", { name: /Save|Done/i })
+      .last()
+      .click();
+  }
+
+  async deleteArgumentTemplate(name: string): Promise<void> {
+    const template = this.page
+      .locator("div")
+      .filter({ hasText: new RegExp(`^${name}`) });
+    const deleteBtn = template.getByRole("button", { name: /delete/i });
+    await deleteBtn.click();
+  }
 }

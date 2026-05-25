@@ -486,6 +486,7 @@ export default function Scans() {
               <span className="text-xs text-high font-bold">{selectedSavedScan.name}</span>
             )}
             <span
+              data-testid="scan-status"
               className={cn(
                 'text-sm font-bold uppercase tracking-wider',
                 runStatus === 'running' && 'text-high animate-pulse',

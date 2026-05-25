@@ -1,7 +1,47 @@
 import { test, expect } from "../fixtures/base";
-import { API_DIRECT, TIMEOUTS } from "../fixtures/constants";
+import { TIMEOUTS } from "../fixtures/constants";
+import { getProjectId, apiGet } from "../helpers/common";
 
 test.describe.serial("Journey 3: Scan Execution", () => {
+  test("cleans stale global tool overrides", async ({ page }) => {
+    await page.goto("/");
+    await page.evaluate(async () => {
+      const projRes = await fetch("/api/v1/projects");
+      const projBody = await projRes.json();
+      const pid = projBody.items
+        ? projBody.items[0].id
+        : projBody[0].id;
+
+      const csrf =
+        document.cookie
+          .split("; ")
+          .find((c) => c.startsWith("tally_csrf="))
+          ?.split("=")[1] ?? "";
+
+      const ovRes = await fetch(
+        `/api/v1/projects/${pid}/tools/overrides`
+      );
+      const ovBody = await ovRes.json();
+      const globals = (ovBody.items ?? ovBody).filter(
+        (o: { scope: string }) => o.scope === "global"
+      );
+      const toolNames = [
+        ...new Set(
+          globals.map((o: { toolName: string }) => o.toolName)
+        ),
+      ];
+      for (const name of toolNames) {
+        await fetch(
+          `/api/v1/projects/${pid}/tools/overrides/${name}`,
+          {
+            method: "DELETE",
+            headers: { "x-csrf-token": csrf },
+          }
+        );
+      }
+    });
+  });
+
   test("starts scan and waits for completion", async ({
     scansPage,
     page,
@@ -16,16 +56,36 @@ test.describe.serial("Journey 3: Scan Execution", () => {
     });
 
     await page.evaluate(async (pid: number) => {
-      await fetch(`/api/v1/projects/${pid}/scans`, {
+      const csrf =
+        document.cookie
+          .split("; ")
+          .find((c) => c.startsWith("tally_csrf="))
+          ?.split("=")[1] ?? "";
+      const catalogRes = await fetch(
+        `/api/v1/projects/${pid}/scans/config`
+      );
+      const catalog = await catalogRes.json();
+      const allTools = catalog.tools.map(
+        (t: { id: string }) => t.id
+      );
+      const res = await fetch(`/api/v1/projects/${pid}/scans`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "x-csrf-token": csrf,
+        },
         body: JSON.stringify({
           skipEnrichment: true,
-          domains: ["sast", "sca", "secrets"],
+          toolIds: allTools,
         }),
       });
+      if (!res.ok) {
+        const body = await res.text();
+        throw new Error(`Scan start failed (${res.status}): ${body}`);
+      }
     }, projectId);
 
+    await scansPage.expectScanRunning();
     await scansPage.waitForScanComplete();
   });
 
@@ -36,19 +96,47 @@ test.describe.serial("Journey 3: Scan Execution", () => {
   });
 
   test("verifies findings produced via API", async ({ page }) => {
-    const projectsRes = await page.request.get(
-      `${API_DIRECT}/projects`
-    );
-    const projectsBody = await projectsRes.json();
-    const projectId = projectsBody.items
-      ? projectsBody.items[0].id
-      : projectsBody[0].id;
+    await page.goto("/");
+    const total = await page.evaluate(async () => {
+      const projRes = await fetch("/api/v1/projects");
+      const projBody = await projRes.json();
+      const pid = projBody.items
+        ? projBody.items[0].id
+        : projBody[0].id;
+      const findRes = await fetch(
+        `/api/v1/projects/${pid}/findings?limit=1`
+      );
+      const findBody = await findRes.json();
+      return findBody.total;
+    });
+    expect(total).toBeGreaterThan(0);
+  });
 
-    const findingsRes = await page.request.get(
-      `${API_DIRECT}/projects/${projectId}/findings?limit=1`
+  test("verifies every configured tool produced findings", async ({
+    page,
+  }) => {
+    const pid = await getProjectId(page);
+    const findings = await apiGet<{ items: any[]; total: number }>(
+      page,
+      `/projects/${pid}/findings?limit=1000`
     );
-    const findingsBody = await findingsRes.json();
-    expect(findingsBody.total).toBeGreaterThan(0);
+
+    const toolsWithFindings = new Set(findings.items.map((f: any) => f.tool));
+
+    const expectedTools = [
+      "semgrep",
+      "gitleaks",
+      "npm-audit",
+      "pip-audit",
+      "composer-audit",
+      "noir",
+    ];
+    for (const tool of expectedTools) {
+      expect(
+        toolsWithFindings.has(tool),
+        `Expected ${tool} to produce findings against DVECA`
+      ).toBe(true);
+    }
   });
 });
 
@@ -80,7 +168,7 @@ test.describe.serial("Journey 3b: Scan UI Interactions", () => {
   test("switches to History tab", async ({ scansPage, page }) => {
     await scansPage.goto();
     await scansPage.switchToHistoryTab();
-    await page.waitForTimeout(500);
+    await expect(page.locator('[role="tabpanel"]').first()).toBeVisible();
   });
 
   test("switches to Saved Scans tab", async ({
@@ -89,7 +177,7 @@ test.describe.serial("Journey 3b: Scan UI Interactions", () => {
   }) => {
     await scansPage.goto();
     await scansPage.switchToSavedTab();
-    await page.waitForTimeout(500);
+    await expect(page.locator('[role="tabpanel"]').first()).toBeVisible();
   });
 
   test("cancels a running scan", async ({ scansPage, page }) => {

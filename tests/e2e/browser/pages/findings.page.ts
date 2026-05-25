@@ -16,21 +16,24 @@ export class FindingsPage {
 
   async toggleSeverityFilter(severity: string): Promise<void> {
     await this.page
-      .locator("button[aria-pressed]")
-      .filter({ hasText: new RegExp(severity, "i") })
+      .getByRole("button", {
+        name: new RegExp(`^${severity}`, "i"),
+      })
       .click();
   }
 
   async searchFindings(query: string): Promise<void> {
-    await this.page
-      .locator("input[aria-label='Search findings']")
-      .fill(query);
+    await this.page.keyboard.press("/");
+    await this.page.waitForTimeout(200);
+    await this.page.keyboard.type(query);
   }
 
   async clearSearch(): Promise<void> {
-    await this.page
-      .locator("button[aria-label='Clear search']")
-      .click();
+    await this.page.keyboard.press("/");
+    await this.page.waitForTimeout(200);
+    await this.page.keyboard.press("Control+a");
+    await this.page.keyboard.press("Backspace");
+    await this.page.keyboard.press("Escape");
   }
 
   async clearFilters(): Promise<void> {
@@ -99,7 +102,7 @@ export class FindingsPage {
 
   async openCreateFindingModal(): Promise<void> {
     await this.page
-      .getByText("+ add issue", { exact: false })
+      .getByRole("button", { name: /add issue/i })
       .click();
   }
 
@@ -111,6 +114,10 @@ export class FindingsPage {
     await this.page
       .getByLabel("SEVERITY", { exact: false })
       .selectOption(severity);
+  }
+
+  async fillManualFindingUrl(url: string): Promise<void> {
+    await this.page.getByPlaceholder("url").fill(url);
   }
 
   async submitManualFinding(): Promise<void> {
@@ -130,5 +137,51 @@ export class FindingsPage {
     await expect(
       this.page.getByText("detail ::", { exact: false })
     ).toBeVisible();
+  }
+
+  async getVisibleFindingCount(): Promise<number> {
+    const rows = this.page.locator("[role='button'][data-index]");
+    return rows.count();
+  }
+
+  async editStatus(status: string): Promise<void> {
+    const select = this.page
+      .locator("[aria-label='Edit status']")
+      .first();
+    await select.click();
+    await this.page.waitForTimeout(200);
+    await this.page.getByRole("option", { name: new RegExp(status, "i") }).first().click();
+  }
+
+  async editShouldReport(shouldReport: boolean): Promise<void> {
+    const checkbox = this.page.locator(
+      "input[aria-label='should report finding']"
+    );
+    if (shouldReport) {
+      await checkbox.check();
+    } else {
+      await checkbox.uncheck();
+    }
+  }
+
+  async editBusinessImpact(impact: string): Promise<void> {
+    const notesField = this.page.locator(
+      "textarea[aria-label='Edit notes']"
+    );
+    await notesField.click();
+    await notesField.fill(impact);
+    await notesField.press("Enter");
+  }
+
+  async selectManualFindingStatus(status: string): Promise<void> {
+    await this.page
+      .getByLabel("STATUS", { exact: false })
+      .selectOption(status);
+  }
+
+  async selectManualFindingTool(tool: string): Promise<void> {
+    await this.page
+      .getByLabel("TOOL", { exact: false })
+      .selectOption(tool);
   }
 }

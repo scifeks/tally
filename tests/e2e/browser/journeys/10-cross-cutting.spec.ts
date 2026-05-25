@@ -7,10 +7,21 @@ test.describe.serial("Journey 10: Cross-Cutting Concerns", () => {
     page,
   }) => {
     await page.goto("/");
+
+    const expectedUrls: Record<string, RegExp> = {
+      DASHBOARD: /\/$/,
+      FINDINGS: /\/findings/,
+      "URL LISTS": /\/urls/,
+      SCANS: /\/scans/,
+      REPORTS: /\/reports/,
+      CHAT: /\/chat/,
+      CONFIG: /\/config/,
+    };
+
     for (const tab of NAV_TABS) {
       if (tab === "TRIAGE") continue;
       await topBar.navigateTo(tab);
-      await page.waitForTimeout(300);
+      await expect(page).toHaveURL(expectedUrls[tab]);
     }
   });
 
