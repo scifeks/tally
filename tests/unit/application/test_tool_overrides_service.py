@@ -200,6 +200,9 @@ class TestCreateOrchestration:
             path="/usr/bin/semgrep",
             container_name=None,
             container_tool_path=None,
+            scope="global",
+            repo_id=None,
+            service_name=None,
         )
 
     def test_docker_create_inserts_with_container_and_clears_path(self) -> None:
@@ -230,6 +233,9 @@ class TestCreateOrchestration:
             path=None,
             container_name="semgrep-runner",
             container_tool_path="/usr/bin/semgrep",
+            scope="global",
+            repo_id=None,
+            service_name=None,
         )
 
     def test_create_returns_freshly_fetched_row(self) -> None:
@@ -361,6 +367,9 @@ class TestReplaceOrchestration:
             path="/usr/bin/semgrep",
             container_name=None,
             container_tool_path=None,
+            scope="global",
+            repo_id=None,
+            service_name=None,
         )
 
     def test_replace_docker_clears_path(self) -> None:
@@ -387,6 +396,9 @@ class TestReplaceOrchestration:
             path=None,
             container_name="runner",
             container_tool_path="/usr/bin/semgrep",
+            scope="global",
+            repo_id=None,
+            service_name=None,
         )
 
     def test_replace_returns_freshly_fetched_row(self) -> None:
