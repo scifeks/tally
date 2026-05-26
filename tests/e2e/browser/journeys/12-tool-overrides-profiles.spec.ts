@@ -3,6 +3,7 @@ import {
   getProjectId,
   apiGet,
   apiPost,
+  apiPut,
   apiPatch,
   apiDelete,
 } from "../helpers/common";
@@ -11,6 +12,10 @@ import { buildScaOverrides, DVECA_SCAN_TARGET_SERVICES } from "../fixtures/const
 test.describe.serial("Journey 12: Tool Overrides & Argument Profiles", () => {
   let projectId: number;
   let dvecaRepoId: number;
+
+  test.beforeEach(async ({ page }) => {
+    await page.goto("/");
+  });
 
   test("gets project and repo IDs", async ({ page }) => {
     await page.goto("/");
@@ -33,8 +38,9 @@ test.describe.serial("Journey 12: Tool Overrides & Argument Profiles", () => {
   });
 
   test("creates global override with local path", async ({ page }) => {
+    await page.goto("/");
     const override = {
-      toolId: "gitleaks",
+      toolName: "gitleaks",
       type: "repo" as const,
       location: "local" as const,
       path: "/usr/local/bin/gitleaks",
@@ -42,7 +48,7 @@ test.describe.serial("Journey 12: Tool Overrides & Argument Profiles", () => {
     };
 
     const result = await apiPost(page, `/projects/${projectId}/tools/overrides`, {
-      toolId: override.toolId,
+      toolName: override.toolName,
       type: override.type,
       location: override.location,
       path: override.path,
@@ -56,7 +62,7 @@ test.describe.serial("Journey 12: Tool Overrides & Argument Profiles", () => {
       `/projects/${projectId}/tools/overrides`
     );
     const created = overrides.items.find(
-      (o: any) => o.toolId === "gitleaks" && o.scope === "global"
+      (o: any) => o.toolName === "gitleaks" && o.scope === "global"
     );
     expect(created).toBeDefined();
     expect(created.location).toBe("local");
@@ -64,8 +70,9 @@ test.describe.serial("Journey 12: Tool Overrides & Argument Profiles", () => {
   });
 
   test("creates global override with Docker location", async ({ page }) => {
+    await page.goto("/");
     const override = {
-      toolId: "zap",
+      toolName: "zap",
       type: "repo" as const,
       location: "docker" as const,
       container: {
@@ -76,7 +83,7 @@ test.describe.serial("Journey 12: Tool Overrides & Argument Profiles", () => {
     };
 
     const result = await apiPost(page, `/projects/${projectId}/tools/overrides`, {
-      toolId: override.toolId,
+      toolName: override.toolName,
       type: override.type,
       location: override.location,
       container: override.container,
@@ -90,7 +97,7 @@ test.describe.serial("Journey 12: Tool Overrides & Argument Profiles", () => {
       `/projects/${projectId}/tools/overrides`
     );
     const created = overrides.items.find(
-      (o: any) => o.toolId === "zap" && o.scope === "global"
+      (o: any) => o.toolName === "zap" && o.scope === "global"
     );
     expect(created).toBeDefined();
     expect(created.location).toBe("docker");
@@ -98,29 +105,26 @@ test.describe.serial("Journey 12: Tool Overrides & Argument Profiles", () => {
   });
 
   test("updates override location", async ({ page }) => {
+    await page.goto("/");
     const overrides = await apiGet<{ items: any[] }>(
       page,
       `/projects/${projectId}/tools/overrides`
     );
     const override = overrides.items.find(
-      (o: any) => o.toolId === "zap" && o.scope === "global"
+      (o: any) => o.toolName === "zap" && o.scope === "global"
     );
 
     expect(override).toBeDefined();
 
-    const updated = {
-      ...override,
-      location: "local" as const,
-      path: "/usr/local/bin/zaproxy",
-      container: undefined,
-    };
-
-    const result = await apiPatch(
+    const result = await apiPut(
       page,
-      `/projects/${projectId}/tools/overrides/${override.id}`,
+      `/projects/${projectId}/tools/overrides/${override.toolName}`,
       {
+        toolName: override.toolName,
+        type: override.type,
         location: "local",
         path: "/usr/local/bin/zaproxy",
+        argsMode: override.argsMode,
       }
     );
 
@@ -131,35 +135,37 @@ test.describe.serial("Journey 12: Tool Overrides & Argument Profiles", () => {
       `/projects/${projectId}/tools/overrides`
     );
     const updated_override = refreshed.items.find(
-      (o: any) => o.toolId === "zap"
+      (o: any) => o.toolName === "zap"
     );
     expect(updated_override.location).toBe("local");
   });
 
   test("deletes global override", async ({ page }) => {
+    await page.goto("/");
     const overrides = await apiGet<{ items: any[] }>(
       page,
       `/projects/${projectId}/tools/overrides`
     );
     const gitleaks = overrides.items.find(
-      (o: any) => o.toolId === "gitleaks" && o.scope === "global"
+      (o: any) => o.toolName === "gitleaks" && o.scope === "global"
     );
 
     expect(gitleaks).toBeDefined();
 
-    await apiDelete(page, `/projects/${projectId}/tools/overrides/${gitleaks.id}`);
+    await apiDelete(page, `/projects/${projectId}/tools/overrides/${gitleaks.toolName}`);
 
     const refreshed = await apiGet<{ items: any[] }>(
       page,
       `/projects/${projectId}/tools/overrides`
     );
     const deleted = refreshed.items.find(
-      (o: any) => o.toolId === "gitleaks" && o.scope === "global"
+      (o: any) => o.toolName === "gitleaks" && o.scope === "global"
     );
     expect(deleted).toBeUndefined();
   });
 
   test("adds scan-target services to DVEca repo", async ({ page }) => {
+    await page.goto("/");
     const services = DVECA_SCAN_TARGET_SERVICES;
     await page.evaluate(
       async ({ pid, rid, svcs }) => {
@@ -196,31 +202,41 @@ test.describe.serial("Journey 12: Tool Overrides & Argument Profiles", () => {
   });
 
   test("creates service-scoped override", async ({ page }) => {
-    const override = {
-      toolName: "composer-audit",
-      argsMode: "stock" as const,
-      type: "repo" as const,
-      location: "docker" as const,
-      scope: "service" as const,
-      repoId: dvecaRepoId,
-      serviceName: "sca-php",
-      container: {
-        name: "dveca-scan-target-1",
-        toolPath: "/usr/local/bin/composer",
-      },
-    };
-
-    const result = await apiPost(page, `/projects/${projectId}/tools/overrides`, {
-      ...override,
-    });
-
-    expect(result).toBeDefined();
-
     const overrides = await apiGet<{ items: any[] }>(
       page,
       `/projects/${projectId}/tools/overrides`
     );
-    const created = overrides.items.find(
+    const existing = overrides.items.find(
+      (o: any) =>
+        o.toolName === "composer-audit" &&
+        o.scope === "service" &&
+        o.serviceName === "sca-php"
+    );
+
+    if (!existing) {
+      const override = {
+        toolName: "composer-audit",
+        argsMode: "stock" as const,
+        type: "repo" as const,
+        location: "docker" as const,
+        scope: "service" as const,
+        repoId: dvecaRepoId,
+        serviceName: "sca-php",
+        container: {
+          name: "dveca-scan-target-1",
+          toolPath: "/usr/local/bin/composer",
+        },
+      };
+      await apiPost(page, `/projects/${projectId}/tools/overrides`, {
+        ...override,
+      });
+    }
+
+    const refreshed = await apiGet<{ items: any[] }>(
+      page,
+      `/projects/${projectId}/tools/overrides`
+    );
+    const created = refreshed.items.find(
       (o: any) => o.toolName === "composer-audit" && o.scope === "service"
     );
     expect(created).toBeDefined();
@@ -286,7 +302,7 @@ test.describe.serial("Journey 12: Tool Overrides & Argument Profiles", () => {
     const toDelete = scoped[0];
     await apiDelete(
       page,
-      `/projects/${projectId}/tools/overrides/${toDelete.id}`
+      `/projects/${projectId}/tools/overrides/${toDelete.toolName}`
     );
 
     const refreshed = await apiGet<{ items: any[] }>(
@@ -311,7 +327,7 @@ test.describe.serial("Journey 12: Tool Overrides & Argument Profiles", () => {
 
     const result = await apiPost(
       page,
-      `/projects/${projectId}/tools/arg-profiles`,
+      `/projects/${projectId}/arg-profiles`,
       {
         toolName: profile.toolName,
         name: profile.name,
@@ -323,7 +339,7 @@ test.describe.serial("Journey 12: Tool Overrides & Argument Profiles", () => {
 
     const profiles = await apiGet<{ items: any[] }>(
       page,
-      `/projects/${projectId}/tools/arg-profiles`
+      `/projects/${projectId}/arg-profiles`
     );
     const created = profiles.items.find(
       (p: any) => p.name === "ZAP Quick Scan"
@@ -346,7 +362,7 @@ test.describe.serial("Journey 12: Tool Overrides & Argument Profiles", () => {
 
     const result = await apiPost(
       page,
-      `/projects/${projectId}/tools/arg-profiles`,
+      `/projects/${projectId}/arg-profiles`,
       {
         toolName: profile.toolName,
         name: profile.name,
@@ -358,7 +374,7 @@ test.describe.serial("Journey 12: Tool Overrides & Argument Profiles", () => {
 
     const profiles = await apiGet<{ items: any[] }>(
       page,
-      `/projects/${projectId}/tools/arg-profiles`
+      `/projects/${projectId}/arg-profiles`
     );
     const created = profiles.items.find(
       (p: any) => p.name === "Gitleaks with Config"
@@ -369,7 +385,7 @@ test.describe.serial("Journey 12: Tool Overrides & Argument Profiles", () => {
   test("edits argument profile", async ({ page }) => {
     const profiles = await apiGet<{ items: any[] }>(
       page,
-      `/projects/${projectId}/tools/arg-profiles`
+      `/projects/${projectId}/arg-profiles`
     );
     const profile = profiles.items.find(
       (p: any) => p.name === "ZAP Quick Scan"
@@ -389,7 +405,7 @@ test.describe.serial("Journey 12: Tool Overrides & Argument Profiles", () => {
 
     const result = await apiPatch(
       page,
-      `/projects/${projectId}/tools/arg-profiles/${profile.id}`,
+      `/projects/${projectId}/arg-profiles/${profile.id}`,
       {
         name: updated.name,
         arguments: updated.arguments,
@@ -400,7 +416,7 @@ test.describe.serial("Journey 12: Tool Overrides & Argument Profiles", () => {
 
     const refreshed = await apiGet<{ items: any[] }>(
       page,
-      `/projects/${projectId}/tools/arg-profiles`
+      `/projects/${projectId}/arg-profiles`
     );
     const updated_profile = refreshed.items.find(
       (p: any) => p.id === profile.id
@@ -412,7 +428,7 @@ test.describe.serial("Journey 12: Tool Overrides & Argument Profiles", () => {
   test("deletes argument profile", async ({ page }) => {
     const profiles = await apiGet<{ items: any[] }>(
       page,
-      `/projects/${projectId}/tools/arg-profiles`
+      `/projects/${projectId}/arg-profiles`
     );
     const toDelete = profiles.items.find(
       (p: any) => p.name === "Gitleaks with Config"
@@ -422,12 +438,12 @@ test.describe.serial("Journey 12: Tool Overrides & Argument Profiles", () => {
 
     await apiDelete(
       page,
-      `/projects/${projectId}/tools/arg-profiles/${toDelete.id}`
+      `/projects/${projectId}/arg-profiles/${toDelete.id}`
     );
 
     const refreshed = await apiGet<{ items: any[] }>(
       page,
-      `/projects/${projectId}/tools/arg-profiles`
+      `/projects/${projectId}/arg-profiles`
     );
     const deleted = refreshed.items.find(
       (p: any) => p.id === toDelete.id
@@ -441,14 +457,14 @@ test.describe.serial("Journey 12: Tool Overrides & Argument Profiles", () => {
       `/projects/${projectId}/tools/overrides`
     );
     const override = overrides.items.find(
-      (o: any) => o.toolId === "zap" && o.scope === "global"
+      (o: any) => o.toolName === "zap" && o.scope === "global"
     );
 
     expect(override).toBeDefined();
 
     const profiles = await apiGet<{ items: any[] }>(
       page,
-      `/projects/${projectId}/tools/arg-profiles`
+      `/projects/${projectId}/arg-profiles`
     );
     const profile = profiles.items.find(
       (p: any) => p.name === "ZAP Extended Scan"
@@ -478,7 +494,7 @@ test.describe.serial("Journey 12: Tool Overrides & Argument Profiles", () => {
       `/projects/${projectId}/tools/overrides`
     );
     const updated_override = refreshed.items.find(
-      (o: any) => o.toolId === "zap"
+      (o: any) => o.toolName === "zap"
     );
     expect(updated_override.argsMode).toBe("custom");
   });
@@ -489,7 +505,7 @@ test.describe.serial("Journey 12: Tool Overrides & Argument Profiles", () => {
       `/projects/${projectId}/tools/overrides`
     );
     const override = overrides.items.find(
-      (o: any) => o.toolId === "zap" && o.argsMode === "custom"
+      (o: any) => o.toolName === "zap" && o.argsMode === "custom"
     );
 
     expect(override).toBeDefined();
@@ -497,7 +513,7 @@ test.describe.serial("Journey 12: Tool Overrides & Argument Profiles", () => {
 
     const profiles = await apiGet<{ items: any[] }>(
       page,
-      `/projects/${projectId}/tools/arg-profiles`
+      `/projects/${projectId}/arg-profiles`
     );
     const profile = profiles.items.find(
       (p: any) => p.id === override.argProfileId
@@ -512,7 +528,7 @@ test.describe.serial("Journey 12: Tool Overrides & Argument Profiles", () => {
       `/projects/${projectId}/tools/overrides`
     );
     const override = overrides.items.find(
-      (o: any) => o.toolId === "zap" && o.argsMode === "custom"
+      (o: any) => o.toolName === "zap" && o.argsMode === "custom"
     );
 
     expect(override).toBeDefined();
@@ -538,7 +554,7 @@ test.describe.serial("Journey 12: Tool Overrides & Argument Profiles", () => {
       `/projects/${projectId}/tools/overrides`
     );
     const updated_override = refreshed.items.find(
-      (o: any) => o.toolId === "zap"
+      (o: any) => o.toolName === "zap"
     );
     expect(updated_override.argsMode).toBe("stock");
   });
@@ -553,7 +569,7 @@ test.describe.serial("Journey 12: Tool Overrides & Argument Profiles", () => {
       if (override.scope === "global") {
         await apiDelete(
           page,
-          `/projects/${projectId}/tools/overrides/${override.id}`
+          `/projects/${projectId}/tools/overrides/${override.toolName}`
         );
       }
     }
@@ -571,19 +587,19 @@ test.describe.serial("Journey 12: Tool Overrides & Argument Profiles", () => {
   test("cleans up argument profiles", async ({ page }) => {
     const profiles = await apiGet<{ items: any[] }>(
       page,
-      `/projects/${projectId}/tools/arg-profiles`
+      `/projects/${projectId}/arg-profiles`
     );
 
     for (const profile of profiles.items) {
       await apiDelete(
         page,
-        `/projects/${projectId}/tools/arg-profiles/${profile.id}`
+        `/projects/${projectId}/arg-profiles/${profile.id}`
       );
     }
 
     const refreshed = await apiGet<{ items: any[] }>(
       page,
-      `/projects/${projectId}/tools/arg-profiles`
+      `/projects/${projectId}/arg-profiles`
     );
     expect(refreshed.items.length).toBe(0);
   });

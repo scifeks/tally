@@ -10,13 +10,14 @@ test.describe.serial("Journey 11: Repository Configuration & Auth", () => {
   const testPath = "/tmp/test-repo-config";
 
   test("adds a repository in basic mode", async ({ configPage, page }) => {
+    fs.mkdirSync(testPath, { recursive: true });
     await configPage.goto();
     await configPage.clickNewRepo();
     await configPage.fillRepoName(testRepoName);
     await configPage.fillLocalPath(testPath);
     await configPage.selectServiceType("api");
     await configPage.clickSave();
-    await page.waitForTimeout(500);
+    await page.waitForTimeout(1000);
 
     const pid = await getProjectId(page);
     const repos = await apiGet<{ items: any[] }>(
@@ -131,15 +132,14 @@ test.describe.serial("Journey 11: Repository Configuration & Auth", () => {
     await configPage.selectRepoByName(`${testRepoName}-advanced`);
     await page.waitForTimeout(500);
 
-    const initialServiceCount = await page
-      .locator("[data-testid*='service']")
-      .count();
-
+    const serviceItems = page.locator("[role='button']").filter({
+      hasText: /service-/i,
+    });
+    const initialServiceCount = await serviceItems.count();
     expect(initialServiceCount).toBeGreaterThan(1);
-    const removeBtn = page
-      .getByRole("button", { name: /remove|delete/i })
-      .first();
-    await removeBtn.click();
+
+    const removeBtn = page.locator("button[title='Remove service']").first();
+    await removeBtn.click({ force: true });
     await page.waitForTimeout(300);
 
     await configPage.clickSave();
@@ -403,6 +403,7 @@ test.describe.serial("Journey 11: Repository Configuration & Auth", () => {
   });
 
   test("creates new repo for auth testing", async ({ configPage, page }) => {
+    fs.mkdirSync("/tmp/auth-test", { recursive: true });
     await configPage.goto();
     await configPage.clickNewRepo();
     await configPage.fillRepoName("auth-test-repo");

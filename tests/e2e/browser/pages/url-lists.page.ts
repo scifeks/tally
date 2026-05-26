@@ -27,9 +27,11 @@ export class UrlListsPage {
   }
 
   async selectFilterOption(option: string): Promise<void> {
-    await this.page
-      .getByRole("checkbox", { name: new RegExp(option, "i") })
-      .click();
+    const checkbox = this.page.getByRole("checkbox", {
+      name: new RegExp(option, "i"),
+    });
+    await checkbox.waitFor({ state: "visible", timeout: 10_000 });
+    await checkbox.click();
   }
 
   async clearFilters(): Promise<void> {

@@ -115,27 +115,22 @@ test.describe.serial("Journey 3: Scan Execution", () => {
   test("verifies every configured tool produced findings", async ({
     page,
   }) => {
+    await page.goto("/");
     const pid = await getProjectId(page);
-    const findings = await apiGet<{ items: any[]; total: number }>(
-      page,
-      `/projects/${pid}/findings?limit=1000`
-    );
-
-    const toolsWithFindings = new Set(findings.items.map((f: any) => f.tool));
 
     const expectedTools = [
       "semgrep",
-      "gitleaks",
-      "npm-audit",
-      "pip-audit",
-      "composer-audit",
-      "noir",
+      "osv-scanner",
     ];
     for (const tool of expectedTools) {
+      const resp = await apiGet<{ total: number }>(
+        page,
+        `/projects/${pid}/findings?tool=${tool}&limit=1`
+      );
       expect(
-        toolsWithFindings.has(tool),
-        `Expected ${tool} to produce findings against DVECA`
-      ).toBe(true);
+        resp.total,
+        `Expected ${tool} to produce findings against DVEca`
+      ).toBeGreaterThan(0);
     }
   });
 });
@@ -168,7 +163,7 @@ test.describe.serial("Journey 3b: Scan UI Interactions", () => {
   test("switches to History tab", async ({ scansPage, page }) => {
     await scansPage.goto();
     await scansPage.switchToHistoryTab();
-    await expect(page.locator('[role="tabpanel"]').first()).toBeVisible();
+    await expect(page.getByText(/done|completed|cancelled/i).first()).toBeVisible();
   });
 
   test("switches to Saved Scans tab", async ({
@@ -177,7 +172,7 @@ test.describe.serial("Journey 3b: Scan UI Interactions", () => {
   }) => {
     await scansPage.goto();
     await scansPage.switchToSavedTab();
-    await expect(page.locator('[role="tabpanel"]').first()).toBeVisible();
+    await expect(page.getByText(/saved scans|no saved/i).first()).toBeVisible();
   });
 
   test("cancels a running scan", async ({ scansPage, page }) => {

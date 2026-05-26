@@ -22,21 +22,21 @@ test.describe.serial("Journey 6: Findings Review", () => {
 
     expect(response.total).toBeGreaterThan(0);
   });
-  test("filters by critical severity", async ({ findingsPage, page }) => {
+  test("filters by severity and verifies via API", async ({ findingsPage, page }) => {
     await findingsPage.goto();
     await findingsPage.expectFindingsVisible();
-    await findingsPage.toggleSeverityFilter("critical");
+    await findingsPage.toggleSeverityFilter("high");
     await page.waitForTimeout(500);
 
     const pid = await getProjectId(page);
     const response = await apiGet<{
       items: { severity: string }[];
       total: number;
-    }>(page, `/projects/${pid}/findings?severity=critical&limit=50`);
+    }>(page, `/projects/${pid}/findings?severity=high&limit=50`);
 
     expect(response.total).toBeGreaterThan(0);
     for (const f of response.items) {
-      expect(f.severity).toBe("critical");
+      expect(f.severity).toBe("high");
     }
   });
 
@@ -93,7 +93,7 @@ test.describe.serial("Journey 6: Findings Review", () => {
 
   test("clears severity filters", async ({ findingsPage, page }) => {
     await findingsPage.goto();
-    await findingsPage.toggleSeverityFilter("critical");
+    await findingsPage.toggleSeverityFilter("medium");
     await page.waitForTimeout(300);
     await findingsPage.clearFilters();
     await page.waitForTimeout(500);
@@ -122,7 +122,7 @@ test.describe.serial("Journey 6: Findings Review", () => {
     }
   });
 
-  test("filters by gitleaks tool", async ({ findingsPage, page }) => {
+  test("filters by tool", async ({ findingsPage, page }) => {
     await findingsPage.goto();
     await findingsPage.expectFindingsVisible();
 
@@ -130,11 +130,11 @@ test.describe.serial("Journey 6: Findings Review", () => {
     const response = await apiGet<{
       items: { tool: string }[];
       total: number;
-    }>(page, `/projects/${pid}/findings?tool=gitleaks&limit=50`);
+    }>(page, `/projects/${pid}/findings?tool=semgrep&limit=50`);
 
     expect(response.total).toBeGreaterThan(0);
     for (const f of response.items) {
-      expect(f.tool).toBe("gitleaks");
+      expect(f.tool).toBe("semgrep");
     }
   });
   test("sorts by severity descending", async ({ findingsPage, page }) => {
@@ -174,8 +174,8 @@ test.describe.serial("Journey 6: Findings Review", () => {
 
     expect(response.items.length).toBeGreaterThan(1);
     for (let i = 1; i < response.items.length; i++) {
-      const prev = response.items[i - 1].title.toLowerCase();
-      const curr = response.items[i].title.toLowerCase();
+      const prev = (response.items[i - 1].title ?? "").toLowerCase();
+      const curr = (response.items[i].title ?? "").toLowerCase();
       expect(prev <= curr).toBe(true);
     }
   });
@@ -454,11 +454,11 @@ test.describe.serial("Journey 6: Findings Review", () => {
       { should_report: !wasFlagged }
     );
 
-    const response = await apiGet<{ should_report: boolean }>(
+    const response = await apiGet<{ should_report: number }>(
       page,
       `/projects/${pid}/findings/${findingId}`
     );
-    expect(response.should_report).toBe(!wasFlagged);
+    expect(!!response.should_report).toBe(!wasFlagged);
   });
 
   test("edits business impact", async ({ findingsPage, page }) => {

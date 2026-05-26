@@ -76,6 +76,32 @@ export async function apiPatch<T = unknown>(
   );
 }
 
+export async function apiPut<T = unknown>(
+  page: Page,
+  path: string,
+  body: unknown
+): Promise<T> {
+  return page.evaluate(
+    async ({ base, p, b }: { base: string; p: string; b: unknown }) => {
+      const csrf = document.cookie
+        .split("; ")
+        .find((c) => c.startsWith("tally_csrf="))
+        ?.split("=")[1];
+      const res = await fetch(`${base}${p}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          ...(csrf ? { "X-CSRF-Token": csrf } : {}),
+        },
+        body: JSON.stringify(b),
+      });
+      if (!res.ok) throw new Error(`PUT ${p} returned ${res.status}`);
+      return res.json();
+    },
+    { base: API_BASE, p: path, b: body }
+  );
+}
+
 export async function apiDelete(page: Page, path: string): Promise<void> {
   await page.evaluate(
     async ({ base, p }: { base: string; p: string }) => {

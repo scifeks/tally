@@ -15,11 +15,19 @@ export class FindingsPage {
   }
 
   async toggleSeverityFilter(severity: string): Promise<void> {
-    await this.page
-      .getByRole("button", {
-        name: new RegExp(`^${severity}`, "i"),
-      })
-      .click();
+    const labelMap: Record<string, string> = {
+      critical: "CRIT",
+      high: "HIGH",
+      medium: "MED",
+      low: "LOW",
+      informational: "INFO",
+    };
+    const label = labelMap[severity] ?? severity;
+    const btn = this.page.getByRole("button", {
+      name: new RegExp(`^${label}`, "i"),
+    });
+    await btn.waitFor({ state: "visible", timeout: 10_000 });
+    await btn.click();
   }
 
   async searchFindings(query: string): Promise<void> {

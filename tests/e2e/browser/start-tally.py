@@ -24,6 +24,24 @@ _PROJECT_ROOT = _SCRIPT_DIR.parents[2]
 sys.path.insert(0, str(_PROJECT_ROOT))
 
 
+def _detect_ollama_url() -> str:
+    """Resolve the Ollama base URL from env, systemd config, or default."""
+    import re
+
+    host = os.environ.get("OLLAMA_HOST")
+    if not host:
+        try:
+            unit = Path("/etc/systemd/system/ollama.service").read_text()
+            match = re.search(r"OLLAMA_HOST=([^\s\"]+)", unit)
+            if match:
+                host = match.group(1)
+        except OSError:
+            pass
+    if not host:
+        host = "localhost:11434"
+    return host if host.startswith("http") else f"http://{host}"
+
+
 def acquire_instance_lock() -> None:
     fd = os.open(str(_LOCK_PATH), os.O_CREAT | os.O_RDWR, 0o644)
     try:
@@ -102,12 +120,13 @@ def main() -> None:
     config_dir = Path(base_path) / "config"
     config_dir.mkdir(exist_ok=True)
     config_path = config_dir / "global.json"
+    ollama_host = _detect_ollama_url()
     if not config_path.exists():
         config_path.write_text(
             json.dumps(
                 {
                     "ollama": {
-                        "base_url": "http://localhost:11434",
+                        "base_url": ollama_host,
                         "model": "qwen2.5:14b",
                         "timeout_seconds": 60,
                     },

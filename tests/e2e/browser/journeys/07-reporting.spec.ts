@@ -40,6 +40,10 @@ test.describe.serial("Journey 7: Reporting", () => {
   let generatedReportId: number | null = null;
   let draftGeneratedReportId: number | null = null;
 
+  test.beforeEach(async ({ page }) => {
+    await page.goto("/");
+  });
+
   test("marks findings for reporting via API", async ({ page }) => {
     await page.goto("/");
 
@@ -57,15 +61,15 @@ test.describe.serial("Journey 7: Reporting", () => {
     expect(findingIds.length).toBeGreaterThan(0);
 
     const patchResponse = await apiPatch<{
-      updated: number;
-      skipped_locked: number;
-      not_found: number;
+      updated: number[];
+      skipped_locked: number[];
+      not_found: number[];
     }>(page, `/projects/${projectId}/findings/batch`, {
       ids: findingIds,
       should_report: true,
     });
 
-    expect(patchResponse.updated).toBeGreaterThan(0);
+    expect(patchResponse.updated.length).toBeGreaterThan(0);
   });
 
   test("navigates to reports page and fills metadata", async ({
@@ -88,6 +92,7 @@ test.describe.serial("Journey 7: Reporting", () => {
   });
 
   test("generates executive_summary draft", async ({ reportsPage, page }) => {
+    test.setTimeout(TIMEOUTS.reportGeneration);
     await reportsPage.generateDraftSection("executive_summary");
 
     await expect.poll(
