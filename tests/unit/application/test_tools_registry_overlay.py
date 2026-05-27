@@ -3,6 +3,8 @@ discover_tools' DB-overlay branch."""
 
 from __future__ import annotations
 
+from typing import Literal
+
 from core.config.schemas import CommandEntry
 from domain.tool_overrides.entry import ToolOverride
 
@@ -20,6 +22,9 @@ class TestOverrideToCommandEntry:
             path="/usr/local/bin/semgrep",
             container_name=None,
             container_tool_path=None,
+            scope="global",
+            repo_id=None,
+            service_name=None,
             created_at="2026-05-04T00:00:00Z",
             updated_at="2026-05-04T00:00:00Z",
         )
@@ -41,6 +46,9 @@ class TestOverrideToCommandEntry:
             path=None,
             container_name="tally-gitleaks",
             container_tool_path="/usr/local/bin/gitleaks",
+            scope="global",
+            repo_id=None,
+            service_name=None,
             created_at="2026-05-04T00:00:00Z",
             updated_at="2026-05-04T00:00:00Z",
         )
@@ -63,6 +71,9 @@ class TestOverrideToCommandEntry:
             path="/usr/local/bin/bandit",
             container_name=None,
             container_tool_path=None,
+            scope="global",
+            repo_id=None,
+            service_name=None,
             created_at="2026-05-04T00:00:00Z",
             updated_at="2026-05-04T00:00:00Z",
         )
@@ -87,16 +98,27 @@ class _FakeOverridesRepo:
     def get_by_tool_name(self, tool_name: str) -> ToolOverride | None:
         return None
 
+    def find_service_scoped(
+        self,
+        tool_name: str,
+        repo_id: int,
+        service_name: str,
+    ) -> ToolOverride | None:
+        return None
+
     def insert(
         self,
         *,
         tool_name: str,
-        args_mode: str,
-        type: str,
-        location: str,
+        args_mode: Literal["stock", "custom"],
+        type: Literal["repo", "api"],
+        location: Literal["local", "docker"],
         path: str | None = None,
         container_name: str | None = None,
         container_tool_path: str | None = None,
+        scope: Literal["global", "service"] = "global",
+        repo_id: int | None = None,
+        service_name: str | None = None,
     ) -> int:
         return 0
 
@@ -104,12 +126,15 @@ class _FakeOverridesRepo:
         self,
         tool_name: str,
         *,
-        args_mode: str,
-        type: str,
-        location: str,
+        args_mode: Literal["stock", "custom"],
+        type: Literal["repo", "api"],
+        location: Literal["local", "docker"],
         path: str | None = None,
         container_name: str | None = None,
         container_tool_path: str | None = None,
+        scope: Literal["global", "service"] = "global",
+        repo_id: int | None = None,
+        service_name: str | None = None,
     ) -> None:
         pass
 
@@ -145,6 +170,9 @@ class TestDiscoverToolsOverlay:
             path="/override/path/semgrep",
             container_name=None,
             container_tool_path=None,
+            scope="global",
+            repo_id=None,
+            service_name=None,
             created_at="2026-05-04T00:00:00Z",
             updated_at="2026-05-04T00:00:00Z",
         )

@@ -5,7 +5,10 @@ from __future__ import annotations
 import sqlite3
 from types import ModuleType
 
-from infrastructure.store.migrations import m0001_baseline
+from infrastructure.store.migrations import (
+    m0001_baseline,
+    m0002_service_scoped_overrides,
+)
 from infrastructure.store.migrations._helpers import (
     add_column_if_missing,
     table_exists,
@@ -19,6 +22,7 @@ __all__ = [
 
 MIGRATIONS: list[ModuleType] = [
     m0001_baseline,
+    m0002_service_scoped_overrides,
 ]
 
 

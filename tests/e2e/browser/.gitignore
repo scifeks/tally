@@ -1,0 +1,6 @@
+node_modules/
+.auth/
+.tally-data/
+test-results/
+playwright-report/
+dist/

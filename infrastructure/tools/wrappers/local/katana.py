@@ -172,6 +172,7 @@ class KatanaLocalTool(BaseKatanaTool):
             "-rl", str(self._CRAWL_RATE_LIMIT),
             "-retry", str(self._CRAWL_RETRIES),
             "-silent",
+            "-duc",
         ]  # fmt: skip
 
         if headless:

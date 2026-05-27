@@ -79,14 +79,18 @@ class FindingRepository(FindingRepositoryPort):
 
         sql = """
             INSERT INTO findings (
-                fingerprint, run_id, tool, domain, segment, repo_id,
-                finding_type, severity,
+                fingerprint, run_id, tool, domain, segment,
+                repo_id, finding_type, severity,
                 confidence, file, rule_id, url,
                 vulnerability_id, package_name, ecosystem,
-                description, package_version, cwe, enriched, meta,
-                first_seen, last_seen, seen_count, status, should_report
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                       ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                description, package_version, cwe,
+                enriched, meta,
+                first_seen, last_seen, seen_count,
+                status, should_report
+            ) VALUES (
+                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+            )
         """
         with self._factory.connect() as conn:
             conn.executemany(sql, rows_with_ts)

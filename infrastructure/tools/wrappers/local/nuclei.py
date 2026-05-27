@@ -57,7 +57,7 @@ class NucleiLocalTool(BaseNucleiTool):
 
         self._last_output_path = Path(str(output_file))
 
-        cmd: list[str] = [self._nuclei_path]
+        cmd: list[str] = [self._nuclei_path, "-duc"]
 
         if urls_file:
             cmd.extend(["-list", str(urls_file)])

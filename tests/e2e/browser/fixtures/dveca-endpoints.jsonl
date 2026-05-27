@@ -1,0 +1,3 @@
+{"request": {"method": "GET", "endpoint": "http://127.0.0.1:8082/api/products.php"}, "response": {"status_code": 200, "headers": {"content-type": "application/json"}}}
+{"request": {"method": "POST", "endpoint": "http://127.0.0.1:8082/api/chat.php"}, "response": {"status_code": 200, "headers": {"content-type": "application/json"}}}
+{"request": {"method": "GET", "endpoint": "http://127.0.0.1:8082/index.php"}, "response": {"status_code": 200, "headers": {"content-type": "text/html"}}}

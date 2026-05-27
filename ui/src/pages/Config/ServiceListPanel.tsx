@@ -59,8 +59,9 @@ export function ServiceListPanel({
                   e.stopPropagation()
                   onDelete(i)
                 }}
-                className="opacity-0 group-hover:opacity-100 p-1 text-dim hover:text-crit transition-all"
+                className="opacity-0 group-hover:opacity-100 p-1 text-dim hover:text-crit transition-all pointer-events-auto"
                 title="Remove service"
+                data-testid={`remove-service-${i}`}
               >
                 <Trash2 className="h-3 w-3" />
               </button>

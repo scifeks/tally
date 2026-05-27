@@ -82,6 +82,17 @@ class BaseHandler:
             )
         return self._knowledge_bases[key]
 
+    def close(self) -> None:
+        """Close all cached knowledge bases."""
+        for kb in self._knowledge_bases.values():
+            try:
+                kb.close()
+            except Exception:
+                logger.exception(
+                    "error closing knowledge base for %s",
+                    getattr(kb, "_project_name", "unknown"),
+                )
+
     def _persist_to_chromadb(
         self, ids: list[int], project_name: str, base_path: str
     ) -> None:

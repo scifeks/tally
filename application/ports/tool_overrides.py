@@ -24,6 +24,12 @@ class ToolOverridesRepositoryPort(Protocol):
         limit: int = 50,
     ) -> tuple[list[ToolOverride], int]: ...
     def get_by_tool_name(self, tool_name: str) -> ToolOverride | None: ...
+    def find_service_scoped(
+        self,
+        tool_name: str,
+        repo_id: int,
+        service_name: str,
+    ) -> ToolOverride | None: ...
     def insert(
         self,
         *,
@@ -34,6 +40,9 @@ class ToolOverridesRepositoryPort(Protocol):
         path: str | None = None,
         container_name: str | None = None,
         container_tool_path: str | None = None,
+        scope: Literal["global", "service"] = "global",
+        repo_id: int | None = None,
+        service_name: str | None = None,
     ) -> int: ...
     def update(
         self,
@@ -45,5 +54,8 @@ class ToolOverridesRepositoryPort(Protocol):
         path: str | None = None,
         container_name: str | None = None,
         container_tool_path: str | None = None,
+        scope: Literal["global", "service"] = "global",
+        repo_id: int | None = None,
+        service_name: str | None = None,
     ) -> None: ...
     def delete(self, tool_name: str) -> None: ...

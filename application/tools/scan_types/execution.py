@@ -51,11 +51,7 @@ def _build_tool_execution_config(
 def should_skip_sca_tool(
     tool: Any, service: Any, repo_path: str = ""
 ) -> tuple[bool, str]:
-    """Return (skip, reason) for an SCA tool that has no matching manifests.
-
-    Returns (False, "") when the tool should proceed.  Returns (True, reason)
-    when it should be skipped because no dependency manifest was found.
-    """
+    """Skip SCA tools that have no dependency manifests in the service path."""
     if not getattr(tool, "language_gates", None):
         return False, ""
     if getattr(tool, "scan_segment", "") != "sca":
@@ -107,6 +103,7 @@ def _build_raw_command(
     tool_name: str,
     command_config: Any,
     cli_args: list[str],
+    workdir: str | None = None,
 ) -> list[str]:
     """Build a command from raw CLI args using the tool's command config."""
     location = getattr(command_config, "location", None)
@@ -120,7 +117,7 @@ def _build_raw_command(
         tool_path = getattr(container, "tool_path", None)
         if not name or not tool_path:
             raise ValueError(f"Tool {tool_name!r}: container missing name or tool_path")
-        return build_docker_exec(name, tool_path, cli_args)
+        return build_docker_exec(name, tool_path, cli_args, workdir=workdir)
     if location == "local":
         path = getattr(command_config, "path", None)
         if not path:
@@ -156,8 +153,12 @@ def execute_tool_passes(
             )
             cli_args = None
         if cli_args is not None:
+            svc = context.service
+            workdir = getattr(svc, "docker_path", None) if svc else None
             try:
-                raw_cmd = _build_raw_command(tool.name, command_config, cli_args)
+                raw_cmd = _build_raw_command(
+                    tool.name, command_config, cli_args, workdir=workdir
+                )
             except ValueError:
                 _log.exception(
                     "Tool %s: failed to build raw command",
@@ -179,8 +180,8 @@ def execute_tool_passes(
 
 
 def normalize_success(result: ToolResult, tool: ToolInterface) -> ToolResult:
-    """Mark tools that exit non-zero on findings as successful when
-    parsed_data is valid.
+    """Treat non-zero exits as success when the tool intentionally uses them
+    to signal findings rather than errors.
     """
     if tool.findings_exit_ok:
         if result.parsed_data and "error" not in result.parsed_data:

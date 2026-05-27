@@ -200,6 +200,7 @@ class ScanService:
         from application.pipeline.factory import PipelineFactory
 
         setup_ok = False
+        pipeline_bus = None
         try:
             executor = ToolExecutor(
                 project_name=project_name,
@@ -280,6 +281,8 @@ class ScanService:
                 logger.exception("scan run %d failed", run_id)
             future.set_exception(exc)
         finally:
+            if pipeline_bus is not None:
+                pipeline_bus.cleanup()
             self._scan_run_registry.unregister(run_id)
             try:
                 self._lock_registry.release_job(SCAN_LOCK_KIND, holder_token)

@@ -1,8 +1,5 @@
-"""Application-layer service for tool overrides.
-
-CRUD orchestration with location-specific validation and field
-normalization. Depends only on ToolOverridesRepositoryPort. No
-infrastructure imports.
+"""Application-layer service for tool overrides with location-specific
+validation and normalization of container vs local paths.
 """
 
 from __future__ import annotations
@@ -74,12 +71,14 @@ class ToolOverridesService:
         path: str | None = None,
         container_name: str | None = None,
         container_tool_path: str | None = None,
+        scope: str = "global",
+        repo_id: int | None = None,
+        service_name: str | None = None,
     ) -> ToolOverride:
-        """Create a new override.
+        """Create a new override after validating input and normalizing paths.
 
-        Validates all input first; raises ToolOverrideValidationError on
-        any failure. Normalizes location-irrelevant fields to None.
-        Propagates ToolOverrideNameConflict from the repository.
+        Raises ToolOverrideValidationError on validation failure and
+        ToolOverrideNameConflict if the tool name already exists.
         """
         self._validate_input(
             tool_name=tool_name,
@@ -89,10 +88,14 @@ class ToolOverridesService:
             path=path,
             container_name=container_name,
             container_tool_path=container_tool_path,
+            scope=scope,
+            repo_id=repo_id,
+            service_name=service_name,
         )
         norm_path, norm_cn, norm_ctp = _normalize(
             location, path, container_name, container_tool_path
         )
+        cast_scope = cast(Literal["global", "service"], scope)
         self._repo.insert(
             tool_name=tool_name,
             args_mode=cast(Literal["stock", "custom"], args_mode),
@@ -101,8 +104,14 @@ class ToolOverridesService:
             path=norm_path,
             container_name=norm_cn,
             container_tool_path=norm_ctp,
+            scope=cast_scope,
+            repo_id=repo_id,
+            service_name=service_name,
         )
-        result = self._repo.get_by_tool_name(tool_name)
+        if cast_scope == "service" and repo_id and service_name:
+            result = self._repo.find_service_scoped(tool_name, repo_id, service_name)
+        else:
+            result = self._repo.get_by_tool_name(tool_name)
         assert result is not None
         return result
 
@@ -116,13 +125,15 @@ class ToolOverridesService:
         path: str | None = None,
         container_name: str | None = None,
         container_tool_path: str | None = None,
+        scope: str = "global",
+        repo_id: int | None = None,
+        service_name: str | None = None,
     ) -> ToolOverride:
-        """Replace an existing override.
+        """Replace an existing override after validating input and paths.
 
-        Validates all input first. Reads the current row to detect
-        missing tool names early; raises ToolOverrideNotFound when no
-        row exists. Normalizes location-irrelevant fields to None
-        before delegating to the repository.
+        Raises ToolOverrideNotFound if no override exists for the given
+        tool name and scope. ToolOverrideValidationError on validation
+        failure.
         """
         self._validate_input(
             tool_name=tool_name,
@@ -132,9 +143,16 @@ class ToolOverridesService:
             path=path,
             container_name=container_name,
             container_tool_path=container_tool_path,
+            scope=scope,
+            repo_id=repo_id,
+            service_name=service_name,
         )
 
-        existing = self._repo.get_by_tool_name(tool_name)
+        cast_scope = cast(Literal["global", "service"], scope)
+        if cast_scope == "service" and repo_id and service_name:
+            existing = self._repo.find_service_scoped(tool_name, repo_id, service_name)
+        else:
+            existing = self._repo.get_by_tool_name(tool_name)
         if existing is None:
             raise ToolOverrideNotFound(tool_name)
 
@@ -149,17 +167,21 @@ class ToolOverridesService:
             path=norm_path,
             container_name=norm_cn,
             container_tool_path=norm_ctp,
+            scope=cast_scope,
+            repo_id=repo_id,
+            service_name=service_name,
         )
-        result = self._repo.get_by_tool_name(tool_name)
+        if cast_scope == "service" and repo_id and service_name:
+            result = self._repo.find_service_scoped(tool_name, repo_id, service_name)
+        else:
+            result = self._repo.get_by_tool_name(tool_name)
         assert result is not None
         return result
 
     def delete(self, tool_name: str) -> None:
         """Delete an override.
 
-        Saved scans no longer reference overrides directly, so delete
-        is unconstrained. The route layer maps the missing-tool case
-        to 404 by querying first.
+        No constraints; saved scans are independent of override rows.
         """
         self._repo.delete(tool_name)
 
@@ -212,6 +234,9 @@ class ToolOverridesService:
         path: str | None,
         container_name: str | None,
         container_tool_path: str | None,
+        scope: str = "global",
+        repo_id: int | None = None,
+        service_name: str | None = None,
     ) -> None:
         """Collect every field error in one pass before raising."""
         errors: list[FieldError] = []
@@ -228,6 +253,23 @@ class ToolOverridesService:
             errors.append(
                 FieldError(field="location", issue="must be one of local, docker")
             )
+        if scope not in ("global", "service"):
+            errors.append(FieldError(field="scope", issue="must be global or service"))
+        if scope == "service":
+            if not repo_id:
+                errors.append(
+                    FieldError(
+                        field="repoId",
+                        issue="required when scope is 'service'",
+                    )
+                )
+            if not service_name:
+                errors.append(
+                    FieldError(
+                        field="serviceName",
+                        issue="required when scope is 'service'",
+                    )
+                )
 
         if args_mode != "custom":
             if location == "local" and not path:
@@ -263,11 +305,7 @@ def _normalize(
     container_name: str | None,
     container_tool_path: str | None,
 ) -> tuple[str | None, str | None, str | None]:
-    """Clear fields not relevant to the given location.
-
-    Returns (path, container_name, container_tool_path) with the
-    irrelevant slots set to None.
-    """
+    """Clear fields not relevant to the given location."""
     if location == "local":
         return path, None, None
     return None, container_name, container_tool_path

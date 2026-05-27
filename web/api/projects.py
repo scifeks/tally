@@ -34,6 +34,7 @@ from factories.persistence import (
     create_findings_service,
     create_url_list_service,
 )
+from infrastructure.endpoints.converters.base import ConverterError
 from web.api._errors import NotFound
 from web.api._errors import ValidationError as ApiValidationError
 from web.api._project_resolver import _resolve_project
@@ -371,8 +372,11 @@ async def create_repository(
         raise ApiValidationError(str(exc)) from exc
 
     if endpoint_file is not None and endpoint_file.filename and created.id is not None:
-        await _ingest_endpoint_file(request, project_id, created, endpoint_file)
-        created = service.get(project_id, created.id)
+        try:
+            await _ingest_endpoint_file(request, project_id, created, endpoint_file)
+            created = service.get(project_id, created.id)
+        except ConverterError as exc:
+            raise ApiValidationError(str(exc)) from exc
 
     if garak_config is not None and garak_config.filename and created.id is not None:
         await _ingest_garak_config(row, created.id, garak_config)
@@ -410,8 +414,11 @@ async def patch_repository(
         raise ApiValidationError(str(exc)) from exc
 
     if endpoint_file is not None and endpoint_file.filename:
-        await _ingest_endpoint_file(request, project_id, updated, endpoint_file)
-        updated = service.get(project_id, repo_id)
+        try:
+            await _ingest_endpoint_file(request, project_id, updated, endpoint_file)
+            updated = service.get(project_id, repo_id)
+        except ConverterError as exc:
+            raise ApiValidationError(str(exc)) from exc
 
     if garak_config is not None and garak_config.filename:
         await _ingest_garak_config(row, repo_id, garak_config)
