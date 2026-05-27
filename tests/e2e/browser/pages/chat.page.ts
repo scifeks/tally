@@ -29,7 +29,11 @@ export class ChatPage {
   }
 
   async sendMessage(text: string): Promise<void> {
+    await expect(this.messageInput).toBeEnabled({
+      timeout: TIMEOUTS.chatStream,
+    });
     await this.messageInput.fill(text);
+    await expect(this.sendButton).toBeEnabled({ timeout: 5000 });
     await this.sendButton.click();
   }
 
@@ -38,9 +42,10 @@ export class ChatPage {
   }
 
   async waitForResponse(timeoutMs?: number): Promise<void> {
-    await expect(
-      this.page.getByText("TALLY").last()
-    ).toBeVisible({ timeout: timeoutMs ?? TIMEOUTS.chatStream });
+    const timeout = timeoutMs ?? TIMEOUTS.chatStream;
+    const streaming = this.page.getByText("STREAMING");
+    await expect(streaming).toBeVisible({ timeout: 10_000 });
+    await expect(streaming).not.toBeVisible({ timeout });
   }
 
   async selectSession(index: number): Promise<void> {
@@ -76,14 +81,10 @@ export class ChatPage {
   }
 
   async getLastAssistantMessageText(): Promise<string> {
-    const lastMessage = this.page
-      .locator("[role='button']", { has: this.page.getByText("TALLY") })
-      .last();
-    const messageContent = lastMessage.locator(
-      "xpath=./ancestor::div[contains(@class, 'flex-col')]" +
-        "//div[contains(@class, 'whitespace-pre-wrap')]"
+    const assistantMessages = this.page.locator(
+      ".whitespace-pre-wrap.bg-muted\\/50"
     );
-    return (await messageContent.textContent()) ?? "";
+    return (await assistantMessages.last().textContent()) ?? "";
   }
 
   async getMessageCount(): Promise<number> {

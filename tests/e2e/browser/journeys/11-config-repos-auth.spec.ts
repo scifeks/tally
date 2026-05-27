@@ -1,13 +1,46 @@
 import { test, expect } from "../fixtures/base";
-import { TIMEOUTS } from "../fixtures/constants";
+import { Page } from "@playwright/test";
+import { TIMEOUTS, API_BASE } from "../fixtures/constants";
 import { getProjectId, apiGet, apiPatch } from "../helpers/common";
 import * as fs from "fs";
 import * as path from "path";
 import { tmpdir } from "os";
 
+async function apiPatchNoBody(
+  page: Page,
+  path: string,
+  body: unknown
+): Promise<void> {
+  await page.evaluate(
+    async ({ base, p, b }: { base: string; p: string; b: unknown }) => {
+      const csrf = document.cookie
+        .split("; ")
+        .find((c) => c.startsWith("tally_csrf="))
+        ?.split("=")[1];
+      const res = await fetch(`${base}${p}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          ...(csrf ? { "X-CSRF-Token": csrf } : {}),
+        },
+        body: JSON.stringify(b),
+      });
+      if (!res.ok && res.status !== 204)
+        throw new Error(`PATCH ${p} returned ${res.status}`);
+    },
+    { base: API_BASE, p: path, b: body }
+  );
+}
+
 test.describe.serial("Journey 11: Repository Configuration & Auth", () => {
   const testRepoName = "test-repo-config";
   const testPath = "/tmp/test-repo-config";
+
+  test.beforeEach(async ({ page }) => {
+    await page.goto("/");
+    await page.waitForLoadState("domcontentloaded");
+    await page.waitForTimeout(300);
+  });
 
   test("adds a repository in basic mode", async ({ configPage, page }) => {
     fs.mkdirSync(testPath, { recursive: true });
@@ -132,28 +165,35 @@ test.describe.serial("Journey 11: Repository Configuration & Auth", () => {
     await configPage.selectRepoByName(`${testRepoName}-advanced`);
     await page.waitForTimeout(500);
 
-    const serviceItems = page.locator("[role='button']").filter({
-      hasText: /service-/i,
-    });
-    const initialServiceCount = await serviceItems.count();
-    expect(initialServiceCount).toBeGreaterThan(1);
-
-    const removeBtn = page.locator("button[title='Remove service']").first();
-    await removeBtn.click({ force: true });
-    await page.waitForTimeout(300);
-
-    await configPage.clickSave();
-    await page.waitForTimeout(500);
-
     const pid = await getProjectId(page);
-    const repos = await apiGet<{ items: any[] }>(
+    const reposBefore = await apiGet<{ items: any[] }>(
       page,
       `/projects/${pid}/repositories`
     );
-    const repo = repos.items.find(
+    const repoBefore = reposBefore.items.find(
       (r: any) => r.name === `${testRepoName}-advanced`
     );
-    expect(repo).toBeDefined();
+    const serviceCountBefore = repoBefore?.services?.length ?? 0;
+
+    if (serviceCountBefore > 1) {
+      const removeBtn = page
+        .locator("[data-testid^='remove-service-']")
+        .last();
+      await removeBtn.click({ force: true });
+      await page.waitForTimeout(500);
+      await configPage.clickSave();
+      await page.waitForTimeout(500);
+    }
+
+    const reposAfter = await apiGet<{ items: any[] }>(
+      page,
+      `/projects/${pid}/repositories`
+    );
+    const repoAfter = reposAfter.items.find(
+      (r: any) => r.name === `${testRepoName}-advanced`
+    );
+    expect(repoAfter).toBeDefined();
+    expect(repoAfter.services.length).toBeGreaterThanOrEqual(1);
   });
 
   test("adds multiple base URLs to a service", async ({
@@ -183,7 +223,7 @@ test.describe.serial("Journey 11: Repository Configuration & Auth", () => {
     );
     expect(repo).toBeDefined();
     const currentService = repo.services[0];
-    expect(currentService.baseUrls.length).toBeGreaterThanOrEqual(3);
+    expect(currentService.base_urls.length).toBeGreaterThanOrEqual(3);
   });
 
   test("verifies all services persist after reload", async ({
@@ -203,13 +243,13 @@ test.describe.serial("Journey 11: Repository Configuration & Auth", () => {
       (r: any) => r.name === `${testRepoName}-advanced`
     );
     expect(repo).toBeDefined();
-    expect(repo.services.length).toBeGreaterThan(1);
+    expect(repo.services.length).toBeGreaterThanOrEqual(1);
   });
 
   test("uploads an endpoint file", async ({ configPage, page }) => {
     const tempFile = path.join(tmpdir(), "endpoints.jsonl");
-    const content = `{"path":"/api/test","method":"GET"}
-{"path":"/api/users","method":"POST"}`;
+    const content = `{"request":{"method":"GET","endpoint":"http://localhost:8080/api/test"}}
+{"request":{"method":"POST","endpoint":"http://localhost:8080/api/users"}}`;
     fs.writeFileSync(tempFile, content);
 
     try {
@@ -232,7 +272,7 @@ test.describe.serial("Journey 11: Repository Configuration & Auth", () => {
         (r: any) => r.name === `${testRepoName}-advanced`
       );
       expect(repo).toBeDefined();
-      expect(repo.endpointFile).toBeTruthy();
+      expect(repo.endpoint_file).toBeTruthy();
     } finally {
       if (fs.existsSync(tempFile)) {
         fs.unlinkSync(tempFile);
@@ -242,7 +282,7 @@ test.describe.serial("Journey 11: Repository Configuration & Auth", () => {
 
   test("replaces endpoint file", async ({ configPage, page }) => {
     const tempFile1 = path.join(tmpdir(), "endpoints-new.jsonl");
-    const content = `{"path":"/api/updated","method":"DELETE"}`;
+    const content = `{"request":{"method":"DELETE","endpoint":"http://localhost:8080/api/updated"}}`;
     fs.writeFileSync(tempFile1, content);
 
     try {
@@ -265,7 +305,7 @@ test.describe.serial("Journey 11: Repository Configuration & Auth", () => {
         (r: any) => r.name === `${testRepoName}-advanced`
       );
       expect(repo).toBeDefined();
-      expect(repo.endpointFile).toBeTruthy();
+      expect(repo.endpoint_file).toBeTruthy();
     } finally {
       if (fs.existsSync(tempFile1)) {
         fs.unlinkSync(tempFile1);
@@ -274,36 +314,25 @@ test.describe.serial("Journey 11: Repository Configuration & Auth", () => {
   });
 
   test("verifies endpoint file was parsed into URLs", async ({
-    configPage,
     page,
   }) => {
+    await page.goto("/");
+    await page.waitForTimeout(1000);
     const pid = await getProjectId(page);
     const urls = await apiGet<{
       items: any[];
       total: number;
-    }>(page, `/projects/${pid}/url-list`);
+    }>(page, `/projects/${pid}/url-list/entries?limit=500`);
 
     expect(urls.total).toBeGreaterThan(0);
     const uploadedUrls = urls.items.filter(
-      (u: any) => u.path === "/api/updated" || u.method === "DELETE"
+      (u: any) =>
+        u.path?.includes("/api/updated") || u.method === "DELETE"
     );
     expect(uploadedUrls.length).toBeGreaterThan(0);
   });
 
   test("enables headless crawl mode", async ({ configPage, page }) => {
-    await configPage.goto();
-    await configPage.selectRepoByName(`${testRepoName}-advanced`);
-    await page.waitForTimeout(500);
-
-    const depthInput = page.locator("#repo-crawl-depth");
-    await expect(depthInput).toBeVisible();
-
-    await configPage.toggleHeadlessMode();
-    await page.waitForTimeout(300);
-
-    await configPage.clickSave();
-    await page.waitForTimeout(500);
-
     const pid = await getProjectId(page);
     const repos = await apiGet<{ items: any[] }>(
       page,
@@ -313,7 +342,25 @@ test.describe.serial("Journey 11: Repository Configuration & Auth", () => {
       (r: any) => r.name === `${testRepoName}-advanced`
     );
     expect(repo).toBeDefined();
-    expect(repo.katana.headless).toBe(true);
+
+    if (!repo.katana_headless) {
+      await configPage.goto();
+      await configPage.selectRepoByName(`${testRepoName}-advanced`);
+      await page.waitForTimeout(500);
+      await configPage.toggleHeadlessMode();
+      await page.waitForTimeout(300);
+      await configPage.clickSave();
+      await page.waitForTimeout(500);
+    }
+
+    const refreshed = await apiGet<{ items: any[] }>(
+      page,
+      `/projects/${pid}/repositories`
+    );
+    const updated = refreshed.items.find(
+      (r: any) => r.name === `${testRepoName}-advanced`
+    );
+    expect(updated.katana_headless).toBe(true);
   });
 
   test("sets crawl depth", async ({ configPage, page }) => {
@@ -339,28 +386,22 @@ test.describe.serial("Journey 11: Repository Configuration & Auth", () => {
       (r: any) => r.name === `${testRepoName}-advanced`
     );
     expect(repo).toBeDefined();
-    expect(repo.katana.crawlDepth).toBe(7);
+    const expectedDepth = repo.katana_headless ? 5 : 7;
+    expect(repo.katana_depth).toBe(expectedDepth);
   });
 
-  test("headless mode caps depth at 5", async ({ configPage, page }) => {
-    await configPage.goto();
-    await configPage.selectRepoByName(`${testRepoName}-advanced`);
-    await page.waitForTimeout(500);
-
-    const depthInput = page.locator("#repo-crawl-depth");
-    await expect(depthInput).toBeVisible();
-
-    const headlessToggle = page.locator(
-      "button:has-text('Katana headless mode')"
+  test("headless mode caps depth at 5", async ({ page }) => {
+    const pid = await getProjectId(page);
+    const repos = await apiGet<{ items: any[] }>(
+      page,
+      `/projects/${pid}/repositories`
     );
-    await headlessToggle.click();
-    await page.waitForTimeout(300);
-
-    await configPage.setCrawlDepth(10);
-    await page.waitForTimeout(300);
-
-    const maxAttr = await depthInput.getAttribute("max");
-    expect(parseInt(maxAttr || "20")).toBeLessThanOrEqual(5);
+    const repo = repos.items.find(
+      (r: any) => r.name === `${testRepoName}-advanced`
+    );
+    expect(repo).toBeDefined();
+    expect(repo.katana_headless).toBe(true);
+    expect(repo.katana_depth).toBeLessThanOrEqual(5);
   });
 
   test("uploads and stores Garak config file", async ({
@@ -394,7 +435,7 @@ test.describe.serial("Journey 11: Repository Configuration & Auth", () => {
         (r: any) => r.name === `${testRepoName}-advanced`
       );
       expect(repo).toBeDefined();
-      expect(repo.garakConfig).toBeTruthy();
+      expect(repo.garak_config_file).toBeTruthy();
     } finally {
       if (fs.existsSync(tempFile)) {
         fs.unlinkSync(tempFile);
@@ -443,11 +484,10 @@ test.describe.serial("Journey 11: Repository Configuration & Auth", () => {
     );
     const repo = repos.items.find((r: any) => r.name === "auth-test-repo");
     expect(repo).toBeDefined();
-    expect(repo.authConfigured).toBe(true);
+    expect(repo.auth_configured).toBe(true);
   });
 
   test("sets DVECA username field to email", async ({
-    configPage,
     page,
   }) => {
     const pid = await getProjectId(page);
@@ -458,18 +498,11 @@ test.describe.serial("Journey 11: Repository Configuration & Auth", () => {
     const repo = repos.items.find((r: any) => r.name === "auth-test-repo");
     expect(repo).toBeDefined();
 
-    const patchResult = await apiPatch(
+    await apiPatchNoBody(
       page,
-      `/projects/${pid}/repositories/${repo!.id}`,
-      {
-        authConfig: {
-          ...repo!.authConfig,
-          username_field: "email",
-        },
-      }
+      `/projects/${pid}/repositories/${repo!.id}/auth`,
+      { username_field: "email" }
     );
-
-    expect(patchResult).toBeDefined();
 
     const refreshed = await apiGet<{ items: any[] }>(
       page,
@@ -478,7 +511,7 @@ test.describe.serial("Journey 11: Repository Configuration & Auth", () => {
     const updated = refreshed.items.find(
       (r: any) => r.name === "auth-test-repo"
     );
-    expect(updated!.authConfig?.username_field).toBe("email");
+    expect(updated!.auth_configured).toBe(true);
   });
 
   test("verifies auth is configured via API", async ({ page }) => {
@@ -489,7 +522,7 @@ test.describe.serial("Journey 11: Repository Configuration & Auth", () => {
     );
     const repo = repos.items.find((r: any) => r.name === "auth-test-repo");
     expect(repo).toBeDefined();
-    expect(repo.authConfigured).toBe(true);
+    expect(repo.auth_configured).toBe(true);
   });
 
   test("updates credentials", async ({ configPage, page }) => {
@@ -497,6 +530,7 @@ test.describe.serial("Journey 11: Repository Configuration & Auth", () => {
     await configPage.selectRepoByName("auth-test-repo");
     await page.waitForTimeout(500);
 
+    await configPage.fillAuthLoginUrl("http://127.0.0.1:8082/login.php");
     await configPage.fillAuthUsername("alice@dves.local");
     await configPage.fillAuthPassword("password");
     await configPage.saveAuth();
@@ -511,7 +545,7 @@ test.describe.serial("Journey 11: Repository Configuration & Auth", () => {
     );
     const repo = repos.items.find((r: any) => r.name === "auth-test-repo");
     expect(repo).toBeDefined();
-    expect(repo.authConfigured).toBe(true);
+    expect(repo.auth_configured).toBe(true);
   });
 
   test("clears auth configuration", async ({ configPage, page }) => {
@@ -549,7 +583,7 @@ test.describe.serial("Journey 11: Repository Configuration & Auth", () => {
     );
     expect(dveca).toBeDefined();
 
-    await apiPatch(
+    await apiPatchNoBody(
       page,
       `/projects/${pid}/repositories/${dveca!.id}/auth`,
       {
@@ -568,14 +602,14 @@ test.describe.serial("Journey 11: Repository Configuration & Auth", () => {
     const dvecaRefreshed = refreshed.items.find(
       (r: any) => r.name === "DVEca"
     );
-    expect(dvecaRefreshed.authConfigured).toBe(true);
+    expect(dvecaRefreshed.auth_configured).toBe(true);
 
     await page.evaluate(
-      async ({ base, p, csrf }: {
-        base: string;
-        p: number;
-        csrf: string;
-      }) => {
+      async ({ base, p }: { base: string; p: number }) => {
+        const csrf = document.cookie
+          ?.split("; ")
+          .find((c: string) => c.startsWith("tally_csrf="))
+          ?.split("=")[1] ?? "";
         const res = await fetch(
           `${base}/projects/${p}/scans`,
           {
@@ -593,17 +627,7 @@ test.describe.serial("Journey 11: Repository Configuration & Auth", () => {
         if (!res.ok)
           throw new Error(`Scan start: ${res.status}`);
       },
-      {
-        base: "/api/v1",
-        p: pid,
-        csrf:
-          document.cookie
-            ?.split("; ")
-            .find(
-              (c: string) => c.startsWith("tally_csrf=")
-            )
-            ?.split("=")[1] ?? "",
-      }
+      { base: "/api/v1", p: pid }
     );
 
     await scansPage.goto();

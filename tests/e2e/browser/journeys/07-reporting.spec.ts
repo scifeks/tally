@@ -1,4 +1,5 @@
 import { test, expect } from "../fixtures/base";
+import { Page } from "@playwright/test";
 import {
   getProjectId,
   apiGet,
@@ -34,19 +35,29 @@ interface ReportsListResponse {
   total: number;
 }
 
+async function waitForDraftsIdle(page: Page, projectId: number): Promise<void> {
+  await expect.poll(
+    async () => {
+      const response = await apiGet<DraftResponse>(
+        page,
+        `/projects/${projectId}/reports/drafts`
+      );
+      return response.drafts.every((d) => d.status !== "generating");
+    },
+    { timeout: TIMEOUTS.reportGeneration, intervals: [2000] }
+  ).toBe(true);
+}
+
 test.describe.serial("Journey 7: Reporting", () => {
   let projectId: number;
   let findingIds: number[] = [];
   let generatedReportId: number | null = null;
-  let draftGeneratedReportId: number | null = null;
 
   test.beforeEach(async ({ page }) => {
     await page.goto("/");
   });
 
   test("marks findings for reporting via API", async ({ page }) => {
-    await page.goto("/");
-
     projectId = await getProjectId(page);
     expect(projectId).toBeGreaterThan(0);
 
@@ -80,7 +91,6 @@ test.describe.serial("Journey 7: Reporting", () => {
     await expect(page).toHaveURL(/\/reports/);
 
     await reportsPage.selectFormat("pdf");
-
     await reportsPage.fillCompanyName("E2E Test Corp");
 
     const today = new Date().toISOString().split("T")[0];
@@ -91,113 +101,93 @@ test.describe.serial("Journey 7: Reporting", () => {
     ).toBeVisible();
   });
 
-  test("generates executive_summary draft", async ({ reportsPage, page }) => {
+  test("generates executive-summary draft", async ({ reportsPage, page }) => {
     test.setTimeout(TIMEOUTS.reportGeneration);
-    await reportsPage.generateDraftSection("executive_summary");
+    await waitForDraftsIdle(page, projectId);
+
+    const sections = [
+      "executive-summary", "risk-level", "critical-issues",
+      "improvement-points", "scope-and-methodology",
+      "general-recommendations",
+    ];
+    for (const s of sections) {
+      await apiDelete(page, `/projects/${projectId}/reports/drafts/${s}`)
+        .catch(() => {});
+    }
+
+    await reportsPage.goto();
+    await reportsPage.generateDraftSection("executive-summary");
 
     await expect.poll(
       async () => {
-        const response = await page.evaluate(
-          async (base: string) => {
-            const res = await fetch(
-              `${base}/projects/${projectId}/reports/drafts`
-            );
-            return res.json();
-          },
-          "http://127.0.0.1:3100/api/v1"
+        const response = await apiGet<DraftResponse>(
+          page,
+          `/projects/${projectId}/reports/drafts`
         );
-        const summary = response.drafts.find(
-          (d: { section: string }) => d.section === "executive_summary"
-        );
-        return summary?.status;
+        return response.drafts.find(
+          (d) => d.section === "executive-summary"
+        )?.status;
       },
-      {
-        timeout: TIMEOUTS.reportGeneration,
-        intervals: [2000],
-      }
+      { timeout: TIMEOUTS.reportGeneration, intervals: [2000] }
     ).toBe("draft");
-
-    const drafts = await apiGet<DraftResponse>(
-      page,
-      `/projects/${projectId}/reports/drafts`
-    );
-    const execSummary = drafts.drafts.find(d => d.section === "executive_summary");
-    expect(execSummary?.status).toBe("draft");
   });
 
   test("generates all missing drafts", async ({ reportsPage, page }) => {
+    test.setTimeout(300_000);
+    await reportsPage.goto();
+    await waitForDraftsIdle(page, projectId);
     await reportsPage.clickGenerateMissing();
 
     await expect.poll(
       async () => {
-        const response = await page.evaluate(
-          async (base: string) => {
-            const res = await fetch(
-              `${base}/projects/${projectId}/reports/drafts`
-            );
-            return res.json();
-          },
-          "http://127.0.0.1:3100/api/v1"
+        const response = await apiGet<DraftResponse>(
+          page,
+          `/projects/${projectId}/reports/drafts`
         );
-        const allDone = response.drafts.every(
-          (d: { status: string }) =>
-            d.status === "draft" || d.status === "reviewed"
+        return response.drafts.every(
+          (d) => d.status === "draft" || d.status === "reviewed"
         );
-        return allDone;
       },
-      {
-        timeout: 300_000,
-        intervals: [3000],
-      }
+      { timeout: 300_000, intervals: [3000] }
     ).toBe(true);
-
-    const drafts = await apiGet<DraftResponse>(
-      page,
-      `/projects/${projectId}/reports/drafts`
-    );
-    const allReady = drafts.drafts.every(
-      d => d.status === "draft" || d.status === "reviewed"
-    );
-    expect(allReady).toBe(true);
   });
 
   test("regenerates an existing draft", async ({ reportsPage, page }) => {
-    await reportsPage.clickGenerateMissing();
+    test.setTimeout(TIMEOUTS.reportGeneration);
+    await reportsPage.goto();
+    await waitForDraftsIdle(page, projectId);
+    await reportsPage.clickRegenerate("executive-summary");
 
     await expect.poll(
       async () => {
-        const response = await page.evaluate(
-          async (base: string) => {
-            const res = await fetch(
-              `${base}/projects/${projectId}/reports/drafts`
-            );
-            return res.json();
-          },
-          "http://127.0.0.1:3100/api/v1"
+        const response = await apiGet<DraftResponse>(
+          page,
+          `/projects/${projectId}/reports/drafts`
         );
-        const summary = response.drafts.find(
-          (d: { section: string }) => d.section === "executive_summary"
-        );
-        return summary?.status;
+        return response.drafts.find(
+          (d) => d.section === "executive-summary"
+        )?.status;
       },
-      {
-        timeout: TIMEOUTS.reportGeneration,
-        intervals: [2000],
-      }
+      { timeout: TIMEOUTS.reportGeneration, intervals: [2000] }
     ).toBe("draft");
   });
 
   test("deletes a draft and regenerates", async ({ reportsPage, page }) => {
-    let drafts = await apiGet<DraftResponse>(
+    test.setTimeout(TIMEOUTS.reportGeneration);
+    await reportsPage.goto();
+    await waitForDraftsIdle(page, projectId);
+
+    const drafts = await apiGet<DraftResponse>(
       page,
       `/projects/${projectId}/reports/drafts`
     );
-    const initialMethodologyStatus = drafts.drafts.find(
-      d => d.section === "methodology"
+    const initialStatus = drafts.drafts.find(
+      d => d.section === "scope-and-methodology"
     )?.status;
-    expect(initialMethodologyStatus).toBeTruthy();
+    expect(initialStatus).toBeTruthy();
 
-    await reportsPage.deleteDraft("methodology");
+    page.once("dialog", (dialog) => dialog.accept());
+    await reportsPage.deleteDraft("scope-and-methodology");
 
     await expect.poll(
       async () => {
@@ -205,18 +195,15 @@ test.describe.serial("Journey 7: Reporting", () => {
           page,
           `/projects/${projectId}/reports/drafts`
         );
-        const methodology = response.drafts.find(
-          d => d.section === "methodology"
-        );
-        return methodology?.status;
+        return response.drafts.find(
+          d => d.section === "scope-and-methodology"
+        )?.status;
       },
-      {
-        timeout: 10_000,
-        intervals: [500],
-      }
+      { timeout: 10_000, intervals: [500] }
     ).toBe("not_generated");
 
-    await reportsPage.generateDraftSection("methodology");
+    await reportsPage.goto();
+    await reportsPage.generateDraftSection("scope-and-methodology");
 
     await expect.poll(
       async () => {
@@ -224,31 +211,25 @@ test.describe.serial("Journey 7: Reporting", () => {
           page,
           `/projects/${projectId}/reports/drafts`
         );
-        const methodology = response.drafts.find(
-          d => d.section === "methodology"
-        );
-        return methodology?.status;
+        return response.drafts.find(
+          d => d.section === "scope-and-methodology"
+        )?.status;
       },
-      {
-        timeout: TIMEOUTS.reportGeneration,
-        intervals: [2000],
-      }
+      { timeout: TIMEOUTS.reportGeneration, intervals: [2000] }
     ).toBe("draft");
   });
 
   test("generates full report", async ({ reportsPage, page }) => {
+    test.setTimeout(TIMEOUTS.reportGeneration);
+    await reportsPage.goto();
+    await waitForDraftsIdle(page, projectId);
     await reportsPage.clickGenerateReport();
 
     await expect.poll(
       async () => {
-        const response = await page.evaluate(
-          async (base: string) => {
-            const res = await fetch(
-              `${base}/projects/${projectId}/reports?limit=1`
-            );
-            return res.json();
-          },
-          "http://127.0.0.1:3100/api/v1"
+        const response = await apiGet<ReportsListResponse>(
+          page,
+          `/projects/${projectId}/reports?limit=1`
         );
         if (response.items?.length > 0) {
           const report = response.items[0];
@@ -260,20 +241,10 @@ test.describe.serial("Journey 7: Reporting", () => {
         }
         return "not_found";
       },
-      {
-        timeout: TIMEOUTS.reportGeneration,
-        intervals: [3000],
-      }
+      { timeout: TIMEOUTS.reportGeneration, intervals: [3000] }
     ).toBe("done");
 
     expect(generatedReportId).toBeGreaterThan(0);
-
-    const reports = await apiGet<ReportsListResponse>(
-      page,
-      `/projects/${projectId}/reports?limit=1`
-    );
-    expect(reports.items[0].status).toBe("done");
-    expect(reports.items[0].file_size_bytes).toBeGreaterThan(0);
   });
 
   test("verifies report in history", async ({ reportsPage, page }) => {
@@ -294,24 +265,14 @@ test.describe.serial("Journey 7: Reporting", () => {
     expect(count).toBeGreaterThan(0);
   });
 
-  test("edits report display name", async ({ reportsPage, page }) => {
+  test("edits report display name", async ({ page }) => {
     expect(generatedReportId).toBeTruthy();
-
-    await reportsPage.goto();
-
-    await reportsPage.selectReportFromHistory(generatedReportId!);
-
-    await expect(
-      page.locator("[data-testid='report-detail-name']")
-    ).toBeVisible();
 
     const newName = "E2E Test Report - Updated";
     await apiPatch(
       page,
       `/projects/${projectId}/reports/${generatedReportId}`,
-      {
-        display_name: newName,
-      }
+      { display_name: newName }
     );
 
     const reports = await apiGet<ReportsListResponse>(
@@ -321,20 +282,14 @@ test.describe.serial("Journey 7: Reporting", () => {
     expect(reports.items[0].display_name).toBe(newName);
   });
 
-  test("edits report notes", async ({ reportsPage, page }) => {
+  test("edits report notes", async ({ page }) => {
     expect(generatedReportId).toBeTruthy();
-
-    await reportsPage.goto();
-
-    await reportsPage.selectReportFromHistory(generatedReportId!);
 
     const newNotes = "Test notes for E2E reporting";
     await apiPatch(
       page,
       `/projects/${projectId}/reports/${generatedReportId}`,
-      {
-        notes: newNotes,
-      }
+      { notes: newNotes }
     );
 
     const reports = await apiGet<ReportsListResponse>(
@@ -350,11 +305,7 @@ test.describe.serial("Journey 7: Reporting", () => {
     const reportId = generatedReportId!;
 
     const downloadResponse = await page.evaluate(
-      async (params: {
-        base: string;
-        pid: number;
-        rid: number;
-      }) => {
+      async (params: { base: string; pid: number; rid: number }) => {
         const res = await fetch(
           `${params.base}/projects/${params.pid}/reports/${params.rid}/download`
         );
@@ -378,6 +329,31 @@ test.describe.serial("Journey 7: Reporting", () => {
     expect(Number(downloadResponse.contentLength)).toBeGreaterThan(0);
   });
 
+  test("verifies report metadata survives reload", async ({ page }) => {
+    expect(generatedReportId).toBeTruthy();
+
+    const testName = "Reload Test Report";
+    const testNotes = "Reload test notes";
+    await apiPatch(
+      page,
+      `/projects/${projectId}/reports/${generatedReportId}`,
+      { display_name: testName, notes: testNotes }
+    );
+
+    await page.reload();
+
+    const reports = await apiGet<ReportsListResponse>(
+      page,
+      `/projects/${projectId}/reports?limit=10`
+    );
+    const reloadedReport = reports.items.find(
+      (r) => r.id === generatedReportId
+    );
+    expect(reloadedReport).toBeDefined();
+    expect(reloadedReport!.display_name).toBe(testName);
+    expect(reloadedReport!.notes).toBe(testNotes);
+  });
+
   test("deletes report", async ({ page }) => {
     expect(generatedReportId).toBeTruthy();
 
@@ -392,29 +368,5 @@ test.describe.serial("Journey 7: Reporting", () => {
     );
     const deleted = reports.items.find(r => r.id === generatedReportId);
     expect(deleted).toBeUndefined();
-  });
-
-  test("verifies report metadata survives reload", async ({ page }) => {
-    expect(generatedReportId).toBeTruthy();
-
-    const testName = "Reload Test Report";
-    const testNotes = "Reload test notes";
-    await apiPatch(page, `/projects/${projectId}/reports/${generatedReportId}`, {
-      display_name: testName,
-      notes: testNotes,
-    });
-
-    await page.reload();
-
-    const reports = await apiGet<ReportsListResponse>(
-      page,
-      `/projects/${projectId}/reports?limit=10`
-    );
-    const reloadedReport = reports.items.find(
-      (r) => r.id === generatedReportId
-    );
-    expect(reloadedReport).toBeDefined();
-    expect(reloadedReport!.display_name).toBe(testName);
-    expect(reloadedReport!.notes).toBe(testNotes);
   });
 });

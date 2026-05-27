@@ -308,3 +308,29 @@ async def delete_tool_override(
         raise NotFound(f"Tool override {tool_name!r} not found")
     await asyncio.to_thread(service.delete, tool_name)
     return Response(status_code=204)
+
+
+@projects_tools_v1_router.delete(
+    "/{project_id}/tools/overrides/{repo_id}/{service_name}/{tool_name}",
+    status_code=204,
+)
+async def delete_service_scoped_tool_override(
+    project_id: int,
+    repo_id: int,
+    service_name: str,
+    tool_name: str,
+    request: Request,
+) -> Response:
+    """Delete a service-scoped tool override."""
+    _service, repo, _paths, _name = await asyncio.to_thread(
+        _build_service, request, project_id
+    )
+    existing = await asyncio.to_thread(
+        repo.find_service_scoped, tool_name, repo_id, service_name
+    )
+    if existing is None:
+        raise NotFound(
+            f"Tool override {tool_name!r} not found for service {service_name!r}"
+        )
+    await asyncio.to_thread(repo.delete, tool_name)
+    return Response(status_code=204)

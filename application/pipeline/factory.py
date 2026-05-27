@@ -52,6 +52,7 @@ class PipelineFactory:
             repo_repo=repo_repo,
         )
         bus.subscribe(ToolCompleted, ingest.handle)
+        bus.register_cleanup_target(ingest)
 
         strategy: PostIngestStrategy
         if skip_enrichment:
@@ -68,6 +69,7 @@ class PipelineFactory:
             )
 
         bus.subscribe(IngestCompleted, strategy.handle)
+        bus.register_cleanup_target(strategy)
 
         url_inventory = UrlInventoryIngestHandler(
             repo_repo=repo_repo,

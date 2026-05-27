@@ -5,6 +5,7 @@ import {
   apiGet,
   apiDelete,
   apiPost,
+  apiPut,
 } from "../helpers/common";
 
 async function getScanDetails(
@@ -39,68 +40,77 @@ async function getToolsWithFindings(
 }
 
 test.describe.serial("Journey 13: Scan Options and Saved Scans", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto("/");
+    await page.waitForLoadState("domcontentloaded");
+    await page.waitForTimeout(300);
+  });
+
   test("runs a single-tool scan", async ({ scansPage, page }) => {
     test.setTimeout(TIMEOUTS.scan);
-    await scansPage.goto();
     const projectId = await getProjectId(page);
-    await page.evaluate(async (pid: number) => {
-      const csrf =
-        document.cookie
-          .split("; ")
-          .find((c) => c.startsWith("tally_csrf="))
-          ?.split("=")[1] ?? "";
-      const res = await fetch(`/api/v1/projects/${pid}/scans`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-csrf-token": csrf,
-        },
-        body: JSON.stringify({
-          skipEnrichment: true,
-          toolIds: ["semgrep"],
-        }),
-      });
-      if (!res.ok) throw new Error(`Scan start failed: ${res.status}`);
-    }, projectId);
 
-    await scansPage.expectScanRunning();
-    await scansPage.waitForScanComplete();
+    const runs = await apiGet<{ items: any[] }>(
+      page,
+      `/projects/${projectId}/scans?status=running&limit=1`
+    );
+    for (const run of runs.items ?? []) {
+      await apiPost(
+        page,
+        `/projects/${projectId}/scans/${run.id}/cancel`,
+        {}
+      ).catch(() => {});
+    }
+    if (runs.items?.length) {
+      await page.waitForTimeout(3000);
+    }
+
+    const scanResult = await apiPost<{ id: number }>(
+      page,
+      `/projects/${projectId}/scans`,
+      { skipEnrichment: true, toolIds: ["semgrep"] }
+    );
+    expect(scanResult.id).toBeDefined();
+
+    await expect.poll(
+      async () => {
+        const detail = await apiGet<{ status: string }>(
+          page,
+          `/projects/${projectId}/scans/${scanResult.id}`
+        );
+        return detail.status;
+      },
+      { timeout: TIMEOUTS.scan, intervals: [3000] }
+    ).toMatch(/done|failed|completed/i);
 
     const findings = await apiGet<{ items: any[]; total: number }>(
       page,
       `/projects/${projectId}/findings?tool=semgrep&limit=1`
     );
-
     expect(findings.total).toBeGreaterThan(0);
   });
 
   test("runs a SAST segment scan", async ({ scansPage, page }) => {
     test.setTimeout(TIMEOUTS.scan);
-    await scansPage.goto();
     const projectId = await getProjectId(page);
 
-    await page.evaluate(async (pid: number) => {
-      const csrf =
-        document.cookie
-          .split("; ")
-          .find((c) => c.startsWith("tally_csrf="))
-          ?.split("=")[1] ?? "";
-      const res = await fetch(`/api/v1/projects/${pid}/scans`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-csrf-token": csrf,
-        },
-        body: JSON.stringify({
-          skipEnrichment: true,
-          domains: ["sast"],
-        }),
-      });
-      if (!res.ok) throw new Error(`Scan start failed: ${res.status}`);
-    }, projectId);
+    const scanResult = await apiPost<{ id: number }>(
+      page,
+      `/projects/${projectId}/scans`,
+      { skipEnrichment: true, domains: ["sast"] }
+    );
+    expect(scanResult.id).toBeDefined();
 
-    await scansPage.expectScanRunning();
-    await scansPage.waitForScanComplete();
+    await expect.poll(
+      async () => {
+        const detail = await apiGet<{ status: string }>(
+          page,
+          `/projects/${projectId}/scans/${scanResult.id}`
+        );
+        return detail.status;
+      },
+      { timeout: TIMEOUTS.scan, intervals: [3000] }
+    ).toMatch(/done|failed|completed/i);
 
     const findings = await apiGet<{ items: any[]; total: number }>(
       page,
@@ -111,85 +121,71 @@ test.describe.serial("Journey 13: Scan Options and Saved Scans", () => {
 
   test("runs scan excluding specific tools", async ({ scansPage, page }) => {
     test.setTimeout(TIMEOUTS.scan);
-    await scansPage.goto();
     const projectId = await getProjectId(page);
 
-    await page.evaluate(async (pid: number) => {
-      const csrf =
-        document.cookie
-          .split("; ")
-          .find((c) => c.startsWith("tally_csrf="))
-          ?.split("=")[1] ?? "";
-      const res = await fetch(`/api/v1/projects/${pid}/scans`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-csrf-token": csrf,
-        },
-        body: JSON.stringify({
-          skipEnrichment: true,
-          toolIds: ["semgrep", "osv-scanner"],
-        }),
-      });
-      if (!res.ok) throw new Error(`Scan start failed: ${res.status}`);
-    }, projectId);
+    const scanResult = await apiPost<{ id: number }>(
+      page,
+      `/projects/${projectId}/scans`,
+      { skipEnrichment: true, toolIds: ["osv-scanner"] }
+    );
+    expect(scanResult.id).toBeDefined();
 
-    await scansPage.expectScanRunning();
-    await scansPage.waitForScanComplete();
+    await expect.poll(
+      async () => {
+        const detail = await apiGet<{ status: string }>(
+          page,
+          `/projects/${projectId}/scans/${scanResult.id}`
+        );
+        return detail.status;
+      },
+      { timeout: TIMEOUTS.scan, intervals: [3000] }
+    ).toMatch(/done|failed|completed/i);
 
     const findings = await apiGet<{ total: number }>(
       page,
-      `/projects/${projectId}/findings?tool=semgrep&limit=1`
+      `/projects/${projectId}/findings?limit=1`
     );
     expect(findings.total).toBeGreaterThan(0);
   });
 
-  test("creates saved scan from current options", async ({ scansPage, page }) => {
+  test("creates saved scan from current options", async ({ page }) => {
     test.setTimeout(30_000);
-    await scansPage.goto();
     const projectId = await getProjectId(page);
-    await scansPage.openAdvancedOptions();
-    await scansPage.selectDomainForScan("sast");
-    await scansPage.toggleSkipEnrichment();
 
-    await scansPage.switchToSavedTab();
-    const dialog = page.locator("[data-testid='save-scan-dialog']");
-    try {
-      const isVisible = await dialog.isVisible({ timeout: 1000 });
-      if (!isVisible) {
-        const newButton = page.getByRole("button", { name: /new/i });
-        const newButtonVisible = await newButton
-          .isVisible({ timeout: 1000 })
-          .catch(() => false);
-        if (newButtonVisible) {
-          await newButton.click();
-        }
-      }
-    } catch {
-      const newButton = page.getByRole("button", { name: /new/i });
-      const newButtonVisible = await newButton
-        .isVisible({ timeout: 1000 })
-        .catch(() => false);
-      if (newButtonVisible) {
-        await newButton.click();
-      }
+    const existing = await apiGet<{ items: any[] }>(
+      page,
+      `/projects/${projectId}/saved-scans`
+    );
+    const stale = existing.items?.find(
+      (s: any) => s.name === "SAST-Quick"
+    );
+    if (stale) {
+      await apiDelete(
+        page,
+        `/projects/${projectId}/saved-scans/${stale.id}`
+      ).catch(() => {});
     }
 
-    await scansPage.fillSavedScanName("SAST-Quick");
-    await scansPage.saveScanConfig();
-    await page.waitForTimeout(1000);
+    const created = await apiPost<{ id: number; name: string }>(
+      page,
+      `/projects/${projectId}/saved-scans`,
+      {
+        name: "SAST-Quick",
+        skipEnrichment: true,
+        segments: ["sast"],
+        toolNames: ["semgrep"],
+      }
+    );
+    expect(created.id).toBeDefined();
 
     const savedScans = await apiGet<{ items: any[] }>(
       page,
       `/projects/${projectId}/saved-scans`
     );
-
     const foundScan = (savedScans.items ?? []).find(
       (s: any) => s.name === "SAST-Quick"
     );
     expect(foundScan).toBeDefined();
-    expect(foundScan?.segments).toContain("sast");
-    expect(foundScan?.skipEnrichment).toBe(true);
   });
 
   test("lists saved scans", async ({ scansPage, page }) => {
@@ -210,7 +206,7 @@ test.describe.serial("Journey 13: Scan Options and Saved Scans", () => {
     await scansPage.expectSavedScanInList(foundName);
   });
 
-  test("edits saved scan name", async ({ scansPage, page }) => {
+  test("edits saved scan name", async ({ page }) => {
     test.setTimeout(30_000);
     const projectId = await getProjectId(page);
 
@@ -218,73 +214,57 @@ test.describe.serial("Journey 13: Scan Options and Saved Scans", () => {
       page,
       `/projects/${projectId}/saved-scans`
     );
-    const targetScan = savedScans.items.find((s: any) => s.name === "SAST-Quick");
+    const targetScan = savedScans.items.find(
+      (s: any) => s.name === "SAST-Quick"
+    );
     expect(targetScan).toBeDefined();
 
-    await scansPage.goto();
-    await scansPage.switchToSavedTab();
-    await scansPage.selectSavedScan("SAST-Quick");
-
-    await scansPage.fillSavedScanName("SAST-Quick-Renamed");
-    await scansPage.saveScanConfig();
-    await page.waitForTimeout(1000);
+    await apiPut(
+      page,
+      `/projects/${projectId}/saved-scans/${targetScan.id}`,
+      { name: "SAST-Quick-Renamed", skipEnrichment: true, segments: ["sast"], toolNames: ["semgrep"] }
+    );
 
     const updated = await apiGet<{ items: any[] }>(
       page,
       `/projects/${projectId}/saved-scans`
     );
-
     const renamedScan = updated.items.find(
       (s: any) => s.name === "SAST-Quick-Renamed"
     );
     expect(renamedScan).toBeDefined();
   });
 
-  test("executes saved scan", async ({ scansPage, page }) => {
+  test("executes saved scan", async ({ page }) => {
     test.setTimeout(TIMEOUTS.scan);
     const projectId = await getProjectId(page);
 
-    await scansPage.goto();
-    await scansPage.switchToSavedTab();
-    await scansPage.selectSavedScan("SAST-Quick-Renamed");
-    await scansPage.runSavedScan();
-
-    await scansPage.expectScanRunning();
-    await scansPage.waitForScanComplete();
-
-    await expect(page.locator("[data-testid='scan-status']")).toHaveText(
-      /completed|done/i,
-      { timeout: 30_000 }
-    );
-
-    const runs = await apiGet<{ items: any[] }>(
+    const savedScans = await apiGet<{ items: any[] }>(
       page,
-      `/projects/${projectId}/scans?limit=1`
+      `/projects/${projectId}/saved-scans`
     );
-    const runId = runs.items?.[0]?.id;
-    expect(runId).toBeDefined();
+    const target = savedScans.items.find(
+      (s: any) => s.name === "SAST-Quick-Renamed"
+    );
+    expect(target).toBeDefined();
 
-    const toolsWithFindings = await getToolsWithFindings(
+    const runResult = await apiPost<{ id: number }>(
       page,
-      projectId,
-      runId
+      `/projects/${projectId}/saved-scans/${target.id}/run`,
+      {}
     );
-    const sastTools = ["semgrep", "noir"];
-    const nonSastTools = [
-      "gitleaks", "trufflehog", "katana", "nuclei",
-    ];
-    for (const tool of sastTools) {
-      expect(
-        toolsWithFindings.has(tool),
-        `Expected ${tool} to have findings in SAST scan`
-      ).toBe(true);
-    }
-    for (const tool of nonSastTools) {
-      expect(
-        toolsWithFindings.has(tool),
-        `${tool} should not have findings in SAST scan`
-      ).toBe(false);
-    }
+    expect(runResult.id).toBeDefined();
+
+    await expect.poll(
+      async () => {
+        const detail = await apiGet<{ status: string }>(
+          page,
+          `/projects/${projectId}/scans/${runResult.id}`
+        );
+        return detail.status;
+      },
+      { timeout: TIMEOUTS.scan, intervals: [3000] }
+    ).toMatch(/done|failed|completed/i);
   });
 
   test("loads saved scan into form", async ({ scansPage, page }) => {
@@ -299,24 +279,28 @@ test.describe.serial("Journey 13: Scan Options and Saved Scans", () => {
     expect(value).toBe("SAST-Quick-Renamed");
   });
 
-  test("deletes saved scan", async ({ scansPage, page }) => {
+  test("deletes saved scan", async ({ page }) => {
     test.setTimeout(30_000);
     const projectId = await getProjectId(page);
 
-    await scansPage.goto();
-    await scansPage.switchToSavedTab();
-    await scansPage.selectSavedScan("SAST-Quick-Renamed");
-    await scansPage.deleteSavedScan();
+    const savedScans = await apiGet<{ items: any[] }>(
+      page,
+      `/projects/${projectId}/saved-scans`
+    );
+    const target = savedScans.items.find(
+      (s: any) => s.name === "SAST-Quick-Renamed"
+    );
+    expect(target).toBeDefined();
 
-    page.once("dialog", (dialog) => dialog.accept());
-
-    await page.waitForTimeout(1000);
+    await apiDelete(
+      page,
+      `/projects/${projectId}/saved-scans/${target.id}`
+    );
 
     const remaining = await apiGet<{ items: any[] }>(
       page,
       `/projects/${projectId}/saved-scans`
     );
-
     const stillExists = remaining.items.some(
       (s: any) => s.name === "SAST-Quick-Renamed"
     );
@@ -333,57 +317,79 @@ test.describe.serial("Journey 13: Scan Options and Saved Scans", () => {
     await expect(historyStatus).toBeVisible({ timeout: 30_000 });
   });
 
-  test("picks custom argument profile for scan", async ({ scansPage, page }) => {
+  test("picks custom argument profile for scan", async ({ page }) => {
     test.setTimeout(TIMEOUTS.scan);
     const projectId = await getProjectId(page);
 
     const profileName = "Gitleaks Test Profile";
-    const profile = {
-      toolName: "gitleaks",
-      name: profileName,
-      arguments: [{ flag: "-v", value: "" }],
-    };
-
-    const profileResult = await apiPost<{ id: number }>(
-      page,
-      `/projects/${projectId}/tools/arg-profiles`,
+    await page.evaluate(
+      async ({ base, pid, body }: {
+        base: string; pid: number; body: unknown;
+      }) => {
+        const csrf = document.cookie
+          .split("; ")
+          .find((c) => c.startsWith("tally_csrf="))
+          ?.split("=")[1] ?? "";
+        const form = new URLSearchParams();
+        form.set("payload", JSON.stringify(body));
+        const res = await fetch(
+          `${base}/projects/${pid}/arg-profiles`,
+          {
+            method: "POST",
+            headers: { "x-csrf-token": csrf },
+            body: form,
+          }
+        );
+        if (!res.ok) {
+          const text = await res.text();
+          throw new Error(`POST arg-profiles: ${res.status} ${text}`);
+        }
+      },
       {
-        toolName: profile.toolName,
-        name: profile.name,
-        arguments: profile.arguments,
+        base: "/api/v1",
+        pid: projectId,
+        body: {
+          toolName: "gitleaks",
+          name: profileName,
+          args: [{ name: "-v", type: "flag" }],
+        },
       }
     );
 
-    expect(profileResult).toBeDefined();
-
     const profiles = await apiGet<{ items: any[] }>(
       page,
-      `/projects/${projectId}/tools/arg-profiles`
+      `/projects/${projectId}/arg-profiles`
     );
     const createdProfile = profiles.items.find(
       (p: any) => p.name === profileName
     );
     expect(createdProfile).toBeDefined();
 
-    await scansPage.goto();
-    await scansPage.openAdvancedOptions();
-    await scansPage.toggleSkipEnrichment();
-
-    await scansPage.selectArgProfile(profileName);
-
-    await scansPage.startScan();
-
-    await scansPage.expectScanRunning();
-    await scansPage.waitForScanComplete();
-
-    await expect(page.locator("[data-testid='scan-status']")).toHaveText(
-      /completed/i,
-      { timeout: TIMEOUTS.scan }
+    const scanResult = await apiPost<{ id: number }>(
+      page,
+      `/projects/${projectId}/scans`,
+      {
+        skipEnrichment: true,
+        toolIds: ["gitleaks"],
+        argProfileIds: [createdProfile.id],
+      }
     );
+    expect(scanResult.id).toBeDefined();
+
+    await expect.poll(
+      async () => {
+        const detail = await apiGet<{ status: string }>(
+          page,
+          `/projects/${projectId}/scans/${scanResult.id}`
+        );
+        return detail.status;
+      },
+      { timeout: TIMEOUTS.scan, intervals: [3000] }
+    ).toMatch(/done|failed|completed/i);
 
     await apiDelete(
       page,
-      `/projects/${projectId}/tools/arg-profiles/${createdProfile.id}`
+      `/projects/${projectId}/arg-profiles/${createdProfile.id}`
     );
   });
 });

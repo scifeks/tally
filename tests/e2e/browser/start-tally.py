@@ -39,6 +39,8 @@ def _detect_ollama_url() -> str:
             pass
     if not host:
         host = "localhost:11434"
+    if ":" not in host.split("//")[-1]:
+        host = f"{host}:11434"
     return host if host.startswith("http") else f"http://{host}"
 
 
@@ -47,13 +49,30 @@ def acquire_instance_lock() -> None:
     try:
         fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
     except OSError:
-        os.close(fd)
-        print(
-            "Another Tally instance is already running. "
-            "Stop it before starting e2e tests.",
-            file=sys.stderr,
-        )
-        sys.exit(1)
+        os.lseek(fd, 0, os.SEEK_SET)
+        raw = os.read(fd, 64).decode().strip()
+        stale = False
+        if raw.isdigit():
+            try:
+                os.kill(int(raw), 0)
+            except ProcessLookupError:
+                stale = True
+        else:
+            stale = True
+        if stale:
+            fcntl.flock(fd, fcntl.LOCK_UN)
+            os.close(fd)
+            _LOCK_PATH.unlink(missing_ok=True)
+            fd = os.open(str(_LOCK_PATH), os.O_CREAT | os.O_RDWR, 0o644)
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        else:
+            os.close(fd)
+            print(
+                "Another Tally instance is already running. "
+                "Stop it before starting e2e tests.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
     os.write(fd, f"{os.getpid()}\n".encode())
     os.ftruncate(fd, os.lseek(fd, 0, os.SEEK_CUR))
     atexit.register(os.close, fd)
@@ -121,36 +140,36 @@ def main() -> None:
     config_dir.mkdir(exist_ok=True)
     config_path = config_dir / "global.json"
     ollama_host = _detect_ollama_url()
-    if not config_path.exists():
-        config_path.write_text(
-            json.dumps(
-                {
-                    "ollama": {
-                        "base_url": ollama_host,
-                        "model": "qwen2.5:14b",
-                        "timeout_seconds": 60,
-                    },
-                    "chat_inference": {"provider": "ollama"},
-                    "enrichment_inference": {
-                        "provider": "ollama",
-                        "timeout_seconds": 5,
-                        "retry_count": 1,
-                    },
-                    "report_inference": {"provider": "ollama"},
-                    "embedding_inference": {
-                        "provider": "ollama",
-                        "model": "nomic-embed-text:latest",
-                    },
-                    "projects_dir": "./projects",
-                    "location_attestation_confirmed": False,
-                    "web_ui_host": args.host,
-                    "web_ui_port": args.api_port,
-                    "web_ui_vite_port": args.vite_port,
-                },
-                indent=2,
-            ),
-            encoding="utf-8",
-        )
+    default_config = {
+        "ollama": {
+            "base_url": ollama_host,
+            "model": "qwen3:14b",
+            "timeout_seconds": 60,
+        },
+        "chat_inference": {"provider": "ollama"},
+        "enrichment_inference": {
+            "provider": "ollama",
+            "timeout_seconds": 5,
+            "retry_count": 1,
+        },
+        "report_inference": {"provider": "ollama"},
+        "embedding_inference": {
+            "provider": "ollama",
+            "model": "nomic-embed-text:latest",
+        },
+        "projects_dir": "./projects",
+        "location_attestation_confirmed": False,
+        "web_ui_host": args.host,
+        "web_ui_port": args.api_port,
+        "web_ui_vite_port": args.vite_port,
+    }
+    if config_path.exists():
+        existing = json.loads(config_path.read_text(encoding="utf-8"))
+        ollama_cfg = existing.setdefault("ollama", {})
+        ollama_cfg["base_url"] = ollama_host
+        ollama_cfg["model"] = default_config["ollama"]["model"]
+        default_config = existing
+    config_path.write_text(json.dumps(default_config, indent=2), encoding="utf-8")
 
     from application.bootstrap import BootstrapService
     from application.project.registry_service import ProjectRegistryService

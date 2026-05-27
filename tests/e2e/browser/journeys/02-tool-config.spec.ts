@@ -145,8 +145,10 @@ test.describe.serial("Journey 2b: DVEca Scan-Target Configuration", () => {
         const repoBody = await repoRes.json();
         const repos = repoBody.items ?? repoBody;
         const dveca = repos.find((r: { name: string }) => r.name === "DVEca");
-        const existing = (dveca as Record<string, unknown>)?.services ?? [];
-        const merged = [...(existing as unknown[]), ...svcs];
+        const existing = ((dveca as Record<string, unknown>)?.services ?? []) as Array<{name: string}>;
+        const existingNames = new Set(existing.map((s: {name: string}) => s.name));
+        const newOnly = (svcs as Array<{name: string}>).filter((s) => !existingNames.has(s.name));
+        const merged = [...existing, ...newOnly];
 
         const form = new URLSearchParams();
         form.set("payload", JSON.stringify({ services: merged }));
