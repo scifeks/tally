@@ -30,7 +30,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "ruff",
-    "pyright",
+    "pyright==1.1.411",
     "pre-commit",
     "pytest>=7.0.0",
     "pytest-timeout>=2.0.0",
