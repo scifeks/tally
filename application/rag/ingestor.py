@@ -46,12 +46,14 @@ class ToolHandlerFactory:
         except ImportError:
             logger.debug("No tool handler module for tool %r", tool_name)
             return None
-        for _, obj in inspect.getmembers(module, inspect.isclass):
+        cls: type
+        for _, cls in inspect.getmembers(module, inspect.isclass):
             if (
-                obj.__module__ == module.__name__
-                and getattr(obj, "tool_name", None) == tool_name
+                cls.__module__ == module.__name__
+                and getattr(cls, "tool_name", None) == tool_name
             ):
-                return obj()
+                handler: ToolHandler = cls()
+                return handler
         logger.debug("No ToolHandler class found in module for tool %r", tool_name)
         return None
 
