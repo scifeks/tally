@@ -1,0 +1,55 @@
+<?php
+
+namespace Psr\Http\Message;
+
+interface ServerRequestInterface {
+    /**
+     * @psalm-taint-source input
+     */
+    public function getQueryParams(): array;
+
+    /**
+     * @psalm-taint-source input
+     */
+    public function getParsedBody();
+
+    /**
+     * @psalm-taint-source input
+     */
+    public function getAttribute(
+        string $name,
+        $default = null
+    );
+
+    /**
+     * @psalm-taint-source input
+     */
+    public function getUploadedFiles(): array;
+
+    /**
+     * @psalm-taint-source input
+     */
+    public function getCookieParams(): array;
+
+    /**
+     * @psalm-taint-source input
+     */
+    public function getServerParams(): array;
+}
+
+namespace Slim\Http;
+
+class Request {
+    /**
+     * @psalm-taint-source input
+     */
+    public function getParam(
+        string $key,
+        $default = null
+    ): mixed {}
+
+    /**
+     * @psalm-taint-source input
+     */
+    public function getParams(): array {}
+}

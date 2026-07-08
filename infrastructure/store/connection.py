@@ -34,6 +34,7 @@ def _migrate_repositories_to_services(conn: sqlite3.Connection) -> None:
             dalfox_headers_json      TEXT NOT NULL DEFAULT '{}',
             katana_headers_json      TEXT NOT NULL DEFAULT '{}',
             graphql_cop_headers_json TEXT NOT NULL DEFAULT '{}',
+            psalm_stubs_json         TEXT NOT NULL DEFAULT '["php_builtins"]',
             auth_json                TEXT,
             url_seed_file            TEXT,
             created_at               TEXT NOT NULL DEFAULT (
@@ -66,9 +67,10 @@ def _migrate_repositories_to_services(conn: sqlite3.Connection) -> None:
                 xsstrike_crawl_level, katana_headless, katana_depth,
                 xsstrike_headers_json, dalfox_headers_json,
                 katana_headers_json, graphql_cop_headers_json,
+                psalm_stubs_json,
                 auth_json, url_seed_file,
                 created_at, deleted_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 row_dict.get("id"),
                 row_dict.get("name"),
@@ -81,6 +83,7 @@ def _migrate_repositories_to_services(conn: sqlite3.Connection) -> None:
                 row_dict.get("dalfox_headers_json", "{}"),
                 row_dict.get("katana_headers_json", "{}"),
                 row_dict.get("graphql_cop_headers_json", "{}"),
+                row_dict.get("psalm_stubs_json", '["php_builtins"]'),
                 row_dict.get("auth_json"),
                 row_dict.get("url_seed_file"),
                 row_dict.get("created_at"),
@@ -352,6 +355,7 @@ class ConnectionFactory:
                     dalfox_headers_json      TEXT NOT NULL DEFAULT '{{}}',
                     katana_headers_json      TEXT NOT NULL DEFAULT '{{}}',
                     graphql_cop_headers_json TEXT NOT NULL DEFAULT '{{}}',
+                    psalm_stubs_json         TEXT NOT NULL DEFAULT '["php_builtins"]',
                     auth_json                TEXT,
                     url_seed_file            TEXT,
                     created_at               TEXT NOT NULL DEFAULT (

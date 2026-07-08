@@ -36,6 +36,7 @@ _ALL_COLUMNS: str = (
     "xsstrike_crawl_level, katana_headless, katana_depth, "
     "xsstrike_headers_json, dalfox_headers_json, "
     "katana_headers_json, graphql_cop_headers_json, "
+    "psalm_stubs_json, "
     "auth_json, url_seed_file, "
     "created_at, deleted_at"
 )
@@ -55,6 +56,7 @@ def _row_to_repository(row: sqlite3.Row) -> Repository:
     }
     for field in _DICT_FIELDS:
         fields[field] = json.loads(row[f"{field}_json"])
+    fields["psalm_stubs"] = json.loads(row["psalm_stubs_json"])
     auth_raw = row["auth_json"]
     fields["auth"] = RepoAuth(**json.loads(auth_raw)) if auth_raw else None
     repo = Repository(**fields)
@@ -81,6 +83,7 @@ def _repository_to_row(repo: Repository) -> dict[str, Any]:
         "dalfox_headers_json": json.dumps(repo.dalfox_headers),
         "katana_headers_json": json.dumps(repo.katana_headers),
         "graphql_cop_headers_json": json.dumps(repo.graphql_cop_headers),
+        "psalm_stubs_json": json.dumps(repo.psalm_stubs),
         "auth_json": json.dumps(auth_dump) if auth_dump is not None else None,
         "url_seed_file": repo.url_seed_file,
     }

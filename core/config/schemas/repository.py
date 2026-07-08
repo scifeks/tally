@@ -160,6 +160,15 @@ class Repository(BaseModel):
             '{"Authorization": "Bearer token123"}.'
         ),
     )
+    psalm_stubs: list[str] = Field(
+        default_factory=lambda: ["php_builtins"],
+        description=(
+            "Psalm taint stub packages to include in scans. "
+            "php_builtins is always included regardless of this "
+            "setting. Available: php_builtins, slim, eloquent, "
+            "symfony_console."
+        ),
+    )
     auth: RepoAuth | None = Field(
         default=None,
         description=(

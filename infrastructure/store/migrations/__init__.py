@@ -9,6 +9,7 @@ from infrastructure.store.migrations import (
     m0001_baseline,
     m0002_service_scoped_overrides,
     m0003_graphql_cop_headers,
+    m0004_psalm_stubs,
 )
 from infrastructure.store.migrations._helpers import (
     add_column_if_missing,
@@ -25,6 +26,7 @@ MIGRATIONS: list[ModuleType] = [
     m0001_baseline,
     m0002_service_scoped_overrides,
     m0003_graphql_cop_headers,
+    m0004_psalm_stubs,
 ]
 
 

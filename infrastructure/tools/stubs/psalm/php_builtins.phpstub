@@ -1,0 +1,110 @@
+<?php
+
+/**
+ * @psalm-taint-source input
+ */
+$_REQUEST = [];
+
+/**
+ * @psalm-taint-source input
+ */
+$_SERVER = [];
+
+/**
+ * @psalm-taint-source input
+ */
+$_FILES = [];
+
+/**
+ * @psalm-taint-sink shell $command
+ */
+function shell_exec(string $command): string|false|null {}
+
+/**
+ * @psalm-taint-sink shell $command
+ */
+function exec(
+    string $command,
+    array &$output = [],
+    int &$result_code = 0
+): string|false {}
+
+/**
+ * @psalm-taint-sink shell $command
+ */
+function system(
+    string $command,
+    int &$result_code = 0
+): string|false {}
+
+/**
+ * @psalm-taint-sink shell $command
+ */
+function passthru(
+    string $command,
+    int &$result_code = 0
+): false|null {}
+
+/**
+ * @psalm-taint-sink shell $command
+ */
+function proc_open(
+    string $command,
+    array $descriptor_spec,
+    array &$pipes
+): resource|false {}
+
+/**
+ * @psalm-taint-sink shell $command
+ */
+function popen(string $command, string $mode): resource|false {}
+
+/**
+ * @psalm-taint-sink eval $code
+ */
+function eval(string $code): mixed {}
+
+/**
+ * @psalm-taint-sink file $filename
+ */
+function file_put_contents(
+    string $filename,
+    mixed $data
+): int|false {}
+
+/**
+ * @psalm-taint-sink ssrf $filename
+ */
+function file_get_contents(string $filename): string|false {}
+
+/**
+ * @psalm-taint-sink file $filename
+ */
+function fopen(string $filename, string $mode): resource|false {}
+
+/**
+ * @psalm-taint-sink ssrf $filename
+ */
+function readfile(string $filename): int|false {}
+
+/**
+ * @psalm-taint-sink header $header
+ */
+function header(string $header): void {}
+
+class PDO {
+    /**
+     * @psalm-taint-sink sql $statement
+     */
+    public function query(string $statement): PDOStatement|false {}
+
+    /**
+     * @psalm-taint-sink sql $statement
+     */
+    public function exec(string $statement): int|false {}
+
+    /**
+     * @psalm-taint-sink sql $query
+     */
+    public function prepare(string $query): PDOStatement|false {}
+}
