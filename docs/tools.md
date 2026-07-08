@@ -9,6 +9,7 @@
 | XSStrike | DAST | XSS-focused dynamic scanner; context-aware payload generation and WAF evasion to complement ZAP |
 | graphql-cop | DAST | GraphQL security auditing; tests for introspection, batching, alias abuse, field suggestions, and other misconfigurations |
 | OWASP Noir | Pre-DAST | Static endpoint discovery; produces an OAS3 spec for ZAP |
+| Psalm | SAST | PHP taint analysis; traces data flow from user input to dangerous sinks (SQL injection, XSS, command injection) |
 | Semgrep | SAST | Static analysis across many languages |
 | tree-sitter | SAST | AST-based code analysis (Python library) |
 | Gitleaks | Secrets | Git history and working-tree secret scanning |
@@ -58,6 +59,43 @@ for Node.js apps and for any project that already maintains an API spec.
 
 See [docs/endpoint-files.md](endpoint-files.md) for supported formats,
 setup instructions, and a description of how conversion works.
+
+---
+
+## Psalm
+
+Psalm is a PHP static analyzer whose taint analysis mode traces data flow from user-controlled sources (`$_GET`, framework request objects) to dangerous sinks (`DB::raw()`, `shell_exec`, `echo`) across function boundaries. Unlike pattern-matching SAST tools, Psalm follows data through assignments, function calls, and return values to detect injection vulnerabilities that require path-sensitive analysis.
+
+### Setup
+
+Psalm is optional and auto-detected via `$PATH`. Install globally or per-project via Composer:
+
+```bash
+composer require --dev vimeo/psalm
+```
+
+### Taint stubs
+
+Tally ships PHP stub files that teach Psalm which framework methods are taint sources and sinks. Configure stubs per repository with `repo edit <name>`:
+
+| Stub | Covers |
+|---|---|
+| `php_builtins` | PHP superglobals (`$_REQUEST`, `$_SERVER`, `$_FILES`), `shell_exec`, `eval`, PDO, `file_get_contents`, `header` |
+| `slim` | PSR-7 `ServerRequestInterface` and Slim `Request::getParam()` |
+| `eloquent` | `DB::raw()`, `whereRaw()`, `selectRaw()`, `orderByRaw()`, `havingRaw()`, `groupByRaw()` |
+| `symfony_console` | `InputInterface::getArgument()`, `InputInterface::getOption()` |
+
+`php_builtins` is always included regardless of configuration. The default is `["php_builtins"]`. To add framework stubs, set the `psalm_stubs` field on the repository:
+
+```json
+{
+  "psalm_stubs": ["php_builtins", "slim", "eloquent"]
+}
+```
+
+### How it works
+
+The adapter generates a temporary `psalm.xml` per scan with taint analysis enabled, the configured stubs, and source directories extracted from `composer.json` or an existing `psalm.xml`. The target repository is never modified. Psalm outputs SARIF and the adapter filters to `Tainted*` findings only, ignoring code quality issues.
 
 ---
 

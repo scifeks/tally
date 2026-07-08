@@ -1,0 +1,75 @@
+<?php
+
+namespace Illuminate\Support\Facades;
+
+class DB {
+    /**
+     * @psalm-taint-sink sql $value
+     */
+    public static function raw($value): mixed {}
+
+    /**
+     * @psalm-taint-sink sql $query
+     */
+    public static function select(
+        string $query,
+        array $bindings = []
+    ): array {}
+
+    /**
+     * @psalm-taint-sink sql $query
+     */
+    public static function statement(
+        string $query,
+        array $bindings = []
+    ): bool {}
+
+    /**
+     * @psalm-taint-sink sql $query
+     */
+    public static function unprepared(string $query): bool {}
+}
+
+namespace Illuminate\Database\Query;
+
+class Builder {
+    /**
+     * @psalm-taint-sink sql $sql
+     */
+    public function whereRaw(
+        string $sql,
+        $bindings = []
+    ): static {}
+
+    /**
+     * @psalm-taint-sink sql $expression
+     */
+    public function selectRaw(
+        string $expression,
+        array $bindings = []
+    ): static {}
+
+    /**
+     * @psalm-taint-sink sql $sql
+     */
+    public function orderByRaw(
+        string $sql,
+        $bindings = []
+    ): static {}
+
+    /**
+     * @psalm-taint-sink sql $sql
+     */
+    public function havingRaw(
+        string $sql,
+        $bindings = []
+    ): static {}
+
+    /**
+     * @psalm-taint-sink sql $sql
+     */
+    public function groupByRaw(
+        string $sql,
+        $bindings = []
+    ): static {}
+}

@@ -12,6 +12,7 @@ from infrastructure.tools.parsers.gitleaks import GitleaksHandler
 from infrastructure.tools.parsers.npm_audit import NpmAuditHandler
 from infrastructure.tools.parsers.osv_scanner import OsvScannerHandler
 from infrastructure.tools.parsers.pip_audit import PipAuditHandler
+from infrastructure.tools.parsers.psalm import PsalmHandler
 from infrastructure.tools.parsers.semgrep import SemgrepHandler
 from infrastructure.tools.parsers.zap import ZapHandler
 
@@ -498,6 +499,112 @@ class TestScaHandlers:
         assert "HTTP redirect handling issue" in text
 
 
+# Psalm
+
+
+class TestPsalmHandler:
+    _PARSED: dict = {
+        "findings": [
+            {
+                "rule_id": "TaintedSql",
+                "severity": "high",
+                "message": "SQL injection via tainted input",
+                "file_path": "src/UserRepo.php",
+                "line_start": 42,
+                "line_end": 42,
+                "cwe": "CWE-89",
+                "confidence": "confirmed",
+                "taint_flow": [
+                    {"file": "src/UserRepo.php", "line": 10, "text": "Source: $_GET"},
+                    {
+                        "file": "src/UserRepo.php",
+                        "line": 42,
+                        "text": "Sink: DB::raw()",
+                    },
+                ],
+                "taint_source": "Source: $_GET",
+                "taint_sink": "Sink: DB::raw()",
+                "taint_type": "sql",
+            }
+        ]
+    }
+
+    def test_normalize_returns_list_of_dicts(self) -> None:
+        handler = PsalmHandler()
+        rows = handler.normalize(_make_result("psalm", self._PARSED), _PROFILE)
+        assert isinstance(rows, list)
+        assert len(rows) == 1
+        assert isinstance(rows[0], dict)
+
+    def test_normalize_profile_in_every_dict(self) -> None:
+        handler = PsalmHandler()
+        rows = handler.normalize(_make_result("psalm", self._PARSED), _PROFILE)
+        assert rows[0]["profile"] == _PROFILE
+
+    def test_normalize_correct_field_names(self) -> None:
+        handler = PsalmHandler()
+        rows = handler.normalize(_make_result("psalm", self._PARSED), _PROFILE)
+        row = rows[0]
+        assert "file_path" in row
+        assert "rule_id" in row
+        assert "line_start" in row
+        assert row["file_path"] == "src/UserRepo.php"
+        assert row["rule_id"] == "TaintedSql"
+        assert row["line_start"] == 42
+
+    def test_normalize_type_flags_present(self) -> None:
+        handler = PsalmHandler()
+        rows = handler.normalize(_make_result("psalm", self._PARSED), _PROFILE)
+        row = rows[0]
+        for key in _TYPE_FLAG_KEYS:
+            assert key in row
+
+    def test_normalize_type_vulnerability_and_weakness_true(self) -> None:
+        handler = PsalmHandler()
+        rows = handler.normalize(_make_result("psalm", self._PARSED), _PROFILE)
+        assert rows[0]["type_vulnerability"] is True
+        assert rows[0]["type_weakness"] is True
+
+    def test_normalize_taint_fields_present(self) -> None:
+        handler = PsalmHandler()
+        rows = handler.normalize(_make_result("psalm", self._PARSED), _PROFILE)
+        row = rows[0]
+        assert "taint_flow" in row
+        assert "taint_source" in row
+        assert "taint_sink" in row
+        assert "taint_type" in row
+
+    def test_normalize_empty_findings(self) -> None:
+        handler = PsalmHandler()
+        rows = handler.normalize(_make_result("psalm", {"findings": []}), _PROFILE)
+        assert rows == []
+
+    def test_render_contains_rule_id(self) -> None:
+        handler = PsalmHandler()
+        rows = handler.normalize(_make_result("psalm", self._PARSED), _PROFILE)
+        text = handler.render(rows[0])
+        assert "[psalm]" in text
+        assert "TaintedSql" in text
+
+    def test_render_contains_file_path(self) -> None:
+        handler = PsalmHandler()
+        rows = handler.normalize(_make_result("psalm", self._PARSED), _PROFILE)
+        text = handler.render(rows[0])
+        assert "src/UserRepo.php" in text
+
+    def test_render_contains_cwe(self) -> None:
+        handler = PsalmHandler()
+        rows = handler.normalize(_make_result("psalm", self._PARSED), _PROFILE)
+        text = handler.render(rows[0])
+        assert "CWE-89" in text
+
+    def test_fingerprint_key(self) -> None:
+        handler = PsalmHandler()
+        finding = self._PARSED["findings"][0]
+        key = handler.fingerprint_key(finding)
+        assert key == "psalm|TaintedSql|src/UserRepo.php|42"
+
+
 class TestOsvScannerRenderCwe:
     """osv-scanner-specific render() test for cwe_ids field."""
 
@@ -508,7 +615,7 @@ class TestOsvScannerRenderCwe:
                 "package_version": "5.3.1",
                 "vulnerability_id": "CVE-2020-14343",
                 "severity": "critical",
-                "summary": "Arbitrary code execution via YAML deserialisation",
+                "summary": "Arbitrary code execution via YAML deserialization",
                 "affected_ecosystem": "PyPI",
                 "cwe_ids": ["CWE-502"],
             }

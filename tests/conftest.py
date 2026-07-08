@@ -42,6 +42,10 @@ requires_xsstrike = pytest.mark.skipif(
     shutil.which("xsstrike") is None,
     reason="xsstrike binary not installed",
 )
+requires_psalm = pytest.mark.skipif(
+    shutil.which("psalm") is None,
+    reason="psalm binary not installed",
+)
 requires_ollama = pytest.mark.skipif(
     _OLLAMA_URL is None or not verify_ollama_available(_OLLAMA_URL),
     reason="Ollama not configured or not running",
