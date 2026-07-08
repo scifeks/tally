@@ -1,0 +1,40 @@
+[
+  {
+    "title": "Introspection Query Enabled",
+    "severity": "HIGH",
+    "description": "The GraphQL introspection query is enabled. This allows attackers to enumerate the entire schema.",
+    "impact": "Information Leakage",
+    "result": true,
+    "curl_verify": "curl -X POST https://target.com/graphql -H 'Content-Type: application/json' -d '{\"query\":\"{__schema{types{name}}}\"}"
+  },
+  {
+    "title": "Field Suggestions Enabled",
+    "severity": "LOW",
+    "description": "Field suggestions are returned when incorrect field names are used in queries.",
+    "impact": "Information Leakage",
+    "result": true,
+    "curl_verify": "curl -X POST https://target.com/graphql -H 'Content-Type: application/json' -d '{\"query\":\"{nonexistent}\"}'"
+  },
+  {
+    "title": "GET Method Query Support",
+    "severity": "MEDIUM",
+    "description": "GraphQL queries can be sent via GET method, enabling CSRF attacks.",
+    "impact": "Cross-Site Request Forgery",
+    "result": true,
+    "curl_verify": "curl 'https://target.com/graphql?query={__typename}'"
+  },
+  {
+    "title": "Batch Query Support",
+    "severity": "INFO",
+    "description": "The server supports batch queries which could be abused for DoS.",
+    "impact": "Denial of Service",
+    "result": false
+  },
+  {
+    "title": "Alias Overloading",
+    "severity": "HIGH",
+    "description": "No limit on alias-based query duplication.",
+    "impact": "Denial of Service",
+    "result": false
+  }
+]

@@ -66,6 +66,15 @@ class RepoService(BaseModel):
             "endpoint file and opts out of live crawling."
         ),
     )
+    graphql_paths: list[str] = Field(
+        default_factory=list,
+        description=(
+            "GraphQL endpoint paths for graphql-cop scanning. When "
+            "empty, common patterns (/graphql, /gql, /api/graphql) "
+            "are matched against the URL inventory. When set, only "
+            "these paths are scanned."
+        ),
+    )
     katana_headless: bool | None = Field(
         default=None,
         description="Override repo-level headless setting for this service.",

@@ -28,13 +28,15 @@ _DICT_FIELDS: tuple[str, ...] = (
     "xsstrike_headers",
     "dalfox_headers",
     "katana_headers",
+    "graphql_cop_headers",
 )
 
 _ALL_COLUMNS: str = (
     "id, name, path, services_json, "
     "xsstrike_crawl_level, katana_headless, katana_depth, "
     "xsstrike_headers_json, dalfox_headers_json, "
-    "katana_headers_json, auth_json, url_seed_file, "
+    "katana_headers_json, graphql_cop_headers_json, "
+    "auth_json, url_seed_file, "
     "created_at, deleted_at"
 )
 
@@ -78,6 +80,7 @@ def _repository_to_row(repo: Repository) -> dict[str, Any]:
         "xsstrike_headers_json": json.dumps(repo.xsstrike_headers),
         "dalfox_headers_json": json.dumps(repo.dalfox_headers),
         "katana_headers_json": json.dumps(repo.katana_headers),
+        "graphql_cop_headers_json": json.dumps(repo.graphql_cop_headers),
         "auth_json": json.dumps(auth_dump) if auth_dump is not None else None,
         "url_seed_file": repo.url_seed_file,
     }
