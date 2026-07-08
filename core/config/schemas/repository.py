@@ -84,7 +84,7 @@ class Repository(BaseModel):
         default_factory=dict,
         description=(
             "Extra HTTP headers passed to XSStrike via --headers (JSON "
-            "serialised). Use to supply authentication cookies, e.g. "
+            "serialized). Use to supply authentication cookies, e.g. "
             '{"Cookie": "session=abc123"}.'
         ),
     )
@@ -141,7 +141,7 @@ class Repository(BaseModel):
         description=(
             "Katana crawl depth (-d flag). Default 5. Headless mode caps this "
             "at 5 automatically; deeper headless crawls stall on cyclic or "
-            "parameterised apps and offer diminishing returns."
+            "parameterized apps and offer diminishing returns."
         ),
     )
     katana_headers: dict[str, str] = Field(
@@ -150,6 +150,14 @@ class Repository(BaseModel):
             "Extra HTTP headers passed to Katana via -H. Use for "
             "authentication cookies or custom user agents, e.g. "
             '{"Cookie": "session=abc123"}.'
+        ),
+    )
+    graphql_cop_headers: dict[str, str] = Field(
+        default_factory=dict,
+        description=(
+            "Extra HTTP headers passed to graphql-cop via -H. Use to "
+            "supply authentication tokens, e.g. "
+            '{"Authorization": "Bearer token123"}.'
         ),
     )
     auth: RepoAuth | None = Field(

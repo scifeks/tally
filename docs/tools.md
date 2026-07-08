@@ -7,6 +7,7 @@
 | Nuclei | DAST | Template-based vulnerability scanner; known CVE fingerprinting, misconfiguration detection, and DAST fuzzing |
 | OWASP ZAP | DAST | Dynamic web/API security scanning |
 | XSStrike | DAST | XSS-focused dynamic scanner; context-aware payload generation and WAF evasion to complement ZAP |
+| graphql-cop | DAST | GraphQL security auditing; tests for introspection, batching, alias abuse, field suggestions, and other misconfigurations |
 | OWASP Noir | Pre-DAST | Static endpoint discovery; produces an OAS3 spec for ZAP |
 | Semgrep | SAST | Static analysis across many languages |
 | tree-sitter | SAST | AST-based code analysis (Python library) |

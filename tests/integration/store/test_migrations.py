@@ -43,6 +43,7 @@ _EXPECTED_NEW_COLUMNS = {
     "xsstrike_headers_json",
     "dalfox_headers_json",
     "katana_headers_json",
+    "graphql_cop_headers_json",
     "auth_json",
     "url_seed_file",
 }
@@ -106,7 +107,7 @@ class TestMigrationRunnerOnOldDB:
         factory.init_schema()
 
         with factory.connect() as conn:
-            assert _current_version(conn) == 2
+            assert _current_version(conn) == 3
 
     def test_preserves_existing_data(self, tmp_path: Path) -> None:
         db_path = tmp_path / "old.db"
@@ -139,8 +140,8 @@ class TestMigrationIdempotency:
 
         with factory.connect() as conn:
             versions = conn.execute("SELECT version FROM schema_version").fetchall()
-        assert len(versions) == 2
-        assert versions[-1][0] == 2
+        assert len(versions) == 3
+        assert versions[-1][0] == 3
 
     def test_skips_already_applied(self, tmp_path: Path) -> None:
         factory = ConnectionFactory(tmp_path / "skip.db")

@@ -1,0 +1,78 @@
+{
+  "composer-audit": {
+    "type": "repo",
+    "location": "docker",
+    "container": {
+      "name": "docker-php-auditor-1",
+      "tool_path": "/usr/bin/composer"
+    }
+  },
+  "dalfox": {
+    "type": "api",
+    "location": "local",
+    "path": "/usr/bin/dalfox"
+  },
+  "garak": {
+    "type": "repo",
+    "location": "local",
+    "path": "/home/justin/.local/bin/garak"
+  },
+  "graphql-cop": {
+    "type": "api",
+    "location": "local",
+    "path": "/opt/graphql-cop/graphql-cop.py"
+  },
+  "gitleaks": {
+    "type": "repo",
+    "location": "local",
+    "path": "/usr/local/bin/gitleaks"
+  },
+  "katana": {
+    "type": "api",
+    "location": "local",
+    "path": "/usr/bin/katana"
+  },
+  "noir": {
+    "type": "repo",
+    "location": "local",
+    "path": "/usr/bin/noir"
+  },
+  "npm-audit": {
+    "type": "repo",
+    "location": "docker",
+    "container": {
+      "name": "dvna",
+      "tool_path": "/usr/local/bin/npm"
+    }
+  },
+  "nuclei": {
+    "type": "api",
+    "location": "local",
+    "path": "/usr/bin/nuclei"
+  },
+  "osv-scanner": {
+    "type": "repo",
+    "location": "local",
+    "path": "/usr/bin/osv-scanner"
+  },
+  "semgrep": {
+    "type": "repo",
+    "location": "local",
+    "path": "/usr/bin/semgrep"
+  },
+  "sqlmap": {
+    "type": "api",
+    "location": "local",
+    "path": "/usr/bin/sqlmap"
+  },
+  "xsstrike": {
+    "type": "api",
+    "location": "local",
+    "path": "/usr/bin/xsstrike"
+  },
+  "zap": {
+    "type": "api",
+    "location": "local",
+    "path": "/usr/share/zaproxy/zap.sh"
+  }
+}
