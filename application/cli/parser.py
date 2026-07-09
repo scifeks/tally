@@ -30,7 +30,17 @@ def build_parser() -> argparse.ArgumentParser:
             "  tally --project myapp --command stats\n"
             "  tally --project myapp --command"
             " integration-sync\n"
-            "  tally --command ui"
+            "  tally --command ui\n"
+            "  tally --command project-create"
+            " --company-name ACME --department-name Engineering\n"
+            "  tally --command project-list\n"
+            "  tally --project myapp --command repo-add"
+            " --repo-name backend --repo-path ./\n"
+            "  tally --project myapp --command repo-list\n"
+            "  tally --project myapp --command repo-edit"
+            " --repo-name backend --languages python,go\n"
+            "  tally --project myapp --command repo-delete"
+            " --repo-name backend"
         ),
     )
 
@@ -58,6 +68,12 @@ def build_parser() -> argparse.ArgumentParser:
             "stats",
             "integration-sync",
             "ui",
+            "project-create",
+            "project-list",
+            "repo-add",
+            "repo-list",
+            "repo-edit",
+            "repo-delete",
         ],
         help="Command to execute",
     )
@@ -186,6 +202,112 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         metavar="TYPE",
         help="Engagement type override (integration-sync only)",
+    )
+
+    parser.add_argument(
+        "--company-name",
+        type=str,
+        default="",
+        metavar="NAME",
+        help="Company name (project-create only)",
+    )
+    parser.add_argument(
+        "--department-name",
+        type=str,
+        default="",
+        metavar="NAME",
+        help="Department name (project-create only)",
+    )
+    parser.add_argument(
+        "--abbreviation",
+        type=str,
+        default="",
+        metavar="CODE",
+        help="Project abbreviation, max 3 chars (project-create only)",
+    )
+
+    parser.add_argument(
+        "--repo-name",
+        type=str,
+        metavar="NAME",
+        help="Repository name (repo-add, repo-edit, repo-delete)",
+    )
+    parser.add_argument(
+        "--repo-path",
+        type=str,
+        metavar="PATH",
+        help="Filesystem path to repository (repo-add)",
+    )
+    parser.add_argument(
+        "--languages",
+        type=str,
+        metavar="LANGS",
+        help="Comma-separated languages (repo-add, repo-edit)",
+    )
+    parser.add_argument(
+        "--repo-type",
+        type=str,
+        metavar="TYPES",
+        help=("Comma-separated service types: library, api, ui (repo-add, repo-edit)"),
+    )
+    parser.add_argument(
+        "--base-urls",
+        type=str,
+        metavar="URLS",
+        help="Comma-separated base URLs for DAST tools (repo-add, repo-edit)",
+    )
+    parser.add_argument(
+        "--graphql-paths",
+        type=str,
+        metavar="PATHS",
+        help=("Comma-separated GraphQL endpoint paths (repo-add, repo-edit)"),
+    )
+    parser.add_argument(
+        "--container-name",
+        type=str,
+        metavar="NAME",
+        help="Docker container name (repo-add, repo-edit)",
+    )
+    parser.add_argument(
+        "--docker-path",
+        type=str,
+        metavar="PATH",
+        help="Container mount path (repo-add, repo-edit)",
+    )
+    parser.add_argument(
+        "--dependencies-file",
+        type=str,
+        metavar="PATH",
+        help=("Dependencies file path for supply-chain scanning (repo-add, repo-edit)"),
+    )
+    parser.add_argument(
+        "--test-dirs",
+        type=str,
+        metavar="DIRS",
+        help="Comma-separated test directory names (repo-add, repo-edit)",
+    )
+    parser.add_argument(
+        "--ignore-dirs",
+        type=str,
+        metavar="DIRS",
+        help="Comma-separated directory names to exclude (repo-add, repo-edit)",
+    )
+    parser.add_argument(
+        "--no-crawl",
+        action="store_true",
+        help="Disable Katana/Noir crawling for this repo (repo-add, repo-edit)",
+    )
+    parser.add_argument(
+        "--psalm-stubs",
+        type=str,
+        metavar="STUBS",
+        help=("Comma-separated Psalm stub packages (repo-add, repo-edit)"),
+    )
+    parser.add_argument(
+        "--graphql-cop-headers",
+        type=str,
+        metavar="JSON",
+        help=("JSON string of HTTP headers for graphql-cop (repo-add, repo-edit)"),
     )
 
     parser.add_argument(

@@ -72,7 +72,17 @@ def _dispatch(
     from application.cli.commands.integration_sync import (
         cmd_integration_sync,
     )
+    from application.cli.commands.project import (
+        cmd_project_create,
+        cmd_project_list,
+    )
     from application.cli.commands.purge import cmd_purge
+    from application.cli.commands.repo import (
+        cmd_repo_add,
+        cmd_repo_delete,
+        cmd_repo_edit,
+        cmd_repo_list,
+    )
     from application.cli.commands.report import cmd_report
     from application.cli.commands.run import cmd_run
     from application.cli.commands.scan import cmd_scan
@@ -92,6 +102,12 @@ def _dispatch(
         "stats": cmd_stats,
         "integration-sync": cmd_integration_sync,
         "ui": cmd_ui,
+        "project-create": cmd_project_create,
+        "project-list": cmd_project_list,
+        "repo-add": cmd_repo_add,
+        "repo-list": cmd_repo_list,
+        "repo-edit": cmd_repo_edit,
+        "repo-delete": cmd_repo_delete,
     }
 
     handler = handlers.get(args.command)
@@ -103,6 +119,15 @@ def _dispatch(
 
 
 def main() -> int:
+    _SKIP_BOOTSTRAP = {
+        "project-create",
+        "project-list",
+        "repo-add",
+        "repo-list",
+        "repo-edit",
+        "repo-delete",
+    }
+
     parser = build_parser()
     args = parser.parse_args()
 
@@ -134,15 +159,16 @@ def main() -> int:
     project_registry = ProjectRegistryService(registry_repo)
     tool_registry = ToolRegistry()
 
-    BootstrapService(
-        registry_repo=registry_repo,
-        project_registry=project_registry,
-        tool_registry=tool_registry,
-        base_path=base_path,
-        run_repo_factory=lambda p: RunRepository(ConnectionFactory(p)),
-    ).run()
+    if args.command not in _SKIP_BOOTSTRAP:
+        BootstrapService(
+            registry_repo=registry_repo,
+            project_registry=project_registry,
+            tool_registry=tool_registry,
+            base_path=base_path,
+            run_repo_factory=lambda p: RunRepository(ConnectionFactory(p)),
+        ).run()
 
-    needs_project = args.command not in ("ui",)
+    needs_project = args.command not in ("ui", "project-create", "project-list")
     is_rebuild = args.command == "triage" and getattr(args, "rebuild_container", False)
     if needs_project and not is_rebuild:
         if not args.project:
