@@ -88,10 +88,7 @@ class BasePsalmTool(ToolInterface):
         output: str,
         _files: dict[str, Path],
     ) -> dict[str, Any]:
-        """Parse psalm SARIF output into structured data.
-
-        Prefers the saved SARIF file; falls back to output string.
-        """
+        """Parse from the saved SARIF file, falling back to the output string."""
         try:
             if (
                 self._sarif_path is not None
@@ -159,7 +156,6 @@ class BasePsalmTool(ToolInterface):
         repo: Repository,
         _service: RepoService,
     ) -> Path:
-        """Generate psalm.xml config file."""
         source_dirs = self._find_source_dirs(repo.path)
         stubs_paths = self._resolve_stubs(repo.psalm_stubs)
         xml_str = self._build_psalm_xml(source_dirs, stubs_paths, repo.path)
@@ -179,8 +175,13 @@ class BasePsalmTool(ToolInterface):
                 autoload = data.get("autoload", {})
                 psr4 = autoload.get("psr-4", {})
                 if psr4:
-                    dirs = [v.rstrip("/") for v in psr4.values()]
-                    return dirs
+                    dirs = [
+                        v.rstrip("/")
+                        for v in psr4.values()
+                        if (repo_p / v.rstrip("/")).is_dir()
+                    ]
+                    if dirs:
+                        return dirs
             except Exception as exc:
                 _log.warning(
                     "Failed to parse composer.json: %s",
@@ -204,7 +205,6 @@ class BasePsalmTool(ToolInterface):
         return ["."]
 
     def _extract_directories_from_psalm_xml(self, root: ET.Element) -> list[str]:
-        """Extract directory names from parsed psalm.xml root element."""
         ns = "https://getpsalm.org/schema/config"
 
         project_files = root.find(f"{{{ns}}}projectFiles")
@@ -227,7 +227,6 @@ class BasePsalmTool(ToolInterface):
         return []
 
     def _resolve_stubs(self, psalm_stubs: list[str]) -> list[str]:
-        """Resolve stub file names to absolute paths."""
         stub_names = list(dict.fromkeys(["php_builtins"] + psalm_stubs))
         stubs_dir = Path(__file__).resolve().parent.parent.parent / "stubs" / "psalm"
         resolved = []
@@ -250,7 +249,6 @@ class BasePsalmTool(ToolInterface):
         stubs_paths: list[str],
         repo_path: str,
     ) -> str:
-        """Generate psalm.xml configuration as XML string."""
         lines = [
             '<?xml version="1.0"?>',
             "<psalm",
