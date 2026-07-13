@@ -1,19 +1,4 @@
-"""graphql-cop local wrapper for GraphQL security auditing.
-
-graphql-cop is a Python script (not a pip package) that takes a
-single endpoint URL and checks for 12 vulnerability classes. The
-commands.json ``path`` field points to the script location.
-
-Output goes to stdout (``-o json`` sets the format, not an output
-file). This wrapper stores the target URL as instance state so
-``parse_output`` can inject it into the parsed data for the
-handler to read.
-
-This wrapper discovers GraphQL endpoints from the URL inventory
-(paths matching common GQL patterns) and creates one execution
-pass per endpoint. When no URL inventory exists, it falls back
-to base_urls + the default ``/graphql`` path.
-"""
+"""graphql-cop local wrapper for GraphQL security auditing."""
 
 from __future__ import annotations
 
@@ -47,15 +32,14 @@ _DEFAULT_GQL_PATHS: frozenset[str] = frozenset(
 
 
 class GraphqlCopLocalTool(BaseGraphqlCopTool):
-    """Concrete local wrapper for graphql-cop."""
-
     def __init__(self, config=None) -> None:
         self._script_path: str = config.path if config is not None else "graphql-cop.py"
+        self._needs_python: bool = self._script_path.endswith(".py")
         self._last_target_url: str | None = None
 
     @property
     def command(self) -> str:
-        return "python"
+        return "python" if self._needs_python else self._script_path
 
     def check_available(self) -> bool:
         return Path(self._script_path).exists() or (
@@ -77,14 +61,10 @@ class GraphqlCopLocalTool(BaseGraphqlCopTool):
 
         self._last_target_url = target_url
 
-        cmd: list[str] = [
-            "python",
-            self._script_path,
-            "-t",
-            target_url,
-            "-o",
-            "json",
-        ]
+        cmd: list[str] = (
+            ["python", self._script_path] if self._needs_python else [self._script_path]
+        )
+        cmd.extend(["-t", target_url, "-o", "json"])
 
         if headers:
             cmd.extend(["-H", json.dumps(headers)])

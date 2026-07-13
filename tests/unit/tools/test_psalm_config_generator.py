@@ -11,6 +11,7 @@ class TestFindSourceDirs:
     """Tests for source directory discovery."""
 
     def test_extracts_psr4_from_composer_json(self, tmp_path: Path) -> None:
+        (tmp_path / "src").mkdir()
         composer_path = tmp_path / "composer.json"
         composer_path.write_text(json.dumps({"autoload": {"psr-4": {"App\\": "src/"}}}))
 
@@ -20,6 +21,8 @@ class TestFindSourceDirs:
         assert dirs == ["src"]
 
     def test_extracts_multiple_psr4_paths(self, tmp_path: Path) -> None:
+        (tmp_path / "src").mkdir()
+        (tmp_path / "tests").mkdir()
         composer_path = tmp_path / "composer.json"
         composer_path.write_text(
             json.dumps(
@@ -81,7 +84,17 @@ class TestFindSourceDirs:
 
         assert dirs == ["."]
 
+    def test_skips_psr4_dirs_that_do_not_exist(self, tmp_path: Path) -> None:
+        composer_path = tmp_path / "composer.json"
+        composer_path.write_text(json.dumps({"autoload": {"psr-4": {"App\\": "src/"}}}))
+
+        tool = BasePsalmTool.__new__(BasePsalmTool)
+        dirs = tool._find_source_dirs(str(tmp_path))
+
+        assert dirs == ["."]
+
     def test_strips_trailing_slashes_from_psr4(self, tmp_path: Path) -> None:
+        (tmp_path / "src" / "app").mkdir(parents=True)
         composer_path = tmp_path / "composer.json"
         composer_path.write_text(
             json.dumps({"autoload": {"psr-4": {"App\\": "src/app/"}}})
