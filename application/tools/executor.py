@@ -52,6 +52,12 @@ def _needs_root(stderr: str) -> bool:
     return any(pat in low for pat in _NEEDS_ROOT_PATTERNS)
 
 
+def _sanitize_filename(label: str) -> str:
+    for ch in ("://", "/", "\\", ":", "*", "?", '"', "<", ">", "|"):
+        label = label.replace(ch, "_")
+    return label
+
+
 def sanitize_command(cmd: list[str]) -> list[str]:
     """Reject any token in cmd that looks like a shell injection."""
     for token in cmd:
@@ -138,6 +144,7 @@ class ToolExecutor:
             _log.info("Tool %s: env overrides: %s", tool.name, list(env.keys()))
         output_dir = self._ensure_output_dir(tool.name)
         ts_file = datetime.now(UTC).strftime("%Y-%m-%d_%H%M%S")
+        label = _sanitize_filename(label)
         findings_exit_ok = getattr(tool, "findings_exit_ok", False)
 
         start = perf_counter()
