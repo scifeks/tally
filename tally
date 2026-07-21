@@ -1,4 +1,4 @@
 #!/bin/bash
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$REPO_ROOT/.venv/bin/activate"
-exec python3 "$REPO_ROOT/tally.py" "$@"
+export PYTHONNOUSERSITE=1
+exec "$REPO_ROOT/.venv/bin/python3" "$REPO_ROOT/tally.py" "$@"
