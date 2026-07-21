@@ -64,7 +64,6 @@ def _make_runner_with_source_not_examined(
     """Build a runner with a backend that raises SourceNotExaminedError."""
     store = MagicMock()
     store.latest_run_id.return_value = 1
-    store.reset_stale_batches.return_value = 0
     store.get_active_finding_combos.return_value = []
 
     agent = _SourceNotExaminedBackend(

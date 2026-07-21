@@ -355,11 +355,6 @@ def test_create_triage_batches_called_per_combo(
             ".TriageBatchRepository.create_batches",
             return_value=1,
         ),
-        patch(
-            "infrastructure.store.repositories.triage"
-            ".TriageBatchRepository.reset_stale_batches",
-            return_value=0,
-        ),
         patch("application.triage.factory.TriageAgentFactory") as mock_factory,
     ):
         mock_factory.return_value.create.return_value = _StubAdapter()
@@ -395,11 +390,6 @@ def test_batching_error_aborts_before_session_prep(
             ".TriageBatchRepository"
             ".fetch_active_findings_for_batching",
             side_effect=RuntimeError("db locked"),
-        ),
-        patch(
-            "infrastructure.store.repositories.triage"
-            ".TriageBatchRepository.reset_stale_batches",
-            return_value=0,
         ),
         patch.object(TriageRunner, "_prepare_session") as mock_prepare,
         patch("application.triage.factory.TriageAgentFactory") as mock_factory,
@@ -438,11 +428,6 @@ def test_batch_count_reported(project_db, capsys) -> None:
             "infrastructure.store.repositories.triage"
             ".TriageBatchRepository.create_batches",
             return_value=3,
-        ),
-        patch(
-            "infrastructure.store.repositories.triage"
-            ".TriageBatchRepository.reset_stale_batches",
-            return_value=0,
         ),
         patch("application.triage.factory.TriageAgentFactory") as mock_factory,
     ):

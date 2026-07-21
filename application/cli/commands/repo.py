@@ -19,6 +19,7 @@ from application.cli.project import ProjectResolutionError, resolve_project
 from application.project.repositories_service import (
     DuplicateRepositoryName,
     ProjectRepositoriesService,
+    RepositoryPathNotFound,
 )
 from core.config import Repository
 from core.config.schemas.repo_service import RepoService
@@ -153,6 +154,9 @@ def cmd_repo_add(
     try:
         service = ProjectRepositoriesService.build(project_registry, str(base_path))
         created = service.create(project_id, repo)
+    except RepositoryPathNotFound as exc:
+        print(str(exc), file=sys.stderr)
+        return INVALID_ARGS
     except DuplicateRepositoryName as exc:
         print(str(exc), file=sys.stderr)
         return INVALID_ARGS

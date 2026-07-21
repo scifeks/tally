@@ -1,13 +1,11 @@
 """Repository schema."""
 
 import warnings
-from pathlib import Path
 
 from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
-    field_validator,
     model_validator,
 )
 
@@ -177,13 +175,6 @@ class Repository(BaseModel):
             "injects it into Katana headers automatically."
         ),
     )
-
-    @field_validator("path")
-    @classmethod
-    def path_must_exist(cls, v: str) -> str:
-        if v and not Path(v).exists():
-            raise ValueError(f"Repository path does not exist: {v}")
-        return v
 
     @model_validator(mode="after")
     def validate_services_required(self) -> "Repository":
