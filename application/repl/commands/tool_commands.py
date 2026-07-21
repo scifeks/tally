@@ -5,7 +5,10 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from pydantic import ValidationError
+
 from application.tool_overrides.service import ToolOverridesService
+from core.config.schemas.command_entry import CommandEntry
 from core.project_paths import ProjectPaths
 from factories.persistence import create_overrides_repo
 from infrastructure.store.repositories.global_commands import (
@@ -146,6 +149,8 @@ class ToolCommands:
 
         if entry is None:
             return
+        if not self._validate_entry(entry):
+            return
 
         commands[tool_name] = entry
         self._save_commands_json(commands)
@@ -172,6 +177,8 @@ class ToolCommands:
 
         if entry is None:
             self.repl.console.print("Cancelled.")
+            return
+        if not self._validate_entry(entry):
             return
 
         commands[tool_name] = entry
@@ -203,6 +210,16 @@ class ToolCommands:
 
     def _commands_json_path(self) -> Path:
         return Path(self.repl.base_path) / "config" / "commands.json"
+
+    def _validate_entry(self, entry: dict) -> bool:
+        """Return True if entry is a valid CommandEntry."""
+        try:
+            CommandEntry(**entry)
+            return True
+        except ValidationError as exc:
+            msg = exc.errors()[0]["msg"]
+            self.repl.console.print(f"[red]Invalid configuration:[/red] {msg}")
+            return False
 
     def _load_commands_json(self) -> dict:
         path = self._commands_json_path()
@@ -375,6 +392,8 @@ class ToolCommands:
 
         if entry is None:
             return
+        if not self._validate_entry(entry):
+            return
 
         project_commands[tool_name] = entry
         self._save_project_commands_json(project_name, project_commands)
@@ -403,6 +422,8 @@ class ToolCommands:
 
         if entry is None:
             self.repl.console.print("Cancelled.")
+            return
+        if not self._validate_entry(entry):
             return
 
         project_commands[tool_name] = entry

@@ -7,6 +7,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal, cast
 
+from core.config.schemas.validation import has_shell_metacharacters
 from domain.tool_overrides.entry import ToolOverride
 
 if TYPE_CHECKING:
@@ -294,6 +295,28 @@ class ToolOverridesService:
                             issue="required when location is 'docker'",
                         )
                     )
+
+        if path and has_shell_metacharacters(path):
+            errors.append(
+                FieldError(
+                    field="path",
+                    issue="contains a shell metacharacter",
+                )
+            )
+        if container_name and has_shell_metacharacters(container_name):
+            errors.append(
+                FieldError(
+                    field="container.name",
+                    issue="contains a shell metacharacter",
+                )
+            )
+        if container_tool_path and has_shell_metacharacters(container_tool_path):
+            errors.append(
+                FieldError(
+                    field="container.toolPath",
+                    issue="contains a shell metacharacter",
+                )
+            )
 
         if errors:
             raise ToolOverrideValidationError(errors)

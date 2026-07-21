@@ -18,6 +18,7 @@ from .opencode_config import OpenCodeConfig
 from .project_config import ProjectConfig
 from .repo_service import RepoService
 from .repository import _VALID_REPO_TYPES, RepoAuth, Repository, build_excluded_dirs
+from .validation import TOOL_METACHAR_CHARS, has_shell_metacharacters
 
 __all__ = [
     "ClaudeConfig",
@@ -35,6 +36,8 @@ __all__ = [
     "RepoAuth",
     "RepoService",
     "Repository",
+    "TOOL_METACHAR_CHARS",
     "_VALID_REPO_TYPES",
     "build_excluded_dirs",
+    "has_shell_metacharacters",
 ]

@@ -39,11 +39,12 @@ def _has_metachar(s: str) -> bool:
     return any(ch in s for ch in _METACHAR_CHARS)
 
 
-def _warn_metachar(label: str, value: str) -> None:
+def _reject_metachar(label: str, value: str) -> bool:
+    """Return True (rejected) if value has unsafe chars."""
     if _has_metachar(value):
-        print(
-            f"  Warning: {label} contains shell metacharacters; verify this is correct."
-        )
+        print(f"  Error: {label} contains shell metacharacters and cannot be saved.")
+        return True
+    return False
 
 
 def find_local_binary(tool_name: str) -> str | None:
@@ -157,7 +158,8 @@ def interview_local(tool_name: str, defaults: dict | None = None) -> dict | None
                 return None
 
     path = path.strip()
-    _warn_metachar("binary path", path)
+    if _reject_metachar("binary path", path):
+        return None
     tool_type = _get_wrapper_meta(tool_name, location="local")["tool_type"]
     return {
         "type": tool_type,
@@ -194,7 +196,8 @@ def interview_docker(tool_name: str, defaults: dict | None = None) -> dict | Non
     if not container:
         print("  Container name is required. Skipping.")
         return None
-    _warn_metachar("container name", container)
+    if _reject_metachar("container name", container):
+        return None
 
     if defaults is not None:
         tp_input = input(
@@ -209,7 +212,8 @@ def interview_docker(tool_name: str, defaults: dict | None = None) -> dict | Non
     if not tool_path:
         print("  Binary path is required. Skipping.")
         return None
-    _warn_metachar("binary path", tool_path)
+    if _reject_metachar("binary path", tool_path):
+        return None
 
     tool_type = _get_wrapper_meta(tool_name, location="docker")["tool_type"]
     return {
@@ -272,7 +276,7 @@ def interview_tool(
             else:
                 return interview_docker(tool_name, defaults={})
         else:
-            # keep (Enter or unrecognised)
+            # keep (Enter or unrecognized)
             if current_location == "docker":
                 return interview_docker(tool_name, defaults=defaults)
             else:
@@ -285,14 +289,7 @@ def interview_tool(
 
 
 def run_commands_setup(base_path: str) -> None:
-    """Run the interactive first-run setup and write config/commands.json.
-
-    Scans wrappers/local/ and wrappers/docker/ to discover available tool
-    names, interviews the user for each, and writes the result.
-
-    Args:
-        base_path: Application root directory (where config/ lives).
-    """
+    """Run the interactive first-run setup and write config/commands.json."""
     wrappers_dir = (
         Path(__file__).parent.parent.parent / "infrastructure" / "tools" / "wrappers"
     )
