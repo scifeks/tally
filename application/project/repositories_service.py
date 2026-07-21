@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from core.config import ConfigManager, Repository
@@ -30,6 +31,10 @@ class RepositoryNotFound(LookupError):
 
 class DuplicateRepositoryName(ValueError):
     """Raised when create / update collides with an existing repo's name."""
+
+
+class RepositoryPathNotFound(ValueError):
+    """Raised when a repository path does not exist on the filesystem."""
 
 
 @dataclass(frozen=True)
@@ -97,6 +102,8 @@ class ProjectRepositoriesService:
             raise DuplicateRepositoryName(
                 f"Repository '{repo.name}' already exists in project"
             )
+        if repo.path and not Path(repo.path).exists():
+            raise RepositoryPathNotFound(f"Repository path does not exist: {repo.path}")
         new_id = repo_repo.insert(repo)
         persisted = repo_repo.get_by_id(new_id)
         if persisted is None:
@@ -122,6 +129,11 @@ class ProjectRepositoriesService:
                 "url_seed_file": existing.url_seed_file,
             }
         )
+
+        if updated.path and not Path(updated.path).exists():
+            raise RepositoryPathNotFound(
+                f"Repository path does not exist: {updated.path}"
+            )
 
         if updated.name != existing.name:
             collision = repo_repo.get_by_name(updated.name)

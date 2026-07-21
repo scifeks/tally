@@ -151,20 +151,6 @@ class TriageBatchRepository(TriageBatchRepositoryPort):
                 (status, batch_id),
             )
 
-    def reset_stale_batches(self, run_id: int) -> int:
-        """Reset in_progress batches for run_id back to pending.
-
-        Returns the number of batches reset.
-        """
-        with self._factory.connect() as conn:
-            cur = conn.execute(
-                "UPDATE triage_batches"
-                " SET status = 'pending', started_at = NULL"
-                " WHERE status = 'in_progress' AND run_id = ?",
-                (run_id,),
-            )
-            return cur.rowcount
-
     def reset_for_resume(self, run_id: int) -> int:
         """Flip stranded ``in_progress`` and ``failed`` rows back
         to ``pending`` so an explicit resume can pick them up.

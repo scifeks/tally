@@ -22,6 +22,7 @@ from application.project.repositories_service import (
     DuplicateRepositoryName,
     ProjectRepositoriesService,
     RepositoryNotFound,
+    RepositoryPathNotFound,
 )
 from application.url_inventory.url_list_service import (
     UrlListService,
@@ -370,6 +371,8 @@ async def create_repository(
         created = service.create(project_id, repo)
     except DuplicateRepositoryName as exc:
         raise ApiValidationError(str(exc)) from exc
+    except RepositoryPathNotFound as exc:
+        raise ApiValidationError(str(exc)) from exc
 
     if endpoint_file is not None and endpoint_file.filename and created.id is not None:
         try:
@@ -409,6 +412,8 @@ async def patch_repository(
     except RepositoryNotFound as exc:
         raise NotFound(str(exc)) from exc
     except DuplicateRepositoryName as exc:
+        raise ApiValidationError(str(exc)) from exc
+    except RepositoryPathNotFound as exc:
         raise ApiValidationError(str(exc)) from exc
     except ValidationError as exc:
         raise ApiValidationError(str(exc)) from exc

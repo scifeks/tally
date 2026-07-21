@@ -3,12 +3,8 @@
 from __future__ import annotations
 
 import dataclasses
-import time
-from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING
-
-from application.locking import FindingsBusy
 
 from .factory import build_triage_runner
 
@@ -26,14 +22,6 @@ if TYPE_CHECKING:
     )
     from application.ports.triage_event_sink import TriageEventSink
     from application.tools.registry import ToolRegistry
-
-
-def _retry_once[T](fn: Callable[[], T]) -> T:
-    try:
-        return fn()
-    except FindingsBusy:
-        time.sleep(5)
-        return fn()
 
 
 def run_triage(
@@ -58,7 +46,7 @@ def run_triage(
         audit_repo=audit_repo,
         repo_paths=repo_paths,
     )
-    return dataclasses.asdict(_retry_once(runner.run))
+    return dataclasses.asdict(runner.run())
 
 
 def run_triage_batch_only(
@@ -109,7 +97,7 @@ def run_triage_dry_run(
         audit_repo=audit_repo,
         repo_paths=repo_paths,
     )
-    return _retry_once(runner.run_dry_run)
+    return runner.run_dry_run()
 
 
 def run_triage_for_project(
@@ -143,9 +131,7 @@ def run_triage_for_project(
         audit_repo=audit_repo,
         repo_paths=repo_paths,
     )
-    return dataclasses.asdict(
-        _retry_once(lambda: runner.run(holder_token=holder_token))
-    )
+    return dataclasses.asdict(runner.run(holder_token=holder_token))
 
 
 def resume_triage_for_project(
@@ -180,6 +166,4 @@ def resume_triage_for_project(
         audit_repo=audit_repo,
         repo_paths=repo_paths,
     )
-    return dataclasses.asdict(
-        _retry_once(lambda: runner.run(holder_token=holder_token))
-    )
+    return dataclasses.asdict(runner.run(holder_token=holder_token))
