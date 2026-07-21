@@ -90,7 +90,11 @@ def _fill_siblings(
     return batch + taken, new_queue
 
 
-def compute_batches(findings: list[dict[str, Any]]) -> list[list[dict[str, Any]]]:
+def compute_batches(
+    findings: list[dict[str, Any]],
+    *,
+    max_findings_per_batch: int = MAX_FINDINGS_PER_BATCH,
+) -> list[list[dict[str, Any]]]:
     """Group pre-sorted findings into triage batches.
 
     Input must be scoped to a single tool+repo (asserted, not enforced).
@@ -99,6 +103,9 @@ def compute_batches(findings: list[dict[str, Any]]) -> list[list[dict[str, Any]]
     """
     if not findings:
         return []
+
+    if max_findings_per_batch <= 1:
+        return [[f] for f in findings]
 
     queue: list[dict[str, Any]] = list(findings)
     batches: list[list[dict[str, Any]]] = []

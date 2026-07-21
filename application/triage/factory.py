@@ -23,6 +23,7 @@ from application.tools.registry import ToolRegistry
 from core.config.manager import ConfigManager
 from core.project_paths import ProjectPaths
 
+from .batching import MAX_FINDINGS_PER_BATCH
 from .runner import TriageRunner
 
 
@@ -169,6 +170,7 @@ def build_triage_runner(
 
     resolved = resolve_triage_config(app_root=app_root)
     triaged_by = "claudecode" if resolved.provider_name == "claude" else "opencode"
+    max_batch = MAX_FINDINGS_PER_BATCH if resolved.provider_name == "claude" else 1
 
     agent_factory = TriageAgentFactory(app_root=app_root)
 
@@ -190,4 +192,5 @@ def build_triage_runner(
         repo_paths=repo_paths,
         triaged_by=triaged_by,
         debug=resolved.debug,
+        max_findings_per_batch=max_batch,
     )
