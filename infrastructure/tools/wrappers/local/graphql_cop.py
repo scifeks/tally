@@ -32,8 +32,6 @@ _DEFAULT_GQL_PATHS: frozenset[str] = frozenset(
 
 
 class GraphqlCopLocalTool(BaseGraphqlCopTool):
-    """Concrete local wrapper for graphql-cop."""
-
     def __init__(self, config=None) -> None:
         self._script_path: str = config.path if config is not None else "graphql-cop.py"
         self._needs_python: bool = self._script_path.endswith(".py")
