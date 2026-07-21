@@ -4,7 +4,11 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
-from application.setup.commands_setup import _has_metachar, find_local_binary
+from application.setup.commands_setup import (
+    _has_metachar,
+    _reject_metachar,
+    find_local_binary,
+)
 
 
 class TestCommandsSetup:
@@ -61,3 +65,16 @@ class TestCommandsSetup:
 
     def test_has_metachar_false_for_empty_string(self) -> None:
         assert _has_metachar("") is False
+
+
+class TestRejectMetachar:
+    def test_returns_true_and_prints_error(self, capsys) -> None:
+        result = _reject_metachar("binary path", "cd && foo")
+        assert result is True
+        captured = capsys.readouterr()
+        assert "shell metacharacters" in captured.out
+        assert "cannot be saved" in captured.out
+
+    def test_returns_false_for_clean_input(self) -> None:
+        result = _reject_metachar("test", "/usr/bin/tool")
+        assert result is False

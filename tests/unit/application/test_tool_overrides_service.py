@@ -172,6 +172,57 @@ class TestValidateCreate:
 
         assert len(exc.value.fields) >= 4
 
+    def test_path_with_metacharacters(self) -> None:
+        repo = _make_repo_mock()
+        svc = ToolOverridesService(repo)
+
+        with pytest.raises(ToolOverrideValidationError) as exc:
+            svc.create(
+                tool_name="pip-audit",
+                args_mode="stock",
+                type="repo",
+                location="local",
+                path="cd && python -m pip_audit",
+            )
+
+        assert any(f.field == "path" for f in exc.value.fields)
+
+    def test_container_name_with_metacharacters(
+        self,
+    ) -> None:
+        repo = _make_repo_mock()
+        svc = ToolOverridesService(repo)
+
+        with pytest.raises(ToolOverrideValidationError) as exc:
+            svc.create(
+                tool_name="semgrep",
+                args_mode="stock",
+                type="repo",
+                location="docker",
+                container_name="runner;evil",
+                container_tool_path="/usr/bin/semgrep",
+            )
+
+        assert any(f.field == "container.name" for f in exc.value.fields)
+
+    def test_container_tool_path_with_metacharacters(
+        self,
+    ) -> None:
+        repo = _make_repo_mock()
+        svc = ToolOverridesService(repo)
+
+        with pytest.raises(ToolOverrideValidationError) as exc:
+            svc.create(
+                tool_name="semgrep",
+                args_mode="stock",
+                type="repo",
+                location="docker",
+                container_name="runner",
+                container_tool_path="/usr/bin/tool|evil",
+            )
+
+        assert any(f.field == "container.toolPath" for f in exc.value.fields)
+
 
 class TestCreateOrchestration:
     def test_local_create_inserts_with_path_and_clears_container(self) -> None:
