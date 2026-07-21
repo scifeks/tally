@@ -17,15 +17,15 @@
     "location": "local",
     "path": "/home/justin/.local/bin/garak"
   },
-  "graphql-cop": {
-    "type": "api",
-    "location": "local",
-    "path": "/opt/graphql-cop/graphql-cop.py"
-  },
   "gitleaks": {
     "type": "repo",
     "location": "local",
     "path": "/usr/local/bin/gitleaks"
+  },
+  "graphql-cop": {
+    "type": "api",
+    "location": "local",
+    "path": "/usr/bin/graphql-cop"
   },
   "katana": {
     "type": "api",
