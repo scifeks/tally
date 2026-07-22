@@ -37,6 +37,9 @@ def _make_verdict(finding_id: int = 1) -> Verdict:
         reasoning="test reasoning",
         remediation="test remediation",
         attack_vector="test attack vector",
+        access_required="none",
+        exploitation_complexity="low",
+        user_interaction="none",
         call_stack=[],
     )
 
@@ -304,6 +307,9 @@ def test_run_batch_findings_writes_verdict_fields(
         reasoning="sql injection",
         remediation="use parameterized queries",
         attack_vector="network input",
+        access_required="authenticated",
+        exploitation_complexity="high",
+        user_interaction="required",
         call_stack=["main.py:10", "db.py:5"],
     )
     finding_repo = MagicMock()
@@ -331,6 +337,9 @@ def test_run_batch_findings_writes_verdict_fields(
             "reasoning": "sql injection",
             "remediation": "use parameterized queries",
             "attack_vector": "network input",
+            "access_required": "authenticated",
+            "exploitation_complexity": "high",
+            "user_interaction": "required",
             "call_stack": '["main.py:10", "db.py:5"]',
         },
         strategy="sast",

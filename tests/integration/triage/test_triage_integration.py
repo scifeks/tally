@@ -64,6 +64,9 @@ def _make_verdict(finding_id: int) -> Verdict:
         reasoning="test reasoning",
         remediation="fix it",
         attack_vector="network",
+        access_required="none",
+        exploitation_complexity="low",
+        user_interaction="none",
         call_stack=[],
     )
 

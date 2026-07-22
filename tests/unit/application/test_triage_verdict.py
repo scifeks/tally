@@ -23,6 +23,9 @@ def _valid_obj(**overrides: object) -> dict:
         "remediation": "Use parameterized queries.",
         "attack_vector": "POST /login password",
         "call_stack": ["app.php:10 handle", "db.php:55 query"],
+        "access_required": "none",
+        "exploitation_complexity": "low",
+        "user_interaction": "none",
     }
     base.update(overrides)
     return base
@@ -85,7 +88,10 @@ class TestParseVerdictHappyPath:
         ["confirmed", "probable", "potential", "false_positive"],
     )
     def test_all_confidence_levels(self, confidence: str) -> None:
-        text = _valid_json(confidence=confidence)
+        overrides = {"confidence": confidence}
+        if confidence == "false_positive":
+            overrides["severity"] = "low"
+        text = _valid_json(**overrides)
         verdict = parse_verdict(text, expected_finding_id=42)
         assert verdict.confidence == confidence
 
@@ -102,7 +108,10 @@ class TestParseVerdictHappyPath:
         ],
     )
     def test_all_finding_types(self, finding_type: str) -> None:
-        text = _valid_json(finding_type=finding_type)
+        overrides = {"finding_type": finding_type}
+        if finding_type in ("informational", "weakness"):
+            overrides["severity"] = "medium"
+        text = _valid_json(**overrides)
         verdict = parse_verdict(text, expected_finding_id=42)
         assert verdict.finding_type == finding_type
 
@@ -111,7 +120,10 @@ class TestParseVerdictHappyPath:
         ["critical", "high", "medium", "low", "informational"],
     )
     def test_all_severity_levels(self, severity: str) -> None:
-        text = _valid_json(severity=severity)
+        overrides = {"severity": severity}
+        if severity == "informational":
+            overrides["confidence"] = "probable"
+        text = _valid_json(**overrides)
         verdict = parse_verdict(text, expected_finding_id=42)
         assert verdict.severity == severity
 
@@ -222,3 +234,195 @@ class TestParseVerdictParseFailures:
     def test_no_json_raises_with_correct_message(self) -> None:
         with pytest.raises(VerdictParseError, match="no JSON object found"):
             parse_verdict("This is just prose.", expected_finding_id=42)
+
+
+class TestPredicateContradictions:
+    @pytest.mark.parametrize(
+        "overrides,match",
+        [
+            pytest.param(
+                {
+                    "confidence": "false_positive",
+                    "severity": "high",
+                },
+                "contradictory",
+                id="fp_high_severity",
+            ),
+            pytest.param(
+                {
+                    "confidence": "false_positive",
+                    "severity": "critical",
+                },
+                "contradictory",
+                id="fp_critical_severity",
+            ),
+            pytest.param(
+                {
+                    "confidence": "false_positive",
+                    "severity": "medium",
+                },
+                "contradictory",
+                id="fp_medium_severity",
+            ),
+            pytest.param(
+                {
+                    "finding_type": "informational",
+                    "severity": "critical",
+                    "confidence": "potential",
+                },
+                "contradictory",
+                id="informational_critical",
+            ),
+            pytest.param(
+                {
+                    "finding_type": "informational",
+                    "severity": "high",
+                    "confidence": "potential",
+                },
+                "contradictory",
+                id="informational_high",
+            ),
+            pytest.param(
+                {
+                    "confidence": "confirmed",
+                    "severity": "informational",
+                },
+                "contradictory",
+                id="confirmed_informational",
+            ),
+            pytest.param(
+                {
+                    "access_required": "privileged",
+                    "exploitation_complexity": "high",
+                    "severity": "critical",
+                },
+                "contradictory",
+                id="privileged_complex_critical",
+            ),
+            pytest.param(
+                {
+                    "access_required": "privileged",
+                    "user_interaction": "required",
+                    "severity": "critical",
+                },
+                "contradictory",
+                id="privileged_interaction_critical",
+            ),
+            pytest.param(
+                {
+                    "exploitation_complexity": "high",
+                    "user_interaction": "required",
+                    "severity": "critical",
+                },
+                "contradictory",
+                id="complex_interaction_critical",
+            ),
+            pytest.param(
+                {
+                    "finding_type": "weakness",
+                    "severity": "critical",
+                    "confidence": "potential",
+                },
+                "contradictory",
+                id="weakness_critical",
+            ),
+        ],
+    )
+    def test_contradiction_rejected(self, overrides: dict, match: str) -> None:
+        text = _valid_json(**overrides)
+        with pytest.raises(VerdictParseError, match=match):
+            parse_verdict(text, expected_finding_id=42)
+
+    @pytest.mark.parametrize(
+        "overrides",
+        [
+            pytest.param(
+                {
+                    "confidence": "false_positive",
+                    "severity": "informational",
+                    "finding_type": "informational",
+                },
+                id="fp_informational_ok",
+            ),
+            pytest.param(
+                {
+                    "confidence": "false_positive",
+                    "severity": "low",
+                    "finding_type": "informational",
+                },
+                id="fp_low_ok",
+            ),
+            pytest.param(
+                {
+                    "access_required": "privileged",
+                    "exploitation_complexity": "low",
+                    "severity": "critical",
+                },
+                id="privileged_but_easy_critical_ok",
+            ),
+            pytest.param(
+                {
+                    "access_required": "none",
+                    "exploitation_complexity": "high",
+                    "severity": "critical",
+                },
+                id="complex_but_unauthd_critical_ok",
+            ),
+            pytest.param(
+                {
+                    "finding_type": "weakness",
+                    "severity": "high",
+                    "confidence": "probable",
+                },
+                id="weakness_high_ok",
+            ),
+        ],
+    )
+    def test_valid_predicate_combinations(self, overrides: dict) -> None:
+        text = _valid_json(**overrides)
+        verdict = parse_verdict(text, expected_finding_id=42)
+        assert isinstance(verdict, Verdict)
+
+
+class TestNewPredicateFieldValidation:
+    def test_invalid_access_required(self) -> None:
+        text = _valid_json(access_required="admin")
+        with pytest.raises(
+            VerdictParseError,
+            match="invalid access_required",
+        ):
+            parse_verdict(text, expected_finding_id=42)
+
+    def test_invalid_exploitation_complexity(self) -> None:
+        text = _valid_json(exploitation_complexity="medium")
+        with pytest.raises(
+            VerdictParseError,
+            match="invalid exploitation_complexity",
+        ):
+            parse_verdict(text, expected_finding_id=42)
+
+    def test_invalid_user_interaction(self) -> None:
+        text = _valid_json(user_interaction="optional")
+        with pytest.raises(
+            VerdictParseError,
+            match="invalid user_interaction",
+        ):
+            parse_verdict(text, expected_finding_id=42)
+
+    @pytest.mark.parametrize("ar", ["none", "authenticated", "privileged"])
+    def test_all_access_required_levels(self, ar: str) -> None:
+        text = _valid_json(access_required=ar)
+        v = parse_verdict(text, expected_finding_id=42)
+        assert v.access_required == ar
+
+    @pytest.mark.parametrize("ec", ["low", "high"])
+    def test_all_exploitation_complexity_levels(self, ec: str) -> None:
+        text = _valid_json(exploitation_complexity=ec)
+        v = parse_verdict(text, expected_finding_id=42)
+        assert v.exploitation_complexity == ec
+
+    @pytest.mark.parametrize("ui", ["none", "required"])
+    def test_all_user_interaction_levels(self, ui: str) -> None:
+        text = _valid_json(user_interaction=ui)
+        v = parse_verdict(text, expected_finding_id=42)
+        assert v.user_interaction == ui

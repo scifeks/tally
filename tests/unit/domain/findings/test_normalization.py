@@ -429,6 +429,23 @@ class TestBuildTriageMeta:
         assert result["call_stack"] is None
         assert len(result) == 5
 
+    def test_build_triage_meta_includes_predicates(
+        self,
+    ) -> None:
+        result = build_triage_meta(
+            confidence="confirmed",
+            reasoning="trace complete",
+            remediation="fix it",
+            attack_vector="POST /login",
+            call_stack='["a.py:1 foo"]',
+            access_required="none",
+            exploitation_complexity="low",
+            user_interaction="none",
+        )
+        assert result["access_required"] == "none"
+        assert result["exploitation_complexity"] == "low"
+        assert result["user_interaction"] == "none"
+
 
 class TestPrepareRowForRender:
     def test_cwe_list_joined_and_aliased(self) -> None:

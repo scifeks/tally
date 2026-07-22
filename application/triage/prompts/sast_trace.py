@@ -36,6 +36,7 @@ def render(
         POST_DATA_REMINDER,
         _EPISTEMIC_CONSERVATISM,
         _CONFIDENCE_GUIDANCE,
+        _PREDICATE_GUIDANCE,
         _output_schema(finding_id),
     ]
     return "\n\n".join(sections)
@@ -198,7 +199,11 @@ before or after. No markdown. No leading whitespace. Schema:
 {{"finding_id": {finding_id}, "confidence": "<confirmed|probable\
 |potential|false_positive>", "finding_type": "<vulnerability|weakness\
 |misconfiguration|exposure|dependency|informational|secret>", \
-"severity": "<critical|high|medium|low|informational>", "reasoning": \
+"severity": "<critical|high|medium|low|informational>", \
+"access_required": "<none|authenticated|privileged>", \
+"exploitation_complexity": "<low|high>", \
+"user_interaction": "<none|required>", \
+"reasoning": \
 "<one paragraph addressing all four runtime-layer questions>", \
 "remediation": "<one specific, actionable fix>", "attack_vector": \
 "<HTTP method + path + parameter, or n/a>", "call_stack": \
@@ -209,6 +214,13 @@ Constraints:
 - `call_stack` MUST be a (possibly empty) JSON array of strings.
 - All string fields MUST be present. Use empty string only where
   genuinely not applicable.
+- `access_required`: none (unauthenticated), authenticated (valid
+  session), privileged (admin/root/DBA).
+- `exploitation_complexity`: low (straightforward exploit), high
+  (requires chaining, race conditions, or non-default config).
+- `user_interaction`: none (no victim action needed), required
+  (victim must click a link, open a file, or perform some action).
+- Predicates must be mutually consistent (see Predicate Guidance).
 - Output the JSON, then stop. Do NOT continue producing text."""
 
 
@@ -229,3 +241,35 @@ _CONFIDENCE_GUIDANCE = """\
 - false_positive: The flagged pattern is safe in context (sanitized,
   constant value, dead code, upstream normalization fully neutralizes
   input, or the semgrep rule is misclassified)."""
+
+
+_PREDICATE_GUIDANCE = """\
+## Predicate Guidance
+
+The access_required, exploitation_complexity, user_interaction,
+confidence, severity, and finding_type fields are orthogonal
+dimensions. Each must be assigned independently based on evidence,
+then checked for mutual consistency.
+
+- access_required: What access level must an attacker already have?
+  none = unauthenticated network access suffices.
+  authenticated = attacker needs a valid user session.
+  privileged = attacker needs admin, root, or DBA access.
+
+- exploitation_complexity: How complex is the exploit chain?
+  low = straightforward single-step exploit with public techniques.
+  high = requires chaining multiple conditions, race windows,
+  non-default configuration, or specialized knowledge.
+
+- user_interaction: Does the victim need to do something?
+  none = no victim action needed; attacker exploits directly.
+  required = victim must click a link, open a file, visit a page,
+  or perform some other action for the exploit to succeed.
+
+Consistency rules (your verdict will be rejected if violated):
+- false_positive requires severity=low or informational.
+- informational finding_type requires severity <= medium.
+- confirmed confidence requires severity > informational.
+- Two or more of (privileged access, high complexity, required
+  user interaction) precludes critical severity.
+- weakness finding_type precludes critical severity."""

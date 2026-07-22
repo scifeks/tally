@@ -219,6 +219,9 @@ class TestVerdictRoundtrip:
                 ),
                 "remediation": "Already using parameterized queries.",
                 "attack_vector": "GET /api/users?id=1",
+                "access_required": "none",
+                "exploitation_complexity": "low",
+                "user_interaction": "none",
                 "call_stack": [],
             }
         )
@@ -238,6 +241,9 @@ class TestVerdictRoundtrip:
                 "reasoning": "test",
                 "remediation": "test",
                 "attack_vector": "n/a",
+                "access_required": "none",
+                "exploitation_complexity": "low",
+                "user_interaction": "none",
                 "call_stack": [],
             }
         )

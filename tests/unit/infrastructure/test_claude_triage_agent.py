@@ -41,6 +41,9 @@ def _valid_verdict(**overrides: object) -> dict:
         "remediation": "Use parameterized queries.",
         "attack_vector": "POST /login password",
         "call_stack": ["app.php:10 handle"],
+        "access_required": "none",
+        "exploitation_complexity": "low",
+        "user_interaction": "none",
     }
     base.update(overrides)
     return base
