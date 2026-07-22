@@ -102,6 +102,7 @@ class TriageRunner:
         repo_paths: dict[str, Path] | None = None,
         triaged_by: str = "claudecode",
         debug: bool = False,
+        max_findings_per_batch: int = 4,
     ) -> None:
         self._project = project
         self._run_repo = run_repo
@@ -121,6 +122,7 @@ class TriageRunner:
         self._repo_paths: dict[str, Path] = repo_paths or {}
         self._triaged_by = triaged_by
         self._debug = debug
+        self._max_findings_per_batch = max_findings_per_batch
 
     # Public API
 
@@ -156,7 +158,10 @@ class TriageRunner:
                 findings = self._triage_repo.fetch_active_findings_for_batching(
                     tool, repo, segment
                 )
-                batches = compute_batches(findings)
+                batches = compute_batches(
+                    findings,
+                    max_findings_per_batch=self._max_findings_per_batch,
+                )
                 count = self._triage_repo.create_batches(run_id, batches)
                 _log.info(
                     "Created %d batches: tool=%s repo=%s segment=%s",
