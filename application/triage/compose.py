@@ -151,6 +151,32 @@ def build_opencode_config(
     return json.dumps(config, indent=2) + "\n"
 
 
+def build_claude_settings(hook_script_path: str) -> str:
+    """Generates Claude Code settings.json for scope-restricted triage.
+
+    Registers a PreToolUse hook that validates Read, Grep, and Glob
+    paths against the allowed repository scope.
+    """
+    import json
+
+    config = {
+        "hooks": {
+            "PreToolUse": [
+                {
+                    "matcher": "Read|Grep|Glob",
+                    "hooks": [
+                        {
+                            "type": "command",
+                            "command": hook_script_path,
+                        }
+                    ],
+                }
+            ]
+        }
+    }
+    return json.dumps(config, indent=2) + "\n"
+
+
 def build_compose_dict(
     *,
     repo_paths: dict[str, Path],
@@ -162,6 +188,8 @@ def build_compose_dict(
     oauth_identity_path: Path | None = None,
     oauth_credentials_path: Path | None = None,
     opencode_config_path: Path | None = None,
+    claude_settings_path: Path | None = None,
+    claude_hook_script_path: Path | None = None,
 ) -> dict[str, Any]:
     """Builds the compose file structure as a dict.
 
@@ -226,6 +254,26 @@ def build_compose_dict(
                 "type": "bind",
                 "source": str(opencode_config_path),
                 "target": "/etc/opencode/opencode.json",
+                "read_only": True,
+            }
+        )
+
+    if claude_settings_path is not None:
+        volumes.append(
+            {
+                "type": "bind",
+                "source": str(claude_settings_path),
+                "target": "/home/agent/.claude/settings.json",
+                "read_only": True,
+            }
+        )
+
+    if claude_hook_script_path is not None:
+        volumes.append(
+            {
+                "type": "bind",
+                "source": str(claude_hook_script_path),
+                "target": ("/home/agent/.claude/hooks/scope-guard.sh"),
                 "read_only": True,
             }
         )
@@ -393,6 +441,12 @@ def generate_triage_compose(
         )
         oc_config_path = app_root / PROXY_CONFIG_DIR / "opencode.json"
 
+    hook_container_path = "/home/agent/.claude/hooks/scope-guard.sh"
+    claude_settings_content = build_claude_settings(hook_container_path)
+    claude_settings_path = app_root / PROXY_CONFIG_DIR / "claude-settings.json"
+
+    hook_script_path = app_root / "docker" / "triage-agent" / "hooks" / "scope-guard.sh"
+
     compose_dict = build_compose_dict(
         repo_paths=repo_paths,
         claude_creds=claude_creds,
@@ -403,6 +457,8 @@ def generate_triage_compose(
         oauth_identity_path=oauth_identity,
         oauth_credentials_path=oauth_credentials,
         opencode_config_path=oc_config_path,
+        claude_settings_path=claude_settings_path,
+        claude_hook_script_path=hook_script_path,
     )
 
     content = yaml.dump(
@@ -417,6 +473,7 @@ def generate_triage_compose(
     port.write_compose_file(proxy_filter_content, proxy_filter_path)
     if oc_config_path is not None:
         port.write_compose_file(oc_config_content, oc_config_path)
+    port.write_compose_file(claude_settings_content, claude_settings_path)
     return compose_path
 
 

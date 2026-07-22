@@ -12,6 +12,7 @@ from application.triage.compose import (
     PROXY_PORT,
     ComposeGenerationError,
     _dockerize_url,
+    build_claude_settings,
     build_compose_dict,
     build_opencode_config,
     build_proxy_config,
@@ -228,6 +229,37 @@ class TestBuildOpenCodeConfig:
         assert cfg["permission"]["edit"] == "deny"
 
 
+# -- build_claude_settings -------------------------------------------
+
+
+class TestBuildClaudeSettings:
+    def test_produces_valid_json(self) -> None:
+        import json
+
+        content = build_claude_settings("/home/agent/.claude/hooks/scope-guard.sh")
+        cfg = json.loads(content)
+        assert "hooks" in cfg
+
+    def test_pre_tool_use_hook_targets_read_grep_glob(
+        self,
+    ) -> None:
+        import json
+
+        content = build_claude_settings("/home/agent/.claude/hooks/scope-guard.sh")
+        cfg = json.loads(content)
+        entry = cfg["hooks"]["PreToolUse"][0]
+        assert entry["matcher"] == "Read|Grep|Glob"
+
+    def test_hook_command_matches_input_path(self) -> None:
+        import json
+
+        content = build_claude_settings("/custom/path.sh")
+        cfg = json.loads(content)
+        hook = cfg["hooks"]["PreToolUse"][0]["hooks"][0]
+        assert hook["type"] == "command"
+        assert hook["command"] == "/custom/path.sh"
+
+
 # -- build_compose_dict ----------------------------------------------
 
 
@@ -392,6 +424,43 @@ class TestBuildComposeDict:
         assert f"triage-proxy:{PROXY_PORT}" in env["HTTP_PROXY"]
         assert env["HTTP_PROXY"] == env["HTTPS_PROXY"]
 
+    def test_claude_settings_mounted_when_provided(
+        self,
+    ) -> None:
+        result = build_compose_dict(
+            **_base_kwargs(
+                claude_settings_path=Path("/app/claude-settings.json"),
+            )
+        )
+        volumes = _service(result)["volumes"]
+        settings_mount = [
+            v for v in volumes if v.get("target") == "/home/agent/.claude/settings.json"
+        ]
+        assert len(settings_mount) == 1
+        assert settings_mount[0]["source"] == "/app/claude-settings.json"
+        assert settings_mount[0]["read_only"] is True
+
+    def test_hook_script_mounted_when_provided(
+        self,
+    ) -> None:
+        result = build_compose_dict(
+            **_base_kwargs(
+                claude_hook_script_path=Path("/app/hooks/scope-guard.sh"),
+            )
+        )
+        volumes = _service(result)["volumes"]
+        hook_mount = [v for v in volumes if "scope-guard" in v.get("target", "")]
+        assert len(hook_mount) == 1
+        assert hook_mount[0]["read_only"] is True
+
+    def test_no_settings_mount_when_path_is_none(
+        self,
+    ) -> None:
+        result = build_compose_dict(**_base_kwargs())
+        volumes = _service(result)["volumes"]
+        targets = [v.get("target", "") for v in volumes]
+        assert "/home/agent/.claude/settings.json" not in targets
+
     def test_proxy_on_both_networks(self) -> None:
         result = build_compose_dict(**_base_kwargs())
         networks = _proxy(result)["networks"]
@@ -466,13 +535,14 @@ class TestGenerateTriageCompose:
             patch(_CM_PATCH, self._mock_config(api_key="sk-x")),
         ):
             generate_triage_compose(tmp_path, {}, provider="claude")
-        assert mock_port.write_compose_file.call_count == 3
+        assert mock_port.write_compose_file.call_count == 4
         paths_written = {
             call[0][1].name for call in mock_port.write_compose_file.call_args_list
         }
         assert "docker-compose.yaml" in paths_written
         assert "tinyproxy.conf" in paths_written
         assert "filter" in paths_written
+        assert "claude-settings.json" in paths_written
 
     def test_claude_filter_includes_anthropic(self, tmp_path: Path) -> None:
         mock_port = MagicMock()
@@ -574,7 +644,7 @@ class TestGenerateTriageCompose:
             patch(_CM_PATCH, self._mock_config(api_key="sk-x")),
         ):
             generate_triage_compose(tmp_path, {}, provider="claude")
-        assert mock_port.write_compose_file.call_count == 3
+        assert mock_port.write_compose_file.call_count == 4
 
     def test_non_claude_provider_writes_opencode_config(self, tmp_path: Path) -> None:
         mock_port = MagicMock()
@@ -589,11 +659,12 @@ class TestGenerateTriageCompose:
                 base_url="http://localhost:11434",
                 model="testmodel",
             )
-        assert mock_port.write_compose_file.call_count == 4
+        assert mock_port.write_compose_file.call_count == 5
         paths_written = {
             call[0][1].name for call in mock_port.write_compose_file.call_args_list
         }
         assert "opencode.json" in paths_written
+        assert "claude-settings.json" in paths_written
 
     def test_relative_app_root_produces_absolute_paths(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -616,3 +687,32 @@ class TestGenerateTriageCompose:
         ][0]
         yaml_content = compose_call[0][0]
         assert "docker/triage-agent/docker/triage-agent" not in yaml_content
+
+    def test_writes_claude_settings_file(self, tmp_path: Path) -> None:
+        mock_port = MagicMock()
+        with (
+            patch(_PORT_PATCH, return_value=mock_port),
+            patch(_CM_PATCH, self._mock_config(api_key="sk-x")),
+        ):
+            generate_triage_compose(tmp_path, {}, provider="claude")
+        paths_written = {
+            call[0][1].name for call in mock_port.write_compose_file.call_args_list
+        }
+        assert "claude-settings.json" in paths_written
+
+    def test_claude_settings_contains_hook_config(self, tmp_path: Path) -> None:
+        import json
+
+        mock_port = MagicMock()
+        with (
+            patch(_PORT_PATCH, return_value=mock_port),
+            patch(_CM_PATCH, self._mock_config(api_key="sk-x")),
+        ):
+            generate_triage_compose(tmp_path, {}, provider="claude")
+        settings_call = [
+            c
+            for c in mock_port.write_compose_file.call_args_list
+            if c[0][1].name == "claude-settings.json"
+        ][0]
+        cfg = json.loads(settings_call[0][0])
+        assert cfg["hooks"]["PreToolUse"][0]["matcher"] == ("Read|Grep|Glob")
