@@ -485,6 +485,7 @@ async def _build_snapshot(
                     current_tool=handle.current_tool if handle else None,
                     tool_runs=[_tool_run_to_item(r).model_dump() for r in tool_rows],
                     project_id=scan_row.project_id,
+                    started_at=scan_row.started_at,
                 )
     else:
         active_handles = service.list_active_runs()

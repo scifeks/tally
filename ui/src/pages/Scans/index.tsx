@@ -270,6 +270,20 @@ export default function Scans() {
       if (status === 'running' || status === 'queued') {
         setRunId(snap.runId)
         setRunStatus('running')
+        setLogs(prev => {
+          if (prev.some(l => l.type === 'run_started')) return prev
+          const runId = snap.runId ?? 0
+          return [
+            {
+              id: `snapshot-run-started-${runId}`,
+              type: 'run_started' as const,
+              runId,
+              message: 'scan started',
+              timestamp: snap.startedAt ?? new Date().toISOString(),
+            },
+            ...prev,
+          ]
+        })
         if (!timerRef.current) startElapsedTimer(false)
       } else if (status === 'cancelling') {
         setRunId(snap.runId)

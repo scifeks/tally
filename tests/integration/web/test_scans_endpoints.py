@@ -288,8 +288,7 @@ async def test_start_scan_unknown_repo_422(app_client, monkeypatch, tmp_path) ->
     active = repo_repo.list_active()
     assert active, "Expected at least one repo after seed"
 
-    # Phase 9: repoIds is list[int]. Send an integer id that doesn't exist
-    # in the active repositories table.
+    # Send an integer id that doesn't exist in the active repositories table.
     resp = await client.post(
         f"/api/v1/projects/{project_id}/scans",
         json={"repoIds": [99999]},
@@ -545,6 +544,33 @@ async def test_sse_filters_events_by_project_id(app_client) -> None:
     assert filtered[0].payload["run_id"] == 2
 
     await bus.unsubscribe("scan", sub_id)
+
+
+@pytest.mark.asyncio
+async def test_sse_snapshot_includes_started_at(app_client) -> None:
+    """Snapshot payload includes started_at for running scans."""
+    from datetime import UTC, datetime
+
+    from application.scans.scans_service import ScansService
+    from web.api.scans import _build_snapshot
+
+    client, _fid, _rag, factory, _muth, project_id = app_client
+    run_id = _seed_run(factory, project_id=project_id, status="running")
+
+    repo = RunRepository(factory)
+    started_at_str = datetime.now(UTC).isoformat()
+    repo.set_started_at(run_id, started_at_str)
+
+    bundle = repo.get_with_tool_runs(run_id)
+    assert bundle is not None
+    scan_row, _tool_rows = bundle
+    assert scan_row.started_at is not None
+
+    service = ScansService(run_repo=repo, project_id=project_id)
+
+    snapshot = await _build_snapshot(service, project_id, run_id)
+    assert snapshot.payload.get("started_at") is not None
+    assert snapshot.payload["status"] == "running"
 
 
 @pytest.mark.asyncio

@@ -391,6 +391,26 @@ class FindingRepository(FindingRepositoryPort):
             rows = conn.execute("SELECT * FROM findings").fetchall()
         return [deserialise_row(r) for r in rows]
 
+    def get_reportable_findings_deserialized(self) -> list[dict]:
+        """Triaged findings marked for report, as dicts."""
+        with self._factory.connect() as conn:
+            rows = conn.execute(
+                "SELECT * FROM findings"
+                " WHERE triaged_by IS NOT NULL"
+                " AND should_report = 1"
+            ).fetchall()
+        return [deserialise_row(r) for r in rows]
+
+    def get_findings_marked_for_report_deserialized(
+        self,
+    ) -> list[dict]:
+        """Findings with should_report=1, as dicts."""
+        with self._factory.connect() as conn:
+            rows = conn.execute(
+                "SELECT * FROM findings WHERE should_report = 1"
+            ).fetchall()
+        return [deserialise_row(r) for r in rows]
+
     def update_analyst_fields(
         self,
         finding_id: int,

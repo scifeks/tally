@@ -306,11 +306,22 @@ def _generate(
             try:
                 n = _SECTION_RAG_N_RESULTS.get(section, 20)
                 results = query_engine.search(rag_query, n_results=n)
+                reportable_ids = {
+                    str(f.id)
+                    for f in query.get_findings_for_report(
+                        skip_triage=request.skip_triage
+                    )
+                }
+                results = [r for r in results if r.get("id") in reportable_ids]
                 context["rag_context"] = "\n\n".join(
                     doc for r in results if (doc := r.get("document"))
                 )
             except Exception as exc:
-                logger.warning("ChromaDB query failed for %r: %s", section, exc)
+                logger.warning(
+                    "ChromaDB query failed for %r: %s",
+                    section,
+                    exc,
+                )
                 context["rag_context"] = ""
     finally:
         kb.close()

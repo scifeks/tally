@@ -347,6 +347,7 @@ export interface SnapshotPayload {
   segmentLabel?: string | null
   currentRepo?: string | null
   currentTool?: string | null
+  startedAt?: string | null
 }
 
 interface ActiveRunSnapshotApi {
@@ -366,6 +367,7 @@ interface SnapshotPayloadApi {
   segment_label?: string | null
   current_repo?: string | null
   current_tool?: string | null
+  started_at?: string | null
 }
 
 function mapSnapshot(data: SnapshotPayloadApi): SnapshotPayload {
@@ -384,6 +386,7 @@ function mapSnapshot(data: SnapshotPayloadApi): SnapshotPayload {
     segmentLabel: data.segment_label,
     currentRepo: data.current_repo,
     currentTool: data.current_tool,
+    startedAt: data.started_at,
   }
 }
 
