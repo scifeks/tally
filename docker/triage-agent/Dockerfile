@@ -5,6 +5,7 @@ RUN apt-get update \
        ca-certificates \
        curl \
        git \
+       jq \
        tinyproxy \
     && rm -rf /var/lib/apt/lists/*
 
