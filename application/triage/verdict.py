@@ -7,9 +7,12 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from domain.tools.constants import (
+    ACCESS_REQUIRED_LEVELS,
     CONFIDENCE_LEVELS,
+    EXPLOITATION_COMPLEXITY_LEVELS,
     FINDING_TYPES,
     SEVERITY_LEVELS,
+    USER_INTERACTION_LEVELS,
 )
 
 _REQUIRED_FIELDS = (
@@ -20,6 +23,9 @@ _REQUIRED_FIELDS = (
     "reasoning",
     "remediation",
     "attack_vector",
+    "access_required",
+    "exploitation_complexity",
+    "user_interaction",
 )
 
 
@@ -62,6 +68,9 @@ class Verdict:
     reasoning: str
     remediation: str
     attack_vector: str
+    access_required: str
+    exploitation_complexity: str
+    user_interaction: str
     call_stack: list[str] = field(default_factory=list)
 
 
@@ -97,6 +106,9 @@ def parse_verdict(text: str, *, expected_finding_id: int) -> Verdict:
         reasoning=obj["reasoning"],
         remediation=obj["remediation"],
         attack_vector=obj["attack_vector"],
+        access_required=obj["access_required"],
+        exploitation_complexity=obj["exploitation_complexity"],
+        user_interaction=obj["user_interaction"],
         call_stack=[str(e) for e in obj.get("call_stack", [])],
     )
 
@@ -183,9 +195,90 @@ def _validate_fields(obj: dict[str, Any], expected_finding_id: int) -> None:
             partial=obj,
         )
 
+    access_required = obj["access_required"]
+    if access_required not in ACCESS_REQUIRED_LEVELS:
+        raise VerdictParseError(
+            f"invalid access_required {access_required!r}; "
+            f"expected one of {sorted(ACCESS_REQUIRED_LEVELS)}",
+            partial=obj,
+        )
+
+    exploitation_complexity = obj["exploitation_complexity"]
+    if exploitation_complexity not in EXPLOITATION_COMPLEXITY_LEVELS:
+        raise VerdictParseError(
+            f"invalid exploitation_complexity "
+            f"{exploitation_complexity!r}; expected one of "
+            f"{sorted(EXPLOITATION_COMPLEXITY_LEVELS)}",
+            partial=obj,
+        )
+
+    user_interaction = obj["user_interaction"]
+    if user_interaction not in USER_INTERACTION_LEVELS:
+        raise VerdictParseError(
+            f"invalid user_interaction {user_interaction!r}; "
+            f"expected one of {sorted(USER_INTERACTION_LEVELS)}",
+            partial=obj,
+        )
+
     cs = obj.get("call_stack")
     if cs is not None and not isinstance(cs, list):
         raise VerdictParseError(
             "call_stack is not a list",
+            partial=obj,
+        )
+
+    _check_contradictions(obj)
+
+
+def _check_contradictions(obj: dict[str, Any]) -> None:
+    confidence = obj["confidence"]
+    severity = obj["severity"]
+    finding_type = obj["finding_type"]
+    access_required = obj["access_required"]
+    complexity = obj["exploitation_complexity"]
+    interaction = obj["user_interaction"]
+
+    if confidence == "false_positive" and severity not in (
+        "low",
+        "informational",
+    ):
+        raise VerdictParseError(
+            f"contradictory: false_positive with severity={severity!r}",
+            partial=obj,
+        )
+
+    if finding_type == "informational" and severity in (
+        "critical",
+        "high",
+    ):
+        raise VerdictParseError(
+            f"contradictory: informational finding_type with severity={severity!r}",
+            partial=obj,
+        )
+
+    if confidence == "confirmed" and severity == "informational":
+        raise VerdictParseError(
+            "contradictory: confirmed confidence with informational severity",
+            partial=obj,
+        )
+
+    modifiers = sum(
+        [
+            access_required == "privileged",
+            complexity == "high",
+            interaction == "required",
+        ]
+    )
+    if modifiers >= 2 and severity == "critical":
+        raise VerdictParseError(
+            "contradictory: multiple exploit prerequisites "
+            "(privileged access, high complexity, or "
+            "user interaction) preclude critical severity",
+            partial=obj,
+        )
+
+    if finding_type == "weakness" and severity == "critical":
+        raise VerdictParseError(
+            "contradictory: weakness finding_type with critical severity",
             partial=obj,
         )

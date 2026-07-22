@@ -233,12 +233,22 @@ def build_triage_meta(
     remediation: str,
     attack_vector: str | None,
     call_stack: str | None,
+    access_required: str | None = None,
+    exploitation_complexity: str | None = None,
+    user_interaction: str | None = None,
 ) -> dict:
     """Build the verdict portion of meta["triage"]."""
-    return {
+    meta = {
         "confidence": confidence,
         "reasoning": reasoning,
         "remediation": remediation,
         "attack_vector": attack_vector,
         "call_stack": call_stack,
     }
+    if access_required is not None:
+        meta["access_required"] = access_required
+    if exploitation_complexity is not None:
+        meta["exploitation_complexity"] = exploitation_complexity
+    if user_interaction is not None:
+        meta["user_interaction"] = user_interaction
+    return meta

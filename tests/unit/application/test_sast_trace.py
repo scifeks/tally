@@ -243,6 +243,9 @@ class TestVerdictRoundtrip:
                 ),
                 "remediation": ("Use a whitelist of allowed file paths."),
                 "attack_vector": ("GET /download?file=../../etc/passwd"),
+                "access_required": "none",
+                "exploitation_complexity": "low",
+                "user_interaction": "none",
                 "call_stack": ["FileController.php:4 download"],
             }
         )
@@ -264,6 +267,9 @@ class TestVerdictRoundtrip:
                 "reasoning": "test",
                 "remediation": "test",
                 "attack_vector": "n/a",
+                "access_required": "none",
+                "exploitation_complexity": "low",
+                "user_interaction": "none",
                 "call_stack": [],
             }
         )

@@ -29,6 +29,22 @@ CONFIDENCE_LEVELS: set[str] = {
     "false_positive",
 }
 
+ACCESS_REQUIRED_LEVELS: set[str] = {
+    "none",
+    "authenticated",
+    "privileged",
+}
+
+EXPLOITATION_COMPLEXITY_LEVELS: set[str] = {
+    "low",
+    "high",
+}
+
+USER_INTERACTION_LEVELS: set[str] = {
+    "none",
+    "required",
+}
+
 SEVERITY_INFORMATIONAL = "informational"
 SEVERITY_HIGH = "high"
 CONFIDENCE_CONFIRMED = "confirmed"

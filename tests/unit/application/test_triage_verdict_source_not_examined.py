@@ -87,6 +87,9 @@ class TestParseVerdictSourceNotExamined:
                 "reasoning": "User input reaches the sink.",
                 "remediation": "Use parameterized queries.",
                 "attack_vector": "POST /login password",
+                "access_required": "none",
+                "exploitation_complexity": "low",
+                "user_interaction": "none",
             }
         )
 
