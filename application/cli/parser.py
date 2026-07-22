@@ -114,6 +114,13 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     parser.add_argument(
+        "--since-commit",
+        type=str,
+        metavar="COMMIT",
+        help="Scan only files changed since this commit",
+    )
+
+    parser.add_argument(
         "--timeout",
         type=int,
         default=None,

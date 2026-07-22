@@ -517,6 +517,10 @@ class ScanStartRequest(BaseModel):
         default_factory=list,
         validation_alias=AliasChoices("argProfileIds", "arg_profile_ids"),
     )
+    sinceCommit: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("sinceCommit", "since_commit"),
+    )
 
 
 class ScanRunSummary(BaseModel):

@@ -9,6 +9,7 @@ from application.ports.user_prompt import UserPromptPort
 from domain.tools.execution_config import ToolExecutionConfig
 
 if TYPE_CHECKING:
+    from application.ports.git_diff import GitDiffPort
     from application.ports.project_repo_repository import (
         ProjectRepoRepositoryPort,
     )
@@ -25,3 +26,5 @@ class ScanTypeConfig:
     project_id: int | None = None
     arg_snapshots: dict[str, str] = field(default_factory=dict)
     repo_repo: ProjectRepoRepositoryPort | None = None
+    since_commit: str | None = None
+    git_diff: GitDiffPort | None = None

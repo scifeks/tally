@@ -66,4 +66,9 @@ class SemgrepDockerTool(BaseSemgrepTool):
             for pattern in exclude:
                 tool_args.extend(["--exclude", pattern])
 
+        include: list[str] | None = kwargs.get("include")
+        if include:
+            for pattern in include:
+                tool_args.extend(["--include", pattern])
+
         return build_docker_exec(self._container_name, self._tool_path, tool_args)

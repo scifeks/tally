@@ -93,6 +93,25 @@ class RepoSegmentScan(ScanType):
         _invocation = 0
 
         for repo in repos:
+            changed_files: list[str] | None = None
+            if config.since_commit and config.git_diff:
+                try:
+                    changed_files = config.git_diff.changed_files(
+                        repo.path, config.since_commit
+                    )
+                    if not changed_files:
+                        logger.info(
+                            "No files changed in %s since %s; skipping",
+                            repo.name,
+                            config.since_commit,
+                        )
+                        continue
+                except ValueError:
+                    logger.warning(
+                        "Could not resolve %s in %s; scanning all files",
+                        config.since_commit,
+                        repo.name,
+                    )
             for service in repo.services:
                 repo_label = repo.name
                 if len(repo.services) > 1:
@@ -312,6 +331,7 @@ class RepoSegmentScan(ScanType):
                         executor,
                         remaining_tools=_remaining,
                         command_config=tool_config,
+                        changed_files=changed_files,
                     )
 
                     if result is None:

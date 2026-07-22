@@ -133,6 +133,7 @@ def execute_tool_passes(
     executor: ToolExecutor,
     remaining_tools: int = 0,
     command_config: Any = None,
+    changed_files: list[str] | None = None,
 ) -> ToolResult | None:
     """Prompt approval once, run all ExecutionPasses, return merged result."""
     if not config.prompt.confirm(f"  Run {tool.name}?"):
@@ -175,6 +176,9 @@ def execute_tool_passes(
     passes = tool.build_execution_passes(context)
     if not passes:
         return None
+    if changed_files and getattr(tool, "supports_include", False):
+        for p in passes:
+            p.kwargs["include"] = changed_files
     pass_results = [executor.run(p, tool) for p in passes]
     return tool.merge_pass_results(pass_results)
 

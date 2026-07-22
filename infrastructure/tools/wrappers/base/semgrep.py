@@ -26,6 +26,7 @@ _log = logging.getLogger(__name__)
 class BaseSemgrepTool(ToolInterface):
     _candidate_commands: list[str] = ["semgrep"]
     _command_entry_type: str = "repo"
+    supports_include: bool = True
 
     @property
     def name(self) -> str:

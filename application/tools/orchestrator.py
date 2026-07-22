@@ -32,6 +32,7 @@ if TYPE_CHECKING:
     from application.ports.chat_session_repository import (
         ChatSessionRepositoryPort,
     )
+    from application.ports.git_diff import GitDiffPort
     from application.ports.project_repo_repository import (
         ProjectRepoRepositoryPort,
     )
@@ -75,6 +76,8 @@ class ScanOrchestrator:
         display: DisplayProtocol | None = None,
         arg_snapshots: dict[str, str] | None = None,
         repo_repo: ProjectRepoRepositoryPort | None = None,
+        since_commit: str | None = None,
+        git_diff: GitDiffPort | None = None,
     ) -> None:
         self.project_name = project
         self.registry = tool_registry
@@ -91,6 +94,8 @@ class ScanOrchestrator:
         self._chat_session_repo = chat_session_repo
         self._arg_snapshots = arg_snapshots or {}
         self._repo_repo = repo_repo
+        self._since_commit = since_commit
+        self._git_diff = git_diff
 
         # Plumb cancellation into the executor so subprocess waits abort.
         if hasattr(tool_executor, "set_cancel_token"):
@@ -112,6 +117,8 @@ class ScanOrchestrator:
             project_id=self._project_id,
             arg_snapshots=self._arg_snapshots,
             repo_repo=self._repo_repo,
+            since_commit=self._since_commit,
+            git_diff=self._git_diff,
         )
 
     def _make_resources(self) -> ExecutionResources:
