@@ -334,6 +334,8 @@ class FindingsService:
         upserts via the per-project knowledge base. Never raises; all
         exceptions are caught and logged as warnings.
         """
+        from application.pipeline.chromadb_ids import chromadb_doc_id
+
         try:
             knowledge_base = get_or_build_knowledge_base(
                 self._kb_cache, self._project_name, self._base_path
@@ -361,11 +363,20 @@ class FindingsService:
                 return
 
             text = handler.render(row)
-            metadata = {"tool": row["tool"], "profile": row["profile"]}
+            metadata = {
+                "tool": row["tool"],
+                "profile": row["profile"],
+                "run_id": row.get("run_id", 0),
+                "severity": row.get("severity", ""),
+                "segment": row.get("segment", ""),
+                "status": row.get("status", "active"),
+                "fingerprint": row.get("fingerprint", ""),
+            }
+            doc_id = chromadb_doc_id(row.get("fingerprint", ""), row.get("profile", ""))
             knowledge_base.add_findings(
                 documents=[text],
                 metadatas=[metadata],
-                ids=[str(row["id"])],
+                ids=[doc_id],
             )
         except Exception as exc:
             logger.warning(
@@ -384,7 +395,14 @@ class FindingsService:
             )
             if knowledge_base is None:
                 return
-            knowledge_base._index.delete(ids=[str(finding_id)])
+            rows = self._finding_repo.get_by_ids([finding_id])
+            if not rows:
+                return
+            row = rows[0]
+            from application.pipeline.chromadb_ids import chromadb_doc_id
+
+            doc_id = chromadb_doc_id(row.get("fingerprint", ""), row.get("profile", ""))
+            knowledge_base._index.delete(ids=[doc_id])
         except Exception as exc:
             logger.warning(
                 "Chroma cleanup: error for finding id=%s: %s",

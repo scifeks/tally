@@ -1,5 +1,6 @@
 from application.tools.scan_types.base import ScanType
 from application.tools.scan_types.full import FullScan
+from application.tools.scan_types.llm_scan import LlmScan
 from application.tools.scan_types.models import ScanTypeConfig
 from application.tools.scan_types.repo import RepoScan
 from application.tools.scan_types.repo_segment import RepoSegmentScan
@@ -17,6 +18,7 @@ __all__ = [
     "SEGMENT_ORDER",
     "ExecutionResources",
     "FullScan",
+    "LlmScan",
     "RepoScan",
     "RepoSegmentScan",
     "ScanSummary",

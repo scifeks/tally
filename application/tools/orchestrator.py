@@ -290,6 +290,13 @@ class ScanOrchestrator:
             )
         )
 
+    def _run_llm_scan(self, repo_names: list[str] | None) -> ScanSummary:
+        from application.tools.scan_types.llm_scan import LlmScan
+
+        return LlmScan(repo_names=repo_names).execute(
+            self._make_config(), self._make_resources()
+        )
+
     def run_scoped_scan(
         self,
         repo_names: list[str] | None = None,
@@ -304,6 +311,10 @@ class ScanOrchestrator:
         ``domains`` when given. Routes to nested ToolOnRepoScan, RepoScan,
         ToolOnAllReposScan, or FullScan based on which scopes are set.
         """
+        # Handle LLM scan domain
+        if domains and set(domains) == {"llm"}:
+            return self._run(lambda: self._run_llm_scan(repo_names))
+
         from application.rag.ingestor import get_tool_domain
         from application.tools.scan_types.execution import (
             ordered_repo_tools,

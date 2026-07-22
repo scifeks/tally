@@ -12,6 +12,7 @@ from unittest.mock import patch
 
 import pytest
 
+from application.pipeline.chromadb_ids import chromadb_doc_id
 from application.pipeline.strategies import PersistOnlyStrategy
 from application.ports.embedding_provider import EmbeddingProvider
 from application.rag.knowledge_base import FindingKnowledgeBase
@@ -19,7 +20,7 @@ from core.project_paths import ProjectPaths
 from domain.pipeline.events import IngestCompleted
 from infrastructure.store import make_store
 from infrastructure.vector.chromadb_adapter import ChromaDBVectorIndex
-from tests.finding_helpers import normalize_test_findings
+from tests.finding_helpers import _test_fingerprint, normalize_test_findings
 
 pytestmark = pytest.mark.integration
 
@@ -91,6 +92,7 @@ def phase4_env(tmp_path: Path) -> dict:
         "finding_type": json.dumps(["vulnerability"]),
         "description": "SQL injection via unsanitized user input",
     }
+    semgrep_fp = _test_fingerprint(semgrep_row)
     semgrep_id = _seed_finding(finding_repo, run_id, semgrep_row)
 
     gitleaks_row = {
@@ -102,6 +104,7 @@ def phase4_env(tmp_path: Path) -> dict:
         "finding_type": json.dumps(["secret"]),
         "meta": json.dumps({"line_number": 42}),
     }
+    gitleaks_fp = _test_fingerprint(gitleaks_row)
     gitleaks_id = _seed_finding(finding_repo, run_id, gitleaks_row)
 
     handler = PersistOnlyStrategy(finding_repo=finding_repo)
@@ -111,7 +114,9 @@ def phase4_env(tmp_path: Path) -> dict:
         "project_name": project_name,
         "run_id": run_id,
         "semgrep_id": semgrep_id,
+        "semgrep_fp": semgrep_fp,
         "gitleaks_id": gitleaks_id,
+        "gitleaks_fp": gitleaks_fp,
         "handler": handler,
     }
 
@@ -148,7 +153,7 @@ class TestPhase4ChromaDBWrite:
     def test_chromadb_docs_have_tool_and_profile_metadata(
         self, phase4_env: dict
     ) -> None:
-        """ChromaDB docs contain exactly {tool, profile} metadata."""
+        """ChromaDB docs contain tool and profile metadata."""
         _dispatch(phase4_env, ids=[phase4_env["semgrep_id"], phase4_env["gitleaks_id"]])
 
         kb = _open_kb(phase4_env)
@@ -158,34 +163,40 @@ class TestPhase4ChromaDBWrite:
             for r in results:
                 meta = r["metadata"]
                 assert meta is not None
-                assert set(meta.keys()) == {"tool", "profile"}
+                assert "tool" in meta
+                assert "profile" in meta
                 assert meta["profile"] == "default"
             tools = {r["metadata"]["tool"] for r in results if r["metadata"]}
             assert tools == {"semgrep", "gitleaks"}
         finally:
             kb.close()
 
-    def test_chromadb_doc_ids_are_sqlite_primary_keys(self, phase4_env: dict) -> None:
-        """ChromaDB doc IDs equal str(findings.id)."""
+    def test_chromadb_doc_ids_are_fingerprint_based(self, phase4_env: dict) -> None:
+        """ChromaDB doc IDs are fingerprint:profile format."""
         semgrep_id = phase4_env["semgrep_id"]
+        semgrep_fp = phase4_env["semgrep_fp"]
         gitleaks_id = phase4_env["gitleaks_id"]
+        gitleaks_fp = phase4_env["gitleaks_fp"]
         _dispatch(phase4_env, ids=[semgrep_id, gitleaks_id])
 
         kb = _open_kb(phase4_env)
         try:
-            assert kb.get_finding(str(semgrep_id)) is not None
-            assert kb.get_finding(str(gitleaks_id)) is not None
+            semgrep_doc_id = chromadb_doc_id(semgrep_fp, "default")
+            gitleaks_doc_id = chromadb_doc_id(gitleaks_fp, "default")
+            assert kb.get_finding(semgrep_doc_id) is not None
+            assert kb.get_finding(gitleaks_doc_id) is not None
         finally:
             kb.close()
 
     def test_chromadb_doc_text_is_rendered(self, phase4_env: dict) -> None:
         """ChromaDB document text comes from ToolHandler.render()."""
-        semgrep_id = phase4_env["semgrep_id"]
-        _dispatch(phase4_env, ids=[semgrep_id])
+        semgrep_fp = phase4_env["semgrep_fp"]
+        _dispatch(phase4_env, ids=[phase4_env["semgrep_id"]])
 
         kb = _open_kb(phase4_env)
         try:
-            doc = kb.get_finding(str(semgrep_id))
+            doc_id = chromadb_doc_id(semgrep_fp, "default")
+            doc = kb.get_finding(doc_id)
             assert doc is not None
             text = doc["document"]
             assert text is not None
@@ -215,25 +226,26 @@ class TestPhase4ChromaDBWrite:
 
     def test_only_requested_ids_are_written(self, phase4_env: dict) -> None:
         """Only the IDs in event.ids are written; others remain absent."""
-        semgrep_id = phase4_env["semgrep_id"]
-        gitleaks_id = phase4_env["gitleaks_id"]
+        semgrep_fp = phase4_env["semgrep_fp"]
+        gitleaks_fp = phase4_env["gitleaks_fp"]
 
-        _dispatch(phase4_env, ids=[semgrep_id])
+        _dispatch(phase4_env, ids=[phase4_env["semgrep_id"]])
 
         kb = _open_kb(phase4_env)
         try:
-            assert kb.get_finding(str(semgrep_id)) is not None
-            assert kb.get_finding(str(gitleaks_id)) is None
+            semgrep_doc_id = chromadb_doc_id(semgrep_fp, "default")
+            gitleaks_doc_id = chromadb_doc_id(gitleaks_fp, "default")
+            assert kb.get_finding(semgrep_doc_id) is not None
+            assert kb.get_finding(gitleaks_doc_id) is None
         finally:
             kb.close()
 
-    def test_orphan_removal_on_rescan_with_fewer_findings(
-        self, phase4_env: dict
-    ) -> None:
-        """Second scan with fewer findings leaves no orphaned ChromaDB docs.
+    def test_historical_findings_persist_across_scans(self, phase4_env: dict) -> None:
+        """Findings from earlier scans persist in ChromaDB as historical data.
 
         First scan produces 3 semgrep findings -> 3 docs in ChromaDB.
-        Second scan produces 1 semgrep finding -> exactly 1 doc remains.
+        Second scan produces 1 new semgrep finding -> 4 docs total persist.
+        Old findings remain accessible for historical context.
         """
         base_path = phase4_env["base_path"]
         project_name = phase4_env["project_name"]
@@ -278,6 +290,28 @@ class TestPhase4ChromaDBWrite:
         _dispatch(phase4_env, ids=[new_id])
         kb = _open_kb(phase4_env)
         try:
-            assert kb.count() == 1, "orphaned docs from first scan were not deleted"
+            assert kb.count() == 4, "expected 4 docs: 3 from first scan + 1 new"
+        finally:
+            kb.close()
+
+    def test_metadata_includes_enriched_fields(self, phase4_env: dict) -> None:
+        """ChromaDB metadata contains run_id, severity, segment, status, fingerprint."""
+        semgrep_fp = phase4_env["semgrep_fp"]
+        _dispatch(phase4_env, ids=[phase4_env["semgrep_id"]])
+
+        kb = _open_kb(phase4_env)
+        try:
+            doc_id = chromadb_doc_id(semgrep_fp, "default")
+            doc = kb.get_finding(doc_id)
+            assert doc is not None
+            meta = doc["metadata"]
+            assert meta is not None
+            assert "run_id" in meta
+            assert "severity" in meta
+            assert meta["severity"] == "high"
+            assert "segment" in meta
+            assert "status" in meta
+            assert "fingerprint" in meta
+            assert meta["fingerprint"] == semgrep_fp
         finally:
             kb.close()

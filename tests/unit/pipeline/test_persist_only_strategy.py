@@ -46,8 +46,26 @@ class TestPersistOnlyStrategy:
         """Full _persist_to_chromadb path: groups by tool/profile."""
         mock_finding_repo = MagicMock()
         mock_finding_repo.get_by_ids.return_value = [
-            {"id": 1, "tool": "gitleaks", "profile": "main"},
-            {"id": 2, "tool": "gitleaks", "profile": "main"},
+            {
+                "id": 1,
+                "tool": "gitleaks",
+                "profile": "main",
+                "fingerprint": "abc123",
+                "run_id": 10,
+                "severity": "high",
+                "segment": "secrets",
+                "status": "active",
+            },
+            {
+                "id": 2,
+                "tool": "gitleaks",
+                "profile": "main",
+                "fingerprint": "def456",
+                "run_id": 10,
+                "severity": "medium",
+                "segment": "secrets",
+                "status": "active",
+            },
         ]
         strategy = PersistOnlyStrategy(finding_repo=mock_finding_repo)
         mock_kb = MagicMock()
@@ -63,12 +81,27 @@ class TestPersistOnlyStrategy:
         ):
             strategy.handle(_event(ids=[1, 2]))
 
-        mock_kb.delete_findings.assert_called_once_with("gitleaks", "main")
         mock_kb.add_findings.assert_called_once_with(
             documents=["Repository: main | secret 1", "Repository: main | secret 2"],
             metadatas=[
-                {"tool": "gitleaks", "profile": "main"},
-                {"tool": "gitleaks", "profile": "main"},
+                {
+                    "tool": "gitleaks",
+                    "profile": "main",
+                    "run_id": 10,
+                    "severity": "high",
+                    "segment": "secrets",
+                    "status": "active",
+                    "fingerprint": "abc123",
+                },
+                {
+                    "tool": "gitleaks",
+                    "profile": "main",
+                    "run_id": 10,
+                    "severity": "medium",
+                    "segment": "secrets",
+                    "status": "active",
+                    "fingerprint": "def456",
+                },
             ],
-            ids=["1", "2"],
+            ids=["abc123:main", "def456:main"],
         )
