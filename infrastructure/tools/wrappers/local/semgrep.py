@@ -68,4 +68,9 @@ class SemgrepLocalTool(BaseSemgrepTool):
             for pattern in exclude:
                 cmd.extend(["--exclude", pattern])
 
+        include: list[str] | None = kwargs.get("include")
+        if include:
+            for pattern in include:
+                cmd.extend(["--include", pattern])
+
         return cmd

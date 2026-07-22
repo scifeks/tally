@@ -27,6 +27,8 @@ from factories.persistence import (
     create_scan_repos,
     create_url_finding_repo,
 )
+from infrastructure.tools.runner import SubprocessRunner
+from infrastructure.vcs.git_diff_adapter import GitDiffAdapter
 
 if TYPE_CHECKING:
     from argparse import Namespace
@@ -86,6 +88,7 @@ def _cmd_scan_inner(
     from domain.tools.constants import DOMAINS
 
     skip_enrichment = args.skip_enrichment
+    since_commit: str | None = getattr(args, "since_commit", None)
 
     repo_val: str | None = args.repo
     tool_val: str | None = args.tool
@@ -188,6 +191,8 @@ def _cmd_scan_inner(
             tool_ids=tuple(effective_tools or ()),
             skip_tool_ids=tuple(skip_tools),
             skip_enrichment=skip_enrichment,
+            since_commit=since_commit,
+            git_diff=(GitDiffAdapter(SubprocessRunner()) if since_commit else None),
             prompt=CliPromptAdapter(),
             reporter=CliProgressReporter(),
             display=CliDisplay(),

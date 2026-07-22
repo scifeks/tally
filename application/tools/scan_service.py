@@ -32,6 +32,7 @@ if TYPE_CHECKING:
     from application.ports.finding_repository import (
         FindingRepositoryPort,
     )
+    from application.ports.git_diff import GitDiffPort
     from application.ports.project_repo_repository import (
         ProjectRepoRepositoryPort,
     )
@@ -100,6 +101,8 @@ class ScanService:
         run_args: dict[str, Any] | None = None,
         arg_profile_ids: list[int] | None = None,
         saved_scan_id: int | None = None,
+        since_commit: str | None = None,
+        git_diff: GitDiffPort | None = None,
     ) -> ScanHandle:
         """Start a scan and return a ScanHandle.
 
@@ -114,6 +117,10 @@ class ScanService:
             effective = _resolve_effective_tools(
                 tool_registry, tool_ids, domains, skip_tool_ids
             )
+            if since_commit is not None:
+                if run_args is None:
+                    run_args = {}
+                run_args["since_commit"] = since_commit
             run_id = run_repo.create(
                 project_id=project_id,
                 repo_ids=list(repo_ids),
@@ -163,6 +170,8 @@ class ScanService:
                 "repo_repo": repo_repo,
                 "url_finding_repo": url_finding_repo,
                 "snapshots": snapshots,
+                "since_commit": since_commit,
+                "git_diff": git_diff,
             },
             name=f"scan-run-{run_id}",
             daemon=True,
@@ -196,6 +205,8 @@ class ScanService:
         repo_repo: ProjectRepoRepositoryPort,
         url_finding_repo: UrlFindingRepositoryPort,
         snapshots: dict[str, str] | None = None,
+        since_commit: str | None = None,
+        git_diff: GitDiffPort | None = None,
     ) -> None:
         from application.pipeline.factory import PipelineFactory
 
@@ -235,6 +246,8 @@ class ScanService:
                 display=display,
                 arg_snapshots=snapshots,
                 repo_repo=repo_repo,
+                since_commit=since_commit,
+                git_diff=git_diff,
             )
             setup_ok = True
 

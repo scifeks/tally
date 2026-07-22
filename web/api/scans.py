@@ -37,6 +37,8 @@ from factories.persistence import (
     create_scans_service,
     create_url_finding_repo,
 )
+from infrastructure.tools.runner import SubprocessRunner
+from infrastructure.vcs.git_diff_adapter import GitDiffAdapter
 from web.adapters.event_bus_scan_sink import EventBusScanSink
 from web.adapters.no_approval_prompt import NoApprovalPromptAdapter
 from web.api._errors import (
@@ -368,6 +370,8 @@ async def start_scan(
             skip_tool_ids=tuple(body.skipToolIds),
             skip_enrichment=body.skipEnrichment,
             arg_profile_ids=body.argProfileIds,
+            since_commit=body.sinceCommit,
+            git_diff=(GitDiffAdapter(SubprocessRunner()) if body.sinceCommit else None),
             prompt=NoApprovalPromptAdapter(),
             event_sink=sink,
         )

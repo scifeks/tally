@@ -29,6 +29,7 @@ from factories.persistence import (
     create_url_list_service,
 )
 from infrastructure.tools.runner import SubprocessRunner
+from infrastructure.vcs.git_diff_adapter import GitDiffAdapter
 
 if TYPE_CHECKING:
     from application.repl.interface import REPL
@@ -92,6 +93,7 @@ class ScanCommands:
         tool_val: str | None = None
         domain_val: str | None = None
         skip_tools_val: str | None = None
+        since_commit_val: str | None = None
         unrecognized: list[str] = []
 
         for arg in args:
@@ -103,6 +105,8 @@ class ScanCommands:
                 domain_val = arg[9:]
             elif arg.startswith("--skip-tools="):
                 skip_tools_val = arg[13:]
+            elif arg.startswith("--since-commit="):
+                since_commit_val = arg[15:]
             else:
                 unrecognized.append(arg)
 
@@ -111,7 +115,7 @@ class ScanCommands:
                 f"[red]Unrecognized argument(s):[/red] {', '.join(unrecognized)}\n"
                 "Usage: scan [--repo=<repo,...>] [--tool=<tool,...>]"
                 " [--skip-tools=<tool,...>] [--domain=<domain,...>]"
-                " [--skip-enrichment] [--yes]"
+                " [--since-commit=<commit>] [--skip-enrichment] [--yes]"
             )
             return
 
@@ -230,6 +234,10 @@ class ScanCommands:
                 tool_ids=tuple(effective_tools or ()),
                 skip_tool_ids=tuple(skip_tools),
                 skip_enrichment=skip_enrichment,
+                since_commit=since_commit_val,
+                git_diff=(
+                    GitDiffAdapter(SubprocessRunner()) if since_commit_val else None
+                ),
                 prompt=RichConsolePromptAdapter(auto_approve=auto_approve),
                 reporter=StdoutProgressReporter(),
                 display=OrchestratorDisplay(self.repl.console),
