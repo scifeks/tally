@@ -315,7 +315,12 @@ def _run_text(
     _check_cancel(token, request)
 
     _emit_step(sink, request, "aggregate", 0, started=True)
-    generator = ReportGenerator(None, request.project, finding_repo)
+    generator = ReportGenerator(
+        None,
+        request.project,
+        finding_repo,
+        skip_triage=request.skip_triage,
+    )
     aggregated = generator._aggregate_findings()  # noqa: SLF001
     _emit_step(sink, request, "aggregate", 25, started=False)
 

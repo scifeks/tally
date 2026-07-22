@@ -22,11 +22,16 @@ class ReportGenerator:
     """Generate security reports from findings stored in the RAG engine."""
 
     def __init__(
-        self, rag_engine: object, project: str, finding_repo: FindingRepositoryPort
+        self,
+        rag_engine: object,
+        project: str,
+        finding_repo: FindingRepositoryPort,
+        skip_triage: bool = False,
     ) -> None:
         self._engine = rag_engine
         self.project = project
         self._finding_repo = finding_repo
+        self._skip_triage = skip_triage
 
     def generate(
         self,
@@ -64,7 +69,14 @@ class ReportGenerator:
         by_severity = {s.label: 0 for s in Severity.all_ordered()}
 
         try:
-            findings_list = self._finding_repo.get_all_findings_deserialized()
+            if self._skip_triage:
+                findings_list = (
+                    self._finding_repo.get_findings_marked_for_report_deserialized()
+                )
+            else:
+                findings_list = (
+                    self._finding_repo.get_reportable_findings_deserialized()
+                )
             for finding in findings_list:
                 tool = finding.get("tool", "unknown")
                 findings_by_tool.setdefault(tool, []).append(finding)
@@ -185,7 +197,6 @@ class ReportGenerator:
             for f in noir_findings:
                 source = f.get("file") or ""
                 desc = f.get("description", "")
-                # Extract param summary from description if present
                 params = ""
                 if "params:" in desc:
                     params = desc.split("params:", 1)[-1].strip()

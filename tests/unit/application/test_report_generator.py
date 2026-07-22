@@ -36,7 +36,8 @@ def mock_engine() -> MagicMock:
 @pytest.fixture()
 def mock_finding_repo() -> MagicMock:
     repo = MagicMock()
-    repo.get_all_findings_deserialized.return_value = []
+    repo.get_reportable_findings_deserialized.return_value = []
+    repo.get_findings_marked_for_report_deserialized.return_value = []
     return repo
 
 
@@ -59,7 +60,7 @@ class TestReportGenerator:
     def test_generate_markdown_contains_header(
         self, generator: ReportGenerator, mock_finding_repo: MagicMock
     ) -> None:
-        mock_finding_repo.get_all_findings_deserialized.return_value = [
+        mock_finding_repo.get_reportable_findings_deserialized.return_value = [
             _GITLEAKS_FINDING
         ]
         result = generator.generate(output_format="markdown")
@@ -68,7 +69,7 @@ class TestReportGenerator:
     def test_generate_markdown_contains_gitleaks_section(
         self, generator: ReportGenerator, mock_finding_repo: MagicMock
     ) -> None:
-        mock_finding_repo.get_all_findings_deserialized.return_value = [
+        mock_finding_repo.get_reportable_findings_deserialized.return_value = [
             _GITLEAKS_FINDING
         ]
         result = generator.generate(output_format="markdown")
@@ -77,7 +78,7 @@ class TestReportGenerator:
     def test_generate_html_contains_doctype(
         self, generator: ReportGenerator, mock_finding_repo: MagicMock
     ) -> None:
-        mock_finding_repo.get_all_findings_deserialized.return_value = [
+        mock_finding_repo.get_reportable_findings_deserialized.return_value = [
             _GITLEAKS_FINDING
         ]
         result = generator.generate(output_format="html")
@@ -86,7 +87,7 @@ class TestReportGenerator:
     def test_generate_html_contains_project_name(
         self, generator: ReportGenerator, mock_finding_repo: MagicMock
     ) -> None:
-        mock_finding_repo.get_all_findings_deserialized.return_value = [
+        mock_finding_repo.get_reportable_findings_deserialized.return_value = [
             _GITLEAKS_FINDING
         ]
         result = generator.generate(output_format="html")
@@ -99,7 +100,7 @@ class TestReportGenerator:
     def test_generate_json_structure(
         self, generator: ReportGenerator, mock_finding_repo: MagicMock
     ) -> None:
-        mock_finding_repo.get_all_findings_deserialized.return_value = [
+        mock_finding_repo.get_reportable_findings_deserialized.return_value = [
             _finding(
                 tool="semgrep",
                 severity="medium",
@@ -137,7 +138,7 @@ class TestReportGenerator:
     def test_aggregate_groups_by_tool(
         self, generator: ReportGenerator, mock_finding_repo: MagicMock
     ) -> None:
-        mock_finding_repo.get_all_findings_deserialized.return_value = [
+        mock_finding_repo.get_reportable_findings_deserialized.return_value = [
             _finding(tool="gitleaks", severity="high"),
             _finding(tool="gitleaks", severity="medium"),
             _finding(tool="semgrep", severity="low"),
@@ -149,7 +150,7 @@ class TestReportGenerator:
     def test_aggregate_counts_severity(
         self, generator: ReportGenerator, mock_finding_repo: MagicMock
     ) -> None:
-        mock_finding_repo.get_all_findings_deserialized.return_value = [
+        mock_finding_repo.get_reportable_findings_deserialized.return_value = [
             _finding(tool="gitleaks", severity="high"),
             _finding(tool="semgrep", severity="critical"),
         ]
@@ -160,8 +161,42 @@ class TestReportGenerator:
     def test_aggregate_repo_exception_logs_warning_and_returns_zeros(
         self, generator: ReportGenerator, mock_finding_repo: MagicMock
     ) -> None:
-        mock_finding_repo.get_all_findings_deserialized.side_effect = RuntimeError(
-            "db error"
+        mock_finding_repo.get_reportable_findings_deserialized.side_effect = (
+            RuntimeError("db error")
         )
         result = generator._aggregate_findings()
         assert result["summary"]["total_findings"] == 0
+
+    def test_skip_triage_true_uses_marked_for_report(
+        self, mock_engine: MagicMock, mock_finding_repo: MagicMock
+    ) -> None:
+        test_finding = _finding(tool="gitleaks", severity="high")
+        mock_finding_repo.get_findings_marked_for_report_deserialized.return_value = [
+            test_finding
+        ]
+        generator = ReportGenerator(
+            mock_engine,
+            project="test-project",
+            finding_repo=mock_finding_repo,
+            skip_triage=True,
+        )
+        result = generator._aggregate_findings()
+        mock_finding_repo.get_findings_marked_for_report_deserialized.assert_called_once()
+        assert result["summary"]["total_findings"] == 1
+
+    def test_skip_triage_false_uses_reportable(
+        self, mock_engine: MagicMock, mock_finding_repo: MagicMock
+    ) -> None:
+        test_finding = _finding(tool="semgrep", severity="medium")
+        mock_finding_repo.get_reportable_findings_deserialized.return_value = [
+            test_finding
+        ]
+        generator = ReportGenerator(
+            mock_engine,
+            project="test-project",
+            finding_repo=mock_finding_repo,
+            skip_triage=False,
+        )
+        result = generator._aggregate_findings()
+        mock_finding_repo.get_reportable_findings_deserialized.assert_called_once()
+        assert result["summary"]["total_findings"] == 1

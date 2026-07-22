@@ -110,7 +110,7 @@ class TestPhase6RagDraft:
             mock_llm.return_value.is_available.return_value = True
             mock_qe.return_value.search.return_value = [
                 {
-                    "id": "doc-1",
+                    "id": "1",
                     "document": (
                         "[semgrep] Rule: python.flask.sqli | "
                         "Severity: high | CWE: CWE-89"
@@ -122,6 +122,9 @@ class TestPhase6RagDraft:
             mock_reg.__contains__ = MagicMock(return_value=True)
             mock_reg.__getitem__ = MagicMock(return_value=lambda *_: mock_generator)
             mock_qs.return_value.get_filtered_findings.return_value = [_seed_finding()]
+            mock_qs.return_value.get_findings_for_report.return_value = [
+                _seed_finding()
+            ]
             mock_qs.return_value.severity_distribution.return_value = {}
             mock_qs.return_value.confidence_distribution.return_value = {}
             mock_qs.return_value.build_risk_counts.return_value = _ZERO_RISK_COUNTS
@@ -183,6 +186,9 @@ class TestPhase6RagDraft:
             mock_reg.__contains__ = MagicMock(return_value=True)
             mock_reg.__getitem__ = MagicMock(return_value=lambda *_: mock_generator)
             mock_qs.return_value.get_filtered_findings.return_value = [_seed_finding()]
+            mock_qs.return_value.get_findings_for_report.return_value = [
+                _seed_finding()
+            ]
             mock_qs.return_value.severity_distribution.return_value = {}
             mock_qs.return_value.confidence_distribution.return_value = {}
             mock_qs.return_value.build_risk_counts.return_value = _ZERO_RISK_COUNTS
@@ -247,6 +253,9 @@ class TestPhase6RagDraft:
             mock_reg.__contains__ = MagicMock(return_value=True)
             mock_reg.__getitem__ = MagicMock(return_value=lambda *_: mock_generator)
             mock_qs.return_value.get_filtered_findings.return_value = [_seed_finding()]
+            mock_qs.return_value.get_findings_for_report.return_value = [
+                _seed_finding()
+            ]
             mock_qs.return_value.severity_distribution.return_value = {}
             mock_qs.return_value.confidence_distribution.return_value = {}
             mock_qs.return_value.build_risk_counts.return_value = _ZERO_RISK_COUNTS

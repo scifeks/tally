@@ -190,6 +190,208 @@ See the [garak documentation](https://github.com/NVIDIA/garak) for config file f
 
 ---
 
+## Search Fields by Tool
+
+The REPL `search` command filters findings by field values. Each tool exposes a different set of searchable fields depending on what information it produces.
+
+Run `search --show-fields --tool=<tool>` to see all available fields for a tool. You can then filter by any field: `search --severity=high --tool=semgrep` or `search --file_path=src/auth.php --tool=psalm`.
+
+### composer-audit
+
+| Field | Description |
+|---|---|
+| `ecosystem` | Package ecosystem (Packagist) |
+| `file_path` | Source file path (composer.json) |
+| `finding_type` | Type of finding (dependency) |
+| `package_name` | Name of the affected package |
+| `severity` | Severity level (low, medium, high, critical) |
+| `vulnerability_id` | CVE or advisory ID |
+
+### dalfox
+
+| Field | Description |
+|---|---|
+| `confidence` | Confidence level (confirmed, probable, potential) |
+| `cwe` | CWE ID of the XSS vulnerability |
+| `evidence` | Evidence captured from the response |
+| `finding_type` | Type of finding (vulnerability) |
+| `inject_type` | Type of XSS injection |
+| `message` | Additional message or note |
+| `method` | HTTP method used in the payload |
+| `param` | Parameter that is vulnerable |
+| `payload` | XSS payload that triggered the finding |
+| `poc` | Proof of concept URL |
+| `severity` | Severity level (low, medium, high, critical) |
+| `url` | URL where the vulnerability was found |
+
+### garak
+
+| Field | Description |
+|---|---|
+| `confidence` | Confidence level (confirmed, probable, potential) |
+| `domain` | Security domain (web) |
+| `finding_type` | Type of finding (vulnerability) |
+| `fingerprint` | Unique fingerprint for the probe and detector pair |
+| `probe` | Name of the garak probe that failed |
+| `severity` | Severity level (low, medium, high, critical) |
+| `tool` | Tool name (garak) |
+
+### gitleaks
+
+| Field | Description |
+|---|---|
+| `confidence` | Confidence level (confirmed) |
+| `domain` | Security domain (code) |
+| `file_path` | File path where the secret was found |
+| `finding_type` | Type of finding (secret) |
+| `severity` | Severity level (high) |
+| `tool` | Tool name (gitleaks) |
+
+### graphql-cop
+
+| Field | Description |
+|---|---|
+| `description` | Description of the misconfiguration |
+| `finding_type` | Type of finding (vulnerability) |
+| `rule_id` | Slugified rule ID |
+| `severity` | Severity level (low, medium, high, critical) |
+| `url` | Target GraphQL endpoint URL |
+
+### katana
+
+| Field | Description |
+|---|---|
+| `description` | Endpoint description |
+| `finding_type` | Type of finding (informational) |
+| `method` | HTTP method (GET, POST, etc.) |
+| `severity` | Severity level |
+| `url` | Discovered endpoint URL |
+
+### noir
+
+| Field | Description |
+|---|---|
+| `description` | Endpoint description |
+| `finding_type` | Type of finding (informational) |
+| `method` | HTTP method (GET, POST, etc.) |
+| `severity` | Severity level |
+| `url` | Discovered endpoint path |
+
+### npm-audit
+
+| Field | Description |
+|---|---|
+| `ecosystem` | Package ecosystem (npm) |
+| `file_path` | Source file path (package.json) |
+| `finding_type` | Type of finding (dependency) |
+| `package_name` | Name of the affected package |
+| `severity` | Severity level (low, medium, high, critical) |
+| `vulnerability_id` | CVE or advisory ID |
+
+### nuclei
+
+| Field | Description |
+|---|---|
+| `confidence` | Confidence level (confirmed) |
+| `finding_type` | Type of finding (vulnerability, misconfiguration, exposure) |
+| `host` | Target host scanned |
+| `matched_at` | URL where the template matched |
+| `matcher_name` | Name of the matcher that triggered |
+| `severity` | Severity level (low, medium, high, critical) |
+| `tags` | Comma-separated template tags |
+| `template_id` | Nuclei template ID |
+| `type` | Type of Nuclei detection |
+| `url` | Full URL where the finding was detected |
+| `vulnerability_id` | CVE ID if applicable |
+
+### osv-scanner
+
+| Field | Description |
+|---|---|
+| `ecosystem` | Package ecosystem (PyPI, npm, etc.) |
+| `file_path` | Source file path (requirements.txt, etc.) |
+| `finding_type` | Type of finding (dependency) |
+| `package_name` | Name of the affected package |
+| `severity` | Severity level (low, medium, high, critical) |
+| `vulnerability_id` | OSV vulnerability ID |
+
+### pip-audit
+
+| Field | Description |
+|---|---|
+| `ecosystem` | Package ecosystem (PyPI) |
+| `file_path` | Source file path |
+| `finding_type` | Type of finding (dependency) |
+| `package_name` | Name of the affected package |
+| `severity` | Severity level (low, medium, high, critical) |
+| `vulnerability_id` | CVE or advisory ID |
+
+### psalm
+
+| Field | Description |
+|---|---|
+| `confidence` | Confidence level (confirmed) |
+| `cwe` | CWE ID of the taint type |
+| `file_path` | PHP source file path |
+| `finding_type` | Type of finding (vulnerability) |
+| `rule_id` | Taint rule ID (TaintedSql, TaintedXss, etc.) |
+| `severity` | Severity level (low, medium, high) |
+
+### semgrep
+
+| Field | Description |
+|---|---|
+| `confidence` | Confidence level (confirmed, probable, potential) |
+| `cwe` | CWE ID from rule metadata |
+| `file_path` | Source file path where the pattern matched |
+| `finding_type` | Type of finding (vulnerability) |
+| `rule_id` | Semgrep rule ID |
+| `severity` | Severity level (low, medium, high) |
+
+### sqlmap
+
+| Field | Description |
+|---|---|
+| `confidence` | Confidence level (confirmed, probable, potential) |
+| `cwe_id` | CWE ID (89 for SQL injection) |
+| `dbms` | Database management system detected |
+| `finding_type` | Type of finding (vulnerability) |
+| `method` | HTTP method used in the injection (GET, POST, etc.) |
+| `param` | Parameter that is vulnerable to SQL injection |
+| `payload` | SQL injection payload used |
+| `severity` | Severity level |
+| `technique_summary` | Summary of injection techniques detected |
+| `url` | Target URL where SQL injection was found |
+
+### xsstrike
+
+| Field | Description |
+|---|---|
+| `confidence` | Confidence level (confirmed, probable, potential) |
+| `cwe` | CWE ID (79 for XSS) |
+| `description` | Description of vulnerable component (for component findings) |
+| `finding_type` | Type of finding (vulnerability or dependency) |
+| `package_name` | Package name (for component findings) |
+| `package_version` | Package version (for component findings) |
+| `param` | Parameter vulnerable to XSS |
+| `payload` | XSS payload used |
+| `severity` | Severity level (low, medium, high, critical) |
+| `url` | URL or component location |
+| `vulnerability_id` | CVE ID (for component findings) |
+
+### zap
+
+| Field | Description |
+|---|---|
+| `confidence` | Confidence level (confirmed, probable, potential) |
+| `cwe` | CWE ID from the ZAP alert |
+| `finding_type` | Type of finding (vulnerability) |
+| `method` | HTTP method used in the request |
+| `severity` | Severity level (informational, low, medium, high) |
+| `url` | URL where the vulnerability was detected |
+
+---
+
 ## Tool Detection
 
 Tally calls `check_system_tools()` on startup and when you run the `tools` REPL command.
