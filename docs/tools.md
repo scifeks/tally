@@ -4,6 +4,7 @@
 
 | Tool | Category | What it does |
 |---|---|---|
+| ffuf | DAST | Fast web fuzzer for discovering hidden files, directories, and parameters via wordlist-based brute-force |
 | Nuclei | DAST | Template-based vulnerability scanner; known CVE fingerprinting, misconfiguration detection, and DAST fuzzing |
 | OWASP ZAP | DAST | Dynamic web/API security scanning |
 | XSStrike | DAST | XSS-focused dynamic scanner; context-aware payload generation and WAF evasion to complement ZAP |
@@ -17,6 +18,7 @@
 | pip-audit | SCA | Python dependency audit (PyPI advisory database) |
 | npm-audit | SCA | Node.js dependency audit |
 | composer-audit | SCA | PHP Composer dependency audit |
+| Retire.js | SCA | Vulnerable JavaScript library detector; scans JS files directly for known CVEs without requiring a lockfile |
 | Garak | LLM Security | LLM vulnerability scanning for prompt injection, jailbreaks, data leakage, and toxicity |
 
 All tools are optional. Tally skips any tool that is not detected.
@@ -59,6 +61,21 @@ for Node.js apps and for any project that already maintains an API spec.
 
 See [docs/endpoint-files.md](endpoint-files.md) for supported formats,
 setup instructions, and a description of how conversion works.
+
+---
+
+## ffuf
+
+ffuf is a fast web fuzzer written in Go that discovers hidden files, directories, vhosts, and parameters by brute-forcing HTTP requests with a wordlist. It runs in the `web` scan segment against configured `base_urls`.
+
+### Requirements
+
+- **ffuf binary.** Install from `https://github.com/ffuf/ffuf` or via your package manager (`go install github.com/ffuf/ffuf/v2@latest`). The binary must be on `$PATH` or configured in `config/commands.json`.
+- **A wordlist.** ffuf needs a wordlist for brute-force discovery. Set the `FFUF_WORDLIST` environment variable to the path of your preferred wordlist, or install SecLists (`/usr/share/seclists/`). Without a wordlist, ffuf is skipped automatically.
+
+### How it works
+
+ffuf appends `/FUZZ` to each configured `base_url` and sends one HTTP request per wordlist entry, filtering responses by status code (200, 201, 301, 302, 307, 401, 403, 405, 500). Each discovered path becomes an "exposure" finding with its HTTP status, response length, and content type.
 
 ---
 
@@ -190,6 +207,22 @@ See the [garak documentation](https://github.com/NVIDIA/garak) for config file f
 
 ---
 
+## Retire.js
+
+Retire.js detects known-vulnerable JavaScript libraries by scanning `.js` files directly. Unlike npm-audit, it does not require a `package.json` or lockfile, making it suitable for legacy projects, vendor directories, and applications that bundle third-party JavaScript without a package manager.
+
+### Requirements
+
+- **retire binary.** Install via npm: `npm install -g retire`. The binary must be on `$PATH` or configured in `config/commands.json`.
+
+### How it works
+
+Retire.js scans the repository directory for JavaScript files and matches their content against a database of known vulnerable library versions. Findings include the CVE ID, affected component name and version, severity, and the file path where the vulnerable library was found. The scanner uses the `--exitwith 0` flag for consistent exit handling and outputs JSON to stdout.
+
+Retire.js is language-gated to JavaScript repositories. It runs only when the repository has a `javascript` language tag configured.
+
+---
+
 ## Search Fields by Tool
 
 The REPL `search` command filters findings by field values. Each tool exposes a different set of searchable fields depending on what information it produces.
@@ -223,6 +256,19 @@ Run `search --show-fields --tool=<tool>` to see all available fields for a tool.
 | `poc` | Proof of concept URL |
 | `severity` | Severity level (low, medium, high, critical) |
 | `url` | URL where the vulnerability was found |
+
+### ffuf
+
+| Field | Description |
+|---|---|
+| `content_type` | Response content type |
+| `finding_type` | Type of finding (exposure) |
+| `host` | Target host |
+| `length` | Response body length in bytes |
+| `redirect_location` | Redirect target URL (for 3xx responses) |
+| `severity` | Severity level (informational, low) |
+| `status` | HTTP response status code |
+| `url` | Discovered URL |
 
 ### garak
 
@@ -336,6 +382,18 @@ Run `search --show-fields --tool=<tool>` to see all available fields for a tool.
 | `finding_type` | Type of finding (vulnerability) |
 | `rule_id` | Taint rule ID (TaintedSql, TaintedXss, etc.) |
 | `severity` | Severity level (low, medium, high) |
+
+### retire
+
+| Field | Description |
+|---|---|
+| `ecosystem` | Package ecosystem (npm) |
+| `file_path` | Path to the JS file containing the vulnerable library |
+| `finding_type` | Type of finding (dependency) |
+| `package_name` | Name of the vulnerable JavaScript library |
+| `package_version` | Version of the vulnerable library detected |
+| `severity` | Severity level (low, medium, high, critical) |
+| `vulnerability_id` | CVE ID |
 
 ### semgrep
 
