@@ -97,6 +97,8 @@ class BaseHandler:
         self, ids: list[int], project_name: str, base_path: str
     ) -> None:
         """Write findings to ChromaDB by their SQLite IDs."""
+        from application.pipeline.chromadb_ids import chromadb_doc_id
+
         try:
             kb = self._get_knowledge_base(project_name, base_path)
         except Exception as exc:
@@ -113,7 +115,6 @@ class BaseHandler:
             for row in rows:
                 grouped[(row["tool"], row["profile"])].append(row)
             for (tool, profile), group_rows in grouped.items():
-                kb.delete_findings(tool, profile)
                 handler = ToolHandlerFactory.load(tool)
                 if handler is None:
                     continue
@@ -123,9 +124,21 @@ class BaseHandler:
                     for row in group_rows
                 ]
                 metadatas: list[Mapping[str, Any]] = [
-                    {"tool": tool, "profile": profile} for _ in group_rows
+                    {
+                        "tool": tool,
+                        "profile": profile,
+                        "run_id": row.get("run_id", 0),
+                        "severity": row.get("severity", ""),
+                        "segment": row.get("segment", ""),
+                        "status": row.get("status", "active"),
+                        "fingerprint": row.get("fingerprint", ""),
+                    }
+                    for row in group_rows
                 ]
-                doc_ids = [str(row["id"]) for row in group_rows]
+                doc_ids = [
+                    chromadb_doc_id(row.get("fingerprint", ""), profile)
+                    for row in group_rows
+                ]
                 kb.add_findings(
                     documents=texts,
                     metadatas=metadatas,
