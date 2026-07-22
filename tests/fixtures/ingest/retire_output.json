@@ -1,0 +1,59 @@
+[
+  {
+    "file": "js/jquery-1.6.2.min.js",
+    "results": [
+      {
+        "version": "1.6.2",
+        "component": "jquery",
+        "detection": "filecontent",
+        "vulnerabilities": [
+          {
+            "below": "1.9.0",
+            "severity": "medium",
+            "identifiers": {
+              "CVE": ["CVE-2012-6708"],
+              "summary": "Selector interpreted as HTML"
+            },
+            "info": [
+              "https://blog.jquery.com/2013/02/04/jquery-1-9-1-released/"
+            ]
+          },
+          {
+            "below": "1.12.0",
+            "severity": "low",
+            "identifiers": {
+              "CVE": ["CVE-2015-9251"],
+              "summary": "Cross-site scripting via cross-domain ajax request"
+            },
+            "info": [
+              "https://github.com/jquery/jquery/issues/2432"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "file": "vendor/bootstrap-3.1.0.min.js",
+    "results": [
+      {
+        "version": "3.1.0",
+        "component": "bootstrap",
+        "detection": "filecontent",
+        "vulnerabilities": [
+          {
+            "below": "3.4.0",
+            "severity": "high",
+            "identifiers": {
+              "CVE": ["CVE-2018-14040", "CVE-2018-14042"],
+              "summary": "XSS in data-target attribute and tooltip/popover data-container"
+            },
+            "info": [
+              "https://github.com/twbs/bootstrap/issues/20184"
+            ]
+          }
+        ]
+      }
+    ]
+  }
+]
