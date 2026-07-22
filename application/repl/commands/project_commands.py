@@ -10,7 +10,15 @@ from rich.panel import Panel
 from rich.table import Table
 
 from application.project.repositories_service import ProjectRepositoriesService
+from application.tool_overrides.service import (
+    ToolOverridesService,
+    ToolOverrideValidationError,
+)
 from core.project_paths import ProjectPaths
+from factories.persistence import create_overrides_repo
+from infrastructure.tools.wrappers.utils.container_tool_probe import (
+    probe_container_tools,
+)
 
 if TYPE_CHECKING:
     from application.repl.help_renderer import HelpRenderer
@@ -44,6 +52,69 @@ def _offer_garak_config(project_name: str, base_path: str, repo_id: int) -> None
         shutil.copy2(src, dest)
         print(f"  Garak config saved to {dest}")
         return
+
+
+def _offer_docker_sca_overrides(
+    project_name: str,
+    base_path: str,
+    repo: Repository,
+) -> None:
+    """Probe Docker containers for SCA tools and offer overrides."""
+    if not repo.id or not repo.services:
+        return
+    service = repo.services[0]
+    if not service.container_name or not service.docker_path:
+        return
+
+    detected = probe_container_tools(
+        service.container_name,
+        service.languages or [],
+    )
+    if not detected:
+        print("  No SCA tools detected in container.")
+        return
+
+    paths = ProjectPaths.from_canonical(base_path, project_name)
+    overrides_repo = create_overrides_repo(paths.findings_db)
+    svc = ToolOverridesService(overrides_repo)
+
+    created = 0
+    for tool_name, tool_path in detected.items():
+        answer = (
+            input(
+                f"  Use {tool_name} from container '{service.container_name}'? [y/N]: "
+            )
+            .strip()
+            .lower()
+        )
+        if answer not in ("y", "yes"):
+            continue
+        try:
+            svc.create(
+                tool_name=tool_name,
+                args_mode="stock",
+                type="repo",
+                location="docker",
+                container_name=service.container_name,
+                container_tool_path=tool_path,
+                scope="service",
+                repo_id=repo.id,
+                service_name=service.name,
+            )
+            created += 1
+            print(f"  Created {tool_name} override.")
+        except (
+            ToolOverrideValidationError,
+            Exception,
+        ) as exc:
+            print(f"  Error creating {tool_name} override: {exc}")
+
+    if created:
+        print(
+            f"  {created} SCA tool"
+            f" {'override' if created == 1 else 'overrides'}"
+            f" created for service '{service.name}'."
+        )
 
 
 class ProjectCommands:
@@ -173,6 +244,9 @@ class ProjectCommands:
         name = self.repl.wizard.create_project()
         if name:
             self.repl.active_project = name
+            for repo in self._active_repos(name):
+                if repo.services and repo.services[0].container_name:
+                    _offer_docker_sca_overrides(name, str(self.repl.base_path), repo)
 
     def cmd_delete_project(self, _cmd: str, args: list[str]) -> None:
         """project delete <name>: delete a project and all its data."""
@@ -199,7 +273,6 @@ class ProjectCommands:
 
         self.repl.console.print(f"[green]Project '{project_name}' deleted.[/green]")
 
-        # Clear active project in the running REPL session
         if self.repl.active_project == project_name:
             self.repl.active_project = None
             self.repl.console.print(
@@ -242,6 +315,11 @@ class ProjectCommands:
                 str(self.repl.base_path),
                 repo.id,
             )
+            _offer_docker_sca_overrides(
+                self.repl.active_project,
+                str(self.repl.base_path),
+                repo,
+            )
 
     def cmd_repos(self, _cmd: str, _args: list[str]) -> None:
         """List configured repositories for the active project."""
@@ -280,16 +358,7 @@ class ProjectCommands:
         self.repl.console.print(table)
 
     def _resolve_repo_arg(self, arg: str) -> str | None:
-        """Translate ``arg`` (id or name) into the canonical repo name.
-
-        ``repo edit`` and ``repo delete`` accept either the integer DB id
-        (e.g. ``repo edit 3``) or the repo name. This helper centralizes
-        resolution so the wizard and project-manager callees keep their
-        name-based contract intact.
-
-        Returns the repo name on success or ``None`` when the argument
-        doesn't match any active repository.
-        """
+        """Translate ``arg`` (id or name) into the canonical repo name."""
         if not self.repl.active_project:
             return None
         repos = self._active_repos(self.repl.active_project)
@@ -331,6 +400,11 @@ class ProjectCommands:
                     self.repl.active_project,
                     str(self.repl.base_path),
                     updated.id,
+                )
+                _offer_docker_sca_overrides(
+                    self.repl.active_project,
+                    str(self.repl.base_path),
+                    updated,
                 )
         except ValueError as exc:
             self.repl.console.print(f"[red]{exc}[/red]")
@@ -396,7 +470,7 @@ class ProjectCommands:
                     if service and service.languages
                     else "none"
                 )
-                lines.append(f"  \u2022 {repo.name} ({lang_str})")
+                lines.append(f"  • {repo.name} ({lang_str})")
 
         self.repl.console.print(
             Panel(
