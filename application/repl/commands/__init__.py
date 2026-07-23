@@ -9,6 +9,7 @@ from .sync import SyncCommand
 from .tool_commands import ToolCommands
 from .triage_commands import TriageCommands
 from .ui_commands import UiCommands
+from .vuln_data_commands import VulnDataCommands
 
 __all__ = [
     "SyncCommand",
@@ -20,4 +21,5 @@ __all__ = [
     "ToolCommands",
     "TriageCommands",
     "UiCommands",
+    "VulnDataCommands",
 ]

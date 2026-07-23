@@ -19,7 +19,7 @@ _SCA_COMMON_ENRICHMENT_FIELDS: tuple[FieldEnrichmentSpec, ...] = (
     ),
     FieldEnrichmentSpec(
         "risk_type",
-        ("vulnerability_id", "description"),
+        ("vulnerability_id", "description", "cwe_description", "epss_score"),
         PromptStrategy.GENERIC,
     ),
     FieldEnrichmentSpec(
@@ -29,7 +29,7 @@ _SCA_COMMON_ENRICHMENT_FIELDS: tuple[FieldEnrichmentSpec, ...] = (
     ),
     FieldEnrichmentSpec(
         "confidence",
-        ("description", "severity"),
+        ("description", "severity", "epss_score"),
         PromptStrategy.GENERIC,
     ),
     FieldEnrichmentSpec(
@@ -48,7 +48,14 @@ _SCA_OSV_ENRICHMENT_FIELDS: tuple[FieldEnrichmentSpec, ...] = (
     ),
     FieldEnrichmentSpec(
         "risk_type",
-        ("vulnerability_id", "description", "cwe_ids", "aliases"),
+        (
+            "vulnerability_id",
+            "description",
+            "cwe_ids",
+            "cwe_description",
+            "epss_score",
+            "aliases",
+        ),
         PromptStrategy.GENERIC,
     ),
     FieldEnrichmentSpec(
@@ -58,7 +65,7 @@ _SCA_OSV_ENRICHMENT_FIELDS: tuple[FieldEnrichmentSpec, ...] = (
     ),
     FieldEnrichmentSpec(
         "confidence",
-        ("description", "severity", "cvss_score", "cvss_vector"),
+        ("description", "severity", "cvss_score", "cvss_vector", "epss_score"),
         PromptStrategy.GENERIC,
     ),
     FieldEnrichmentSpec(
