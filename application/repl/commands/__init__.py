@@ -1,5 +1,6 @@
 """REPL commands package."""
 
+from .document_commands import DocumentCommands
 from .knowledge_commands import KnowledgeCommands
 from .project_commands import ProjectCommands
 from .purge import PurgeCommand
@@ -13,6 +14,7 @@ from .vuln_data_commands import VulnDataCommands
 
 __all__ = [
     "SyncCommand",
+    "DocumentCommands",
     "KnowledgeCommands",
     "ProjectCommands",
     "PurgeCommand",

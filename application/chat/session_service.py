@@ -138,6 +138,7 @@ class ChatSessionService:
         project_registry: ProjectRegistryService,
         knowledge_base_cache: dict[str, FindingKnowledgeBase | None],
         base_path: str,
+        document_store_cache: dict | None = None,
     ) -> SendMessageHandle:
         """Validate, compose, persist user, spawn driver, register handle.
 
@@ -169,6 +170,7 @@ class ChatSessionService:
             knowledge_base_cache,
             base_path,
             project_id,
+            document_store_cache,
         )
 
         user_message_id = await asyncio.to_thread(

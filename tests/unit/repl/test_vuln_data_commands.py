@@ -35,9 +35,11 @@ class TestVulnDataCommands:
     def test_status_with_data(self) -> None:
         cmds, repl = _make_commands()
         with patch(_FACTORY_PATH) as mock_factory:
+            from domain.vulnerability_data.counts import VulnDataCounts
+
             svc = MagicMock()
             svc.is_loaded.return_value = True
-            svc.counts.return_value = (500, 200000)
+            svc.counts.return_value = VulnDataCounts(cwe=500, epss=200000, attack=250)
             mock_factory.return_value = svc
             cmds.cmd_vuln_data("vuln-data", ["status"])
 
@@ -46,8 +48,10 @@ class TestVulnDataCommands:
     def test_update_calls_service(self) -> None:
         cmds, repl = _make_commands()
         with patch(_FACTORY_PATH) as mock_factory:
+            from domain.vulnerability_data.counts import VulnDataCounts
+
             svc = MagicMock()
-            svc.update.return_value = (500, 200000)
+            svc.update.return_value = VulnDataCounts(cwe=500, epss=200000, attack=250)
             mock_factory.return_value = svc
             cmds.cmd_vuln_data("vuln-data", ["update"])
 

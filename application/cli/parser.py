@@ -9,7 +9,10 @@ def build_parser() -> argparse.ArgumentParser:
     """Build the complete CLI argument parser."""
     parser = argparse.ArgumentParser(
         prog="tally",
-        description="Security auditing platform with web UI and CLI",
+        description=(
+            "Security auditing platform that eliminates"
+            " noise and busy work in appsec audits"
+        ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
             "examples:\n"
