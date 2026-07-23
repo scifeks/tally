@@ -114,10 +114,13 @@ class SqlmapLocalTool(BaseSqlmapTool):
         raw = kwargs or {}
         seeds_file = str(raw["seeds_file"]) if "seeds_file" in raw else None
         output_dir = str(raw["output_dir"]) if "output_dir" in raw else None
-        level: int = int(raw.get("level", 1))  # type: ignore[arg-type]
-        risk: int = int(raw.get("risk", 1))  # type: ignore[arg-type]
+        _level = raw.get("level", 1)
+        level = _level if isinstance(_level, int) else 1
+        _risk = raw.get("risk", 1)
+        risk = _risk if isinstance(_risk, int) else 1
+        _headers = raw.get("headers")
         headers: dict[str, str] | None = (
-            raw.get("headers") or None  # type: ignore[assignment]
+            _headers if isinstance(_headers, dict) else None
         )
         tamper: str = str(raw.get("tamper", ""))
 

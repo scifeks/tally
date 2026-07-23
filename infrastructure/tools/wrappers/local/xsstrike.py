@@ -103,8 +103,12 @@ class XSSTrikeLocalTool(BaseXSStrikeTool):
         base_url: str | None = str(raw["base_url"]) if "base_url" in raw else None
         seeds_file: str | None = str(raw["seeds_file"]) if "seeds_file" in raw else None
         log_file: str | None = str(raw["log_file"]) if "log_file" in raw else None
-        crawl_level: int = int(raw.get("crawl_level", 10))  # type: ignore[arg-type]
-        headers: dict[str, str] | None = raw.get("headers") or None  # type: ignore[assignment]
+        _crawl_level = raw.get("crawl_level", 10)
+        crawl_level = _crawl_level if isinstance(_crawl_level, int) else 10
+        _headers = raw.get("headers")
+        headers: dict[str, str] | None = (
+            _headers if isinstance(_headers, dict) else None
+        )
         blind: bool = bool(raw.get("blind", False))
 
         if not base_url and not seeds_file:

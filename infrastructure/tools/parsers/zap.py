@@ -5,7 +5,7 @@ import logging
 import re
 import xml.etree.ElementTree as ET
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from domain.tools.base import ToolResult
 from domain.tools.constants import CONFIDENCE_CONFIRMED
@@ -344,7 +344,7 @@ class ZapHandler:
     ]
 
     def normalize(self, result: ToolResult, profile: str) -> list[dict]:
-        parsed: dict[str, Any] = result.parsed_data or {}  # type: ignore[union-attr]
+        parsed: dict[str, Any] = cast(dict[str, Any], result.parsed_data or {})
         alerts: list[dict[str, Any]] = parsed.get("alerts", [])
 
         timestamp = result.timestamp

@@ -1,7 +1,7 @@
 """SCA shared helpers for osv-scanner, pip-audit, npm-audit, composer-audit."""
 
 import json
-from typing import Any
+from typing import Any, cast
 
 from domain.tools.base import ToolResult
 from domain.tools.enrichment import FieldEnrichmentSpec, PromptStrategy
@@ -85,7 +85,7 @@ _SCA_OSV_ENRICHMENT_FIELDS: tuple[FieldEnrichmentSpec, ...] = (
 def _build_sca_normalize(builder: Any, result: ToolResult, profile: str) -> list[dict]:
     """Build normalized finding dicts for any SCA tool result."""
     tool = result.tool_name
-    parsed: dict[str, Any] = result.parsed_data or {}  # type: ignore[union-attr]
+    parsed: dict[str, Any] = cast(dict[str, Any], result.parsed_data or {})
     vulnerabilities: list[dict[str, Any]] = parsed.get("vulnerabilities", [])
 
     timestamp = result.timestamp

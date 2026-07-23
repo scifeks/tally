@@ -104,7 +104,10 @@ class DalFoxLocalTool(BaseDalFoxTool):
         output_file: str | None = (
             str(raw["output_file"]) if "output_file" in raw else None
         )
-        headers: dict[str, str] | None = raw.get("headers") or None  # type: ignore[assignment]
+        _headers = raw.get("headers")
+        headers: dict[str, str] | None = (
+            _headers if isinstance(_headers, dict) else None
+        )
         blind_xss_callback: str | None = (
             str(raw["blind_xss_callback"]) if raw.get("blind_xss_callback") else None
         )

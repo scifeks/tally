@@ -10,7 +10,9 @@ from typing import TYPE_CHECKING, Any, cast
 if TYPE_CHECKING:
     import chromadb
     from chromadb.api import ClientAPI
-    from chromadb.api.types import Documents, Embeddings
+    from chromadb.api.types import Documents
+
+from chromadb.api.types import Embeddings
 
 from application.ports.embedding_provider import EmbeddingProvider
 from application.ports.filters import And, Contains, Eq, Filter, Or
@@ -33,12 +35,14 @@ class _ProviderEmbeddingFn:
     def __call__(self, input: Documents) -> Embeddings:  # noqa: A002
         if self._debug:
             logger.debug("ChromaDB embedding: documents=%d", len(input))
-        return [self._provider.embed(t) for t in input]  # type: ignore[return-value]
+        embeddings: list[list[float]] = [self._provider.embed(t) for t in input]
+        return cast(Embeddings, embeddings)
 
     def embed_query(self, input: Documents) -> Embeddings:  # noqa: A002
         if self._debug:
             logger.debug("ChromaDB query embedding: documents=%d", len(input))
-        return [self._provider.embed(t) for t in input]  # type: ignore[return-value]
+        embeddings: list[list[float]] = [self._provider.embed(t) for t in input]
+        return cast(Embeddings, embeddings)
 
     def name(self) -> str:
         return "default"
@@ -114,7 +118,7 @@ class ChromaDBVectorIndex(VectorIndex):
         try:
             self._collection.upsert(
                 documents=documents,
-                metadatas=[dict(m) for m in metadatas],  # type: ignore[arg-type]
+                metadatas=[dict(m) for m in metadatas],
                 ids=ids,
             )
         except Exception as exc:
@@ -191,9 +195,10 @@ class ChromaDBVectorIndex(VectorIndex):
             raise VectorIndexError(f"delete failed: {exc}") from exc
 
     def close(self) -> None:
-        if hasattr(self._client, "close"):
+        close_fn = getattr(self._client, "close", None)
+        if close_fn is not None:
             try:
-                self._client.close()  # type: ignore[union-attr]
+                close_fn()
             except Exception:
                 pass
 

@@ -221,7 +221,8 @@ class SavedScansRepository(SavedScansRepositoryPort):
                     " VALUES (?, ?, ?, ?)",
                     (name, 1 if skip_enrichment else 0, now, now),
                 )
-                saved_scan_id = int(cur.lastrowid)  # type: ignore[arg-type]
+                assert cur.lastrowid is not None
+                saved_scan_id = cur.lastrowid
                 _write_join_rows(
                     conn,
                     saved_scan_id=saved_scan_id,

@@ -52,8 +52,9 @@ class GraphqlCopLocalTool(BaseGraphqlCopTool):
     def build_command(self, **kwargs: object) -> list[str]:
         raw = kwargs or {}
         target_url: str | None = str(raw["target_url"]) if "target_url" in raw else None
+        _headers = raw.get("headers")
         headers: dict[str, str] | None = (
-            raw.get("headers") or None  # type: ignore[assignment]
+            _headers if isinstance(_headers, dict) else None
         )
 
         if not target_url:

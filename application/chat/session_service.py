@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import AsyncGenerator
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from application.chat.run_registry import (
     ChatRunHandle,
@@ -140,7 +141,7 @@ class ChatSessionService:
         base_path: str,
         document_store_cache: dict | None = None,
     ) -> SendMessageHandle:
-        """Validate, compose, persist user, spawn driver, register handle.
+        """Orchestrate a user message through validation, composition, and persistence.
 
         Raises:
             ChatSessionNotFound: session_id is unknown or wrong project.
@@ -233,13 +234,7 @@ class ChatSessionService:
         composer: ChatStreamComposer,
         chat_sink: ChatStreamSink,
     ) -> None:
-        """Drive ``stream_chat`` to completion; unregister in finally.
-
-        Tokens reach the SSE client via the sink; yielded chunks are
-        discarded here. The finally always unregisters the handle, even
-        on cancel or error, so a follow-up POST for the same session is
-        not blocked.
-        """
+        """Drive the chat stream to completion."""
         try:
             gen = await stream_chat(
                 chat_request,
@@ -254,7 +249,7 @@ class ChatSessionService:
                 async for _chunk in gen:
                     pass
             finally:
-                await gen.aclose()  # type: ignore[union-attr]
+                await cast(AsyncGenerator[str], gen).aclose()
         except asyncio.CancelledError:
             raise
         except Exception:

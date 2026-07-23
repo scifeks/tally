@@ -33,7 +33,8 @@ class RunRepository(RunRepositoryPort):
                 "INSERT INTO scan_runs (args, created_at) VALUES (?, ?)",
                 (json.dumps(args), created_at),
             )
-            return cur.lastrowid  # type: ignore[return-value]
+            assert cur.lastrowid is not None
+            return cur.lastrowid
 
     def add_run_tools(self, run_id: int, tools: list[dict]) -> None:
         """Insert one row per tool for a run (legacy minimal columns)."""
@@ -80,7 +81,8 @@ class RunRepository(RunRepositoryPort):
                     saved_scan_id,
                 ),
             )
-            return cur.lastrowid  # type: ignore[return-value]
+            assert cur.lastrowid is not None
+            return cur.lastrowid
 
     def set_arg_profile_snapshot(
         self, run_id: int, tool_name: str, snapshot_json: str
@@ -241,7 +243,8 @@ class RunRepository(RunRepositoryPort):
                 " VALUES (?, ?, ?, ?, ?)",
                 (run_id, tool, repo, domain, status),
             )
-            return cur.lastrowid  # type: ignore[return-value]
+            assert cur.lastrowid is not None
+            return cur.lastrowid
 
     def update_tool_run(
         self,

@@ -7,7 +7,7 @@ render_prompt(source_values: dict[str, Any]) -> str.
 from __future__ import annotations
 
 import importlib
-from typing import Any
+from typing import Any, cast
 
 _DEDICATED_MODULES: dict[str, str] = {
     "owasp_name": "application.rag.prompts.owasp_name",
@@ -23,4 +23,4 @@ def get_dedicated_prompt(field_name: str, source_values: dict[str, Any]) -> str:
     """
     module_path = _DEDICATED_MODULES[field_name]
     module = importlib.import_module(module_path)
-    return module.render_prompt(source_values)  # type: ignore[no-any-return]
+    return cast(str, module.render_prompt(source_values))

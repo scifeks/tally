@@ -1,7 +1,7 @@
 """Handler for claudecode LLM-based security scan findings."""
 
 import json
-from typing import Any
+from typing import Any, cast
 
 from domain.tools.base import ToolResult
 
@@ -27,7 +27,7 @@ class ClaudeCodeScanHandler:
     enrichment_fields: tuple[Any, ...] | None = None
 
     def normalize(self, result: ToolResult, profile: str) -> list[dict]:
-        parsed: dict[str, Any] = result.parsed_data or {}  # type: ignore
+        parsed: dict[str, Any] = cast(dict[str, Any], result.parsed_data or {})
         findings: list[dict[str, Any]] = parsed.get("findings", [])
 
         rows: list[dict] = []

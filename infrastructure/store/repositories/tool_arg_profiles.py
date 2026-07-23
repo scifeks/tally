@@ -81,7 +81,8 @@ class ToolArgProfilesRepository(ToolArgProfilesRepositoryPort):
                     " VALUES (?, ?, ?, ?, ?)",
                     (tool_name, name, _args_to_json(args), now, now),
                 )
-                return cur.lastrowid  # type: ignore[return-value]
+                assert cur.lastrowid is not None
+                return cur.lastrowid
         except sqlite3.IntegrityError as err:
             if _is_name_conflict(err):
                 raise ToolArgProfileNameConflict(tool_name, name) from err

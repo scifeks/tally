@@ -142,10 +142,19 @@ class KatanaLocalTool(BaseKatanaTool):
         oas3_target: str | None = (
             str(raw["oas3_target"]) if "oas3_target" in raw else None
         )
-        depth: int = int(raw.get("depth", 5))  # type: ignore[arg-type]
+        _depth = raw.get("depth", 5)
+        depth = _depth if isinstance(_depth, int) else 5
         headless: bool = bool(raw.get("headless", False))
-        headers: dict[str, str] | None = raw.get("headers") or None  # type: ignore[assignment]
-        max_duration: int = int(raw.get("max_duration", self._CRAWL_MAX_DURATION))  # type: ignore[arg-type]
+        _headers = raw.get("headers")
+        headers: dict[str, str] | None = (
+            _headers if isinstance(_headers, dict) else None
+        )
+        _max_duration = raw.get("max_duration", self._CRAWL_MAX_DURATION)
+        max_duration = (
+            _max_duration
+            if isinstance(_max_duration, int)
+            else self._CRAWL_MAX_DURATION
+        )
 
         if not base_url:
             raise ValueError("base_url is required for katana")

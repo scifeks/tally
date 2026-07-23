@@ -173,7 +173,8 @@ class RepositoryRepository(ProjectRepoRepositoryPort):
                 f"INSERT INTO repositories ({column_list}) VALUES ({placeholders})",
                 tuple(cols.values()),
             )
-            return cur.lastrowid  # type: ignore[return-value]
+            assert cur.lastrowid is not None
+            return cur.lastrowid
 
     def update(self, repo_id: int, repo: Repository) -> None:
         """Replace every column for ``repo_id`` with *repo*'s field values."""
