@@ -3,12 +3,16 @@
 from __future__ import annotations
 
 import logging
+from typing import TYPE_CHECKING
 
 from application.ports.llm_provider import LLMProvider
 from application.ports.vector_index import VectorMatch
 from application.rag.knowledge_base import FindingKnowledgeBase
 from application.rag.search_parser import SearchQuery, parse_search_query
 from core.config.manager import ConfigManager
+
+if TYPE_CHECKING:
+    from application.rag.document_store import DocumentStore
 
 logger = logging.getLogger(__name__)
 
@@ -43,10 +47,12 @@ class QueryEngine:
         self,
         knowledge_base: FindingKnowledgeBase,
         llm_provider: LLMProvider | None = None,
+        document_store: DocumentStore | None = None,
     ) -> None:
         """Initialize the query engine."""
         self._kb = knowledge_base
         self._provider: LLMProvider = llm_provider or knowledge_base.chat_provider
+        self._doc_store = document_store
 
         config_manager = ConfigManager(str(knowledge_base.base_path))
         commands = config_manager.load_commands_config()
@@ -96,7 +102,11 @@ class QueryEngine:
             offset=offset,
         )
 
-    def chat(self, message: str, n_context: int = _DEFAULT_N_RESULTS) -> str:
+    def chat(
+        self,
+        message: str,
+        n_context: int = _DEFAULT_N_RESULTS,
+    ) -> str:
         """RAG-augmented chat: retrieve context then query the LLM."""
         if not message.strip():
             return "Please provide a message."
@@ -105,19 +115,54 @@ class QueryEngine:
             return "Cannot connect to inference provider. Is it running?"
 
         results = self.search(message, n_results=n_context)
-        if not results:
-            return "No relevant findings found for your query."
 
-        context_lines = []
-        for i, match in enumerate(results, 1):
-            meta = match.get("metadata") or {}
-            tool = meta.get("tool", "")
-            profile = meta.get("profile", "")
-            repo_part = f" repo={profile}" if profile else ""
-            label = f"[{tool}{repo_part}]" if (tool or profile) else ""
-            document = match.get("document") or ""
-            context_lines.append(f"{i}. {label} {document}")
+        doc_results: list[VectorMatch] = []
+        if self._doc_store is not None:
+            try:
+                doc_results = self._doc_store.search(
+                    message,
+                    n_results=min(n_context, 5),
+                )
+            except Exception as exc:
+                logger.warning(
+                    "Document search failed: %s",
+                    exc,
+                )
+
+        if not results and not doc_results:
+            return "No relevant findings or documents found for your query."
+
+        context_lines: list[str] = []
+
+        if results:
+            context_lines.append("Security Findings:")
+            for i, match in enumerate(results, 1):
+                meta = match.get("metadata") or {}
+                tool = meta.get("tool", "")
+                profile = meta.get("profile", "")
+                repo_part = f" repo={profile}" if profile else ""
+                label = f"[{tool}{repo_part}]" if (tool or profile) else ""
+                document = match.get("document") or ""
+                context_lines.append(f"{i}. {label} {document}")
+
+        if doc_results:
+            context_lines.append("\nProject Documents:")
+            for i, match in enumerate(doc_results, 1):
+                meta = match.get("metadata") or {}
+                source = meta.get(
+                    "source_file",
+                    "unknown",
+                )
+                document = match.get("document") or ""
+                context_lines.append(f"{i}. [doc: {source}] {document}")
+
         context = "\n".join(context_lines)
-
-        prompt = _CHAT_PROMPT_TEMPLATE.format(context=context, question=message)
-        return self._provider.complete(prompt, temperature=0.7, num_predict=2000)
+        prompt = _CHAT_PROMPT_TEMPLATE.format(
+            context=context,
+            question=message,
+        )
+        return self._provider.complete(
+            prompt,
+            temperature=0.7,
+            num_predict=2000,
+        )

@@ -25,6 +25,7 @@ from application.repl.adapters.dependency_summary_display import (
 )
 from application.repl.adapters.tool_registry_display import print_discovery_summary
 from application.repl.commands import (
+    DocumentCommands,
     KnowledgeCommands,
     ProjectCommands,
     PurgeCommand,
@@ -46,6 +47,7 @@ from application.triage.readiness import compute_triage_readiness
 from core.config import ConfigManager
 
 if TYPE_CHECKING:
+    from application.rag.document_store import DocumentStore
     from application.rag.knowledge_base import FindingKnowledgeBase
 
 _log = logging.getLogger(__name__)
@@ -62,6 +64,7 @@ _COMPLETIONS = [
     "exit",
     "quit",
     "clear",
+    "docs",
     "project",
     "repo",
     "scan",
@@ -249,6 +252,7 @@ class REPL:
         self.wizard = InteractiveProjectWizard(self.projects)
         self.active_project: str | None = None
         self.knowledge_base_cache: dict[str, FindingKnowledgeBase | None] = {}
+        self.document_store_cache: dict[str, DocumentStore | None] = {}
         if runtime_service is None:
             runtime_service = RuntimeDependencyService(
                 build_runtime_dependency_probes(base_path=base_path)
@@ -280,6 +284,7 @@ class REPL:
         self.sync_commands = SyncCommand(self)
         self.ui_commands = UiCommands(self, web_ui_runner=web_ui_runner)
         self.vuln_data_commands = VulnDataCommands(self)
+        self.document_commands = DocumentCommands(self)
 
     def run(self) -> None:
         """Start the REPL loop."""
@@ -375,6 +380,7 @@ class REPL:
             "clear": self._cmd_clear,
             "exit": self._cmd_exit,
             "quit": self._cmd_exit,
+            "docs": self.document_commands.cmd_docs,
             "project": pc.cmd_project,
             "repo": pc.cmd_repo,
             "scan": sc.cmd_scan,
@@ -436,7 +442,7 @@ class REPL:
             project_line = "Active Project: [dim]No active project[/dim]"
 
         content = (
-            f"[cyan]Tally Web App Security Auditing REPL v{_VERSION}[/cyan]\n"
+            f"[cyan]Tally Security Auditing Platform v{_VERSION}[/cyan]\n"
             "LlamaIndex + Chroma + Local Inference\n"
             f"{project_line}"
         )

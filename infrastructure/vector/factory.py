@@ -14,13 +14,9 @@ def make_chromadb_vector_index(
     project_name: str,
     base_path: Path,
     embedding_provider: EmbeddingProvider,
+    collection_type: str = "findings",
 ) -> VectorIndex:
-    """Build a project-scoped VectorIndex backed by ChromaDB.
-
-    Resolves the project's chroma directory through ProjectPaths, ensures it
-    exists, and constructs the adapter with collection name
-    ``f"findings_{project}"``.
-    """
+    """Build a project-scoped VectorIndex backed by ChromaDB."""
     if not project_name:
         raise ValueError("project_name must not be empty")
 
@@ -32,7 +28,7 @@ def make_chromadb_vector_index(
 
     chroma_path = paths.chroma_db
     chroma_path.mkdir(parents=True, exist_ok=True)
-    collection_name = f"findings_{project_name}"
+    collection_name = f"{collection_type}_{project_name}"
 
     return ChromaDBVectorIndex(
         chroma_path=chroma_path,

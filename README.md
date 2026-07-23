@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/scifeks/tally/actions/workflows/ci.yml/badge.svg)](https://github.com/scifeks/tally/actions/workflows/ci.yml)
 
-Tally is a security auditing platform with a web UI and CLI for orchestrating scanners, triaging findings, and generating reports. It wraps common security tools, stores findings in a knowledge base (ChromaDB + configurable LLM), and lets you scan, triage, search, chat, and report from a browser or terminal.
+Tally is a security auditing platform that eliminates the noise and busy work involved in application security audits. It wraps common security tools, triages findings with AI, and generates reports, so you can get to the hard parts faster. Tally is not a replacement for manual auditing and penetration testing, nor does it guarantee finding all vulnerabilities.
 
 ## Features
 

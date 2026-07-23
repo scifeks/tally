@@ -5,13 +5,17 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Self
 
 from application.chat.service import ProjectNotFound
-from application.rag.knowledge_base_cache import get_or_build_knowledge_base
+from application.rag.knowledge_base_cache import (
+    get_or_build_document_store,
+    get_or_build_knowledge_base,
+)
 from application.rag.query import QueryEngine
 from infrastructure.llm.factory import get_llm_provider
 
 if TYPE_CHECKING:
     from application.ports.llm_provider import LLMProvider
     from application.project.registry_service import ProjectRegistryService
+    from application.rag.document_store import DocumentStore
     from application.rag.knowledge_base import FindingKnowledgeBase
 
 
@@ -39,21 +43,34 @@ class ChatStreamComposer:
         knowledge_base_cache: dict[str, FindingKnowledgeBase | None],
         base_path: str,
         project_id: int,
+        document_store_cache: dict[str, DocumentStore | None] | None = None,
     ) -> Self:
         row = registry.resolve_by_id(project_id)
         if row is None or row.archived_at:
             raise ProjectNotFound(f"project {project_id} not found")
         knowledge_base = get_or_build_knowledge_base(
-            knowledge_base_cache, row.name, base_path
+            knowledge_base_cache,
+            row.name,
+            base_path,
         )
         if knowledge_base is None:
             raise RagUnavailable(
                 "RAG engine unavailable for this project; "
                 "ChromaDB or embedding provider is not reachable"
             )
+        doc_store = None
+        if document_store_cache is not None:
+            doc_store = get_or_build_document_store(
+                document_store_cache,
+                row.name,
+                base_path,
+            )
         provider = get_llm_provider("chat", base_path)
         return cls(
-            query_engine=QueryEngine(knowledge_base),
+            query_engine=QueryEngine(
+                knowledge_base,
+                document_store=doc_store,
+            ),
             provider=provider,
             model_name=provider.model,
         )

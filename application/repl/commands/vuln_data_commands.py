@@ -29,10 +29,10 @@ class VulnDataCommands:
         self.repl.console.print("Downloading vulnerability reference data...")
         try:
             svc = get_vulnerability_data_service(self.repl.base_path)
-            cwe_count, epss_count = svc.update()
+            counts = svc.update()
             self.repl.console.print(
-                f"[green]Updated:[/green] {cwe_count:,} CWE "
-                f"entries, {epss_count:,} EPSS scores"
+                f"[green]Updated:[/green] {counts.cwe:,} CWE "
+                f"entries, {counts.epss:,} EPSS scores"
             )
         except Exception as exc:
             self.repl.console.print(f"[red]Download failed:[/red] {exc}")
@@ -47,8 +47,8 @@ class VulnDataCommands:
                 "CWE and EPSS data."
             )
             return
-        cwe_count, epss_count = svc.counts()
+        counts = svc.counts()
         self.repl.console.print(
-            f"[green]Loaded:[/green] {cwe_count:,} CWE "
-            f"entries, {epss_count:,} EPSS scores"
+            f"[green]Loaded:[/green] {counts.cwe:,} CWE "
+            f"entries, {counts.epss:,} EPSS scores"
         )

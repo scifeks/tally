@@ -237,6 +237,7 @@ async def send_chat_message(
             project_registry=request.app.state.project_registry,
             knowledge_base_cache=request.app.state.knowledge_base_cache,
             base_path=request.app.state.base_path,
+            document_store_cache=request.app.state.document_store_cache,
         )
     except ChatSessionNotFound as exc:
         raise NotFound(str(exc)) from exc

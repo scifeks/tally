@@ -296,6 +296,36 @@ _HELP_REGISTRY = [
         "--test-connection",
         "Test the integration connection",
     ),
+    # Vulnerability Data
+    ("vuln-data", None, None, "Vulnerability Data"),
+    (
+        "vuln-data",
+        "vuln-data update",
+        None,
+        "Download and cache CWE and EPSS reference data",
+    ),
+    (
+        "vuln-data",
+        "vuln-data status",
+        None,
+        "Show cached vulnerability data status",
+    ),
+    # Documents
+    ("documents", None, None, "Documents"),
+    (
+        "documents",
+        "docs add",
+        "<filepath>",
+        "Ingest a document into the project knowledge base",
+    ),
+    ("documents", "docs list", None, "List ingested documents"),
+    (
+        "documents",
+        "docs remove",
+        "<filename>",
+        "Remove a document from the knowledge base",
+    ),
+    ("documents", "docs stats", None, "Show document store statistics"),
     # Web UI
     ("ui", None, None, "Web UI"),
     (

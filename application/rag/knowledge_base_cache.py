@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
+from application.rag.document_store import DocumentStore
 from application.rag.knowledge_base import FindingKnowledgeBase
 from infrastructure.embedding.factory import get_embedding_provider
 from infrastructure.llm.factory import get_llm_provider
@@ -50,3 +51,39 @@ def get_or_build_knowledge_base(
         kb = None
     cache[project_name] = kb
     return kb
+
+
+def get_or_build_document_store(
+    cache: dict[str, DocumentStore | None],
+    project_name: str,
+    base_path: str,
+) -> DocumentStore | None:
+    """Lookup-or-build a DocumentStore for *project_name*.
+
+    Returns ``None`` (and caches the ``None``) if the embedding provider
+    or vector index cannot be constructed. Callers must handle ``None`` as
+    "document storage unavailable for this project".
+    """
+    if project_name in cache:
+        return cache[project_name]
+    base = Path(base_path)
+    try:
+        embedding_provider = get_embedding_provider(base)
+        vector_index = make_chromadb_vector_index(
+            project_name=project_name,
+            base_path=base,
+            embedding_provider=embedding_provider,
+            collection_type="documents",
+        )
+        store: DocumentStore | None = DocumentStore(
+            vector_index,
+        )
+    except (RuntimeError, OSError, ImportError) as exc:
+        logger.warning(
+            "document store init failed for %s: %s",
+            project_name,
+            exc,
+        )
+        store = None
+    cache[project_name] = store
+    return store

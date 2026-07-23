@@ -99,7 +99,7 @@ def _patch_chat_deps(monkeypatch, *, chunks: list[str]) -> _FakeProvider:
     )
     monkeypatch.setattr(
         "application.chat.session_service.ChatStreamComposer.for_project",
-        lambda registry, cache, base_path, project_id: fake_composer,
+        lambda registry, cache, base_path, project_id, doc_cache=None: fake_composer,
     )
     return provider
 
@@ -218,7 +218,7 @@ async def test_post_409_when_stream_already_running(app_client, monkeypatch) -> 
     )
     monkeypatch.setattr(
         "application.chat.session_service.ChatStreamComposer.for_project",
-        lambda registry, cache, base_path, project_id: fake_composer,
+        lambda registry, cache, base_path, project_id, doc_cache=None: fake_composer,
     )
 
     first = await client.post(

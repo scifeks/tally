@@ -447,7 +447,7 @@ class EnrichmentPipeline:
         source_values: dict[str, Any],
         metadata: dict[str, Any],
     ) -> dict[str, Any]:
-        """Augment source values with CWE descriptions and EPSS scores."""
+        """Augment with CWE descriptions, EPSS scores, and ATT&CK techniques."""
         svc = self._vuln_data
         if svc is None:
             return source_values
@@ -472,6 +472,21 @@ class EnrichmentPipeline:
                 augmented["epss_score"] = (
                     f"EPSS: {epss.score:.4f} (percentile: {epss.percentile:.2f})"
                 )
+
+        technique_ids_raw = metadata.get("technique_ids", "")
+        if technique_ids_raw:
+            ids = [t.strip() for t in str(technique_ids_raw).split(",") if t.strip()]
+            techniques = []
+            for tid in ids:
+                technique = svc.lookup_attack_technique(tid)
+                if technique:
+                    techniques.append(
+                        f"{technique.technique_id}: "
+                        f"{technique.name} "
+                        f"({technique.tactic})"
+                    )
+            if techniques:
+                augmented["attack_techniques"] = "; ".join(techniques)
 
         return augmented
 

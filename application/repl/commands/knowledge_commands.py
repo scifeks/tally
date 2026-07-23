@@ -8,7 +8,10 @@ from rich.panel import Panel
 from rich.table import Table
 
 from application.chat.stream_composer import RagUnavailable
-from application.rag.knowledge_base_cache import get_or_build_knowledge_base
+from application.rag.knowledge_base_cache import (
+    get_or_build_document_store,
+    get_or_build_knowledge_base,
+)
 from factories.persistence import (
     ProjectNotFound,
     create_findings_service,
@@ -214,7 +217,14 @@ class KnowledgeCommands:
         """
         from application.rag.query import QueryEngine
 
-        return QueryEngine(self._get_knowledge_base())
+        assert self.repl.active_project is not None
+        kb = self._get_knowledge_base()
+        doc_store = get_or_build_document_store(
+            self.repl.document_store_cache,
+            self.repl.active_project,
+            self.repl.base_path,
+        )
+        return QueryEngine(kb, document_store=doc_store)
 
     def _cmd_show_fields(self, args: list[str]) -> None:
         """Handle search --show-fields --tool=<name>."""
