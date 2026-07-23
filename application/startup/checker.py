@@ -51,6 +51,7 @@ _PACKAGE_IMPORT_MAP = {
     "chromadb": "chromadb",
     "ollama": "ollama",
     "openai": "openai",
+    "voyageai": "voyageai",
     "pytest": "pytest",
     "pytest-timeout": "pytest_timeout",
 }

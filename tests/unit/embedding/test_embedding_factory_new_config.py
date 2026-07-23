@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -15,6 +16,9 @@ from infrastructure.embedding.llama_cpp_embedding_adapter import (
 )
 from infrastructure.embedding.ollama_embedding_adapter import (
     OllamaEmbeddingAdapter,
+)
+from infrastructure.embedding.voyage_embedding_adapter import (
+    VoyageEmbeddingAdapter,
 )
 
 
@@ -29,6 +33,10 @@ def _write_config(base_path: Path, overrides: dict | None = None) -> None:
         "llama_cpp": {
             "base_url": "http://localhost:8000",
             "model": "llama2",
+        },
+        "voyage": {
+            "api_key": "pa-test",
+            "model": "voyage-3",
         },
         "embedding_inference": {
             "provider": "ollama",
@@ -53,6 +61,15 @@ class TestEmbeddingFactoryNewConfig:
         )
         provider = get_embedding_provider(tmp_path)
         assert isinstance(provider, LlamaCppEmbeddingAdapter)
+
+    def test_returns_voyage(self, tmp_path: Path) -> None:
+        with patch("infrastructure.embedding.voyage_embedding_adapter.VoyageClient"):
+            _write_config(
+                tmp_path,
+                {"embedding_inference": {"provider": "voyage"}},
+            )
+            provider = get_embedding_provider(tmp_path)
+            assert isinstance(provider, VoyageEmbeddingAdapter)
 
     def test_model_override(self, tmp_path: Path) -> None:
         _write_config(

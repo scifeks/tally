@@ -17,6 +17,17 @@
     "max_tokens": 1024,
     "timeout_seconds": 60
   },
+  "openai": {
+    "api_key": "",
+    "model": "gpt-4o",
+    "max_tokens": 4096,
+    "timeout_seconds": 60
+  },
+  "voyage": {
+    "api_key": "",
+    "model": "voyage-3",
+    "timeout_seconds": 60
+  },
   "triage_inference": {
     "provider": "ollama",
     "timeout_seconds": 600,

@@ -12,6 +12,7 @@ from infrastructure.llm.claude_adapter import ClaudeAdapter
 from infrastructure.llm.factory import get_llm_provider
 from infrastructure.llm.llama_cpp_adapter import LlamaCppAdapter
 from infrastructure.llm.ollama_adapter import OllamaAdapter
+from infrastructure.llm.openai_adapter import OpenAIAdapter
 
 
 def _write_config(base_path: Path, overrides: dict | None = None) -> None:
@@ -33,6 +34,12 @@ def _write_config(base_path: Path, overrides: dict | None = None) -> None:
             "api_key": "sk-test",
             "model": "claude-opus-4-5",
             "max_tokens": 2048,
+            "timeout_seconds": 60,
+        },
+        "openai": {
+            "api_key": "sk-test",
+            "model": "gpt-4o",
+            "max_tokens": 4096,
             "timeout_seconds": 60,
         },
         "chat_inference": {"provider": "ollama"},
@@ -134,6 +141,30 @@ class TestLLMFactoryNewConfig:
             provider = get_llm_provider("chat", tmp_path)
         assert isinstance(provider, ClaudeAdapter)
         assert provider._max_tokens == 4096
+
+    def test_chat_returns_openai(self, tmp_path: Path) -> None:
+        _write_config(
+            tmp_path,
+            {"chat_inference": {"provider": "openai"}},
+        )
+        with patch("infrastructure.llm.openai_adapter.openai.OpenAI"):
+            provider = get_llm_provider("chat", tmp_path)
+        assert isinstance(provider, OpenAIAdapter)
+
+    def test_max_tokens_override_openai(self, tmp_path: Path) -> None:
+        _write_config(
+            tmp_path,
+            {
+                "chat_inference": {
+                    "provider": "openai",
+                    "max_tokens": 8192,
+                }
+            },
+        )
+        with patch("infrastructure.llm.openai_adapter.openai.OpenAI"):
+            provider = get_llm_provider("chat", tmp_path)
+        assert isinstance(provider, OpenAIAdapter)
+        assert provider._max_tokens == 8192
 
     def test_missing_feature_config_raises(self, tmp_path: Path) -> None:
         _write_config(tmp_path, {"chat_inference": None})
