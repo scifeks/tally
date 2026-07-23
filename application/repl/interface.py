@@ -34,6 +34,7 @@ from application.repl.commands import (
     ToolCommands,
     TriageCommands,
     UiCommands,
+    VulnDataCommands,
 )
 from application.repl.help_renderer import HELP_BOX, HelpRenderer
 from application.runtime import (
@@ -74,6 +75,7 @@ _COMPLETIONS = [
     "triage",
     "sync",
     "ui",
+    "vuln-data",
 ]
 # First tokens only for WordCompleter
 _TOP_TOKENS = sorted({c.split()[0] for c in _COMPLETIONS})
@@ -277,6 +279,7 @@ class REPL:
         self.triage_commands = TriageCommands(self)
         self.sync_commands = SyncCommand(self)
         self.ui_commands = UiCommands(self, web_ui_runner=web_ui_runner)
+        self.vuln_data_commands = VulnDataCommands(self)
 
     def run(self) -> None:
         """Start the REPL loop."""
@@ -385,6 +388,7 @@ class REPL:
             "triage": self.triage_commands.cmd_triage,
             "sync": self.sync_commands.cmd_sync,
             "ui": self.ui_commands.cmd_ui,
+            "vuln-data": self.vuln_data_commands.cmd_vuln_data,
         }
         handler = handlers.get(cmd)
         if handler is None:

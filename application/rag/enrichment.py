@@ -27,6 +27,7 @@ if TYPE_CHECKING:
     from application.locking.cancellation import CancellationToken
     from application.ports.finding_repository import FindingRepositoryPort
     from application.ports.scan_event_sink import ScanEventSink
+    from application.ports.vulnerability_data import VulnerabilityDataPort
 
 logger = logging.getLogger(__name__)
 
@@ -221,6 +222,7 @@ class EnrichmentPipeline:
         project_id: int | None = None,
         event_sink: ScanEventSink | None = None,
         cancel_token: CancellationToken | None = None,
+        vuln_data_service: VulnerabilityDataPort | None = None,
     ) -> None:
         from application.ports.scan_event_sink import NullScanEventSink
 
@@ -234,6 +236,7 @@ class EnrichmentPipeline:
         self._project_id = project_id
         self._event_sink: ScanEventSink = event_sink or NullScanEventSink()
         self._cancel_token = cancel_token
+        self._vuln_data_service = vuln_data_service
 
     @property
     def had_errors(self) -> bool:
@@ -246,6 +249,22 @@ class EnrichmentPipeline:
         if self._llm_provider is None:
             self._llm_provider = get_llm_provider("enrichment", self._base_path)
         return self._llm_provider
+
+    @property
+    def _vuln_data(self) -> VulnerabilityDataPort | None:
+        """Return vulnerability data service, resolving lazily on first access."""
+        if self._vuln_data_service is None:
+            try:
+                from infrastructure.vulnerability_data.factory import (
+                    get_vulnerability_data_service,
+                )
+
+                svc = get_vulnerability_data_service(self._base_path)
+                if svc.is_loaded():
+                    self._vuln_data_service = svc
+            except Exception:
+                pass
+        return self._vuln_data_service
 
     def _resolve_max_workers(self) -> int:
         """Read enrichment_max_concurrency from global config; fall back to default."""
@@ -423,6 +442,39 @@ class EnrichmentPipeline:
         active = [s for s in declared_specs if not metadata.get(s.field_name)]
         return (None, active)
 
+    def _augment_with_vuln_data(
+        self,
+        source_values: dict[str, Any],
+        metadata: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Augment source values with CWE descriptions and EPSS scores."""
+        svc = self._vuln_data
+        if svc is None:
+            return source_values
+
+        augmented = dict(source_values)
+
+        cwe_raw = metadata.get("cwe_ids", "")
+        if cwe_raw:
+            ids = [c.strip() for c in str(cwe_raw).split(",") if c.strip()]
+            descriptions = []
+            for cid in ids:
+                entry = svc.lookup_cwe(cid)
+                if entry:
+                    descriptions.append(f"{entry.cwe_id}: {entry.name}")
+            if descriptions:
+                augmented["cwe_description"] = "; ".join(descriptions)
+
+        vuln_id = metadata.get("vulnerability_id", "")
+        if isinstance(vuln_id, str) and vuln_id.startswith("CVE-"):
+            epss = svc.lookup_epss(vuln_id)
+            if epss:
+                augmented["epss_score"] = (
+                    f"EPSS: {epss.score:.4f} (percentile: {epss.percentile:.2f})"
+                )
+
+        return augmented
+
     def _call_per_field(
         self,
         metadata: dict[str, Any],
@@ -438,6 +490,7 @@ class EnrichmentPipeline:
             source_values = {
                 k: metadata[k] for k in spec.source_fields if metadata.get(k)
             }
+            source_values = self._augment_with_vuln_data(source_values, metadata)
             try:
                 if spec.strategy is PromptStrategy.DEDICATED:
                     val = self._call_dedicated_field(spec, source_values)

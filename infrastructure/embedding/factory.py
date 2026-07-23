@@ -14,7 +14,6 @@ from .llama_cpp_embedding_adapter import (
     LlamaCppEmbeddingAdapter,
 )
 from .ollama_embedding_adapter import OllamaEmbeddingAdapter
-from .voyage_embedding_adapter import VoyageEmbeddingAdapter
 
 logger = logging.getLogger(__name__)
 
@@ -63,6 +62,8 @@ def get_embedding_provider(
             debug=debug,
         )
     if provider_name == "voyage":
+        from .voyage_embedding_adapter import VoyageEmbeddingAdapter
+
         return VoyageEmbeddingAdapter(
             api_key=merged.get("api_key", ""),
             model=merged["model"],

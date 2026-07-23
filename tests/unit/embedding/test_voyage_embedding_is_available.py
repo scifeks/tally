@@ -2,8 +2,14 @@
 
 from __future__ import annotations
 
+import importlib.util
 import os
 from unittest.mock import patch
+
+import pytest
+
+if not importlib.util.find_spec("voyageai"):
+    pytest.skip("voyageai not installed", allow_module_level=True)
 
 from infrastructure.embedding.voyage_embedding_adapter import (
     VoyageEmbeddingAdapter,

@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import importlib.util
 from unittest.mock import MagicMock, patch
 
 import pytest
+
+if not importlib.util.find_spec("voyageai"):
+    pytest.skip("voyageai not installed", allow_module_level=True)
 
 from application.ports.embedding_provider import (
     EmbeddingAdapterError,
