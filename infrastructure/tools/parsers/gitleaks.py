@@ -2,7 +2,7 @@
 
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from domain.tools.base import ToolResult
 from domain.tools.constants import CONFIDENCE_CONFIRMED, SEVERITY_HIGH
@@ -165,7 +165,7 @@ class GitleaksHandler:
     ]
 
     def normalize(self, result: ToolResult, profile: str) -> list[dict]:
-        parsed: dict[str, Any] = result.parsed_data or {}  # type: ignore[union-attr]
+        parsed: dict[str, Any] = cast(dict[str, Any], result.parsed_data or {})
         secrets: list[dict[str, Any]] = parsed.get("secrets", [])
 
         timestamp = result.timestamp

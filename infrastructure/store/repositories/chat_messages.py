@@ -47,7 +47,8 @@ class ChatMessageRepository(ChatMessageRepositoryPort):
                 " VALUES (?, ?, ?, ?, ?)",
                 (session_id, role, content, model, created_at),
             )
-            return cur.lastrowid  # type: ignore[return-value]
+            assert cur.lastrowid is not None
+            return cur.lastrowid
 
     def list_for_session(self, session_id: int) -> list[ChatMessageRow]:
         """Return every message for *session_id* in insertion order."""

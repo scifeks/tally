@@ -2,7 +2,7 @@
 
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from domain.tools.base import ToolResult
 from domain.tools.constants import OWASP_CODE_TO_NAME
@@ -169,7 +169,7 @@ class SemgrepHandler:
     )
 
     def normalize(self, result: ToolResult, profile: str) -> list[dict]:
-        parsed: dict[str, Any] = result.parsed_data or {}  # type: ignore[union-attr]
+        parsed: dict[str, Any] = cast(dict[str, Any], result.parsed_data or {})
         findings: list[dict[str, Any]] = parsed.get("findings", [])
 
         timestamp = result.timestamp

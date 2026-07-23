@@ -16,7 +16,7 @@ from domain.tools.constants import DOMAINS, FINDING_TYPES, SEVERITY_LEVELS
 _DEFAULT_PAGE_SIZE = 200
 
 
-# SQLite strategy helpers (verbatim from sqlite_store.py)
+# SQLite strategy helpers
 
 # Flag name → SQLite column name
 _FLAG_TO_COLUMN: dict[str, str] = {
@@ -195,7 +195,7 @@ class SearchParserFactory:
         cls = self._REGISTRY.get(backend)
         if cls is None:
             raise ValueError(f"Unknown search backend: {backend!r}")
-        return cls()  # type: ignore[return-value]
+        return cls()
 
 
 _factory = SearchParserFactory()

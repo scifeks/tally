@@ -32,7 +32,8 @@ class ChatSessionRepository(ChatSessionRepositoryPort):
                 " VALUES (?, ?, ?, ?)",
                 (project_id, title, now, now),
             )
-            return cur.lastrowid  # type: ignore[return-value]
+            assert cur.lastrowid is not None
+            return cur.lastrowid
 
     def touch(self, session_id: int, when: str | None = None) -> None:
         """Bump ``updated_at`` to *when* (defaults to now)."""

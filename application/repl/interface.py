@@ -218,7 +218,7 @@ def _build_search_help_table(tool_name: str | None = None) -> Table:
 
     # Examples
     table.add_row("[bold yellow]Examples[/bold yellow]", "")
-    examples = _TOOL_EXAMPLES.get(tool_name) if tool_name else None  # type: ignore[arg-type]
+    examples = _TOOL_EXAMPLES.get(tool_name) if tool_name is not None else None
     if examples is None:
         examples = _GENERIC_EXAMPLES
     for syntax, desc in examples:

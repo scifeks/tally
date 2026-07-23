@@ -949,7 +949,8 @@ class FindingRepository(FindingRepositoryPort):
         """
         with self._factory.connect() as conn:
             cursor = conn.execute(sql, row)
-            return cursor.lastrowid  # type: ignore[return-value]
+            assert cursor.lastrowid is not None
+            return cursor.lastrowid
 
     def delete_finding_by_id(self, finding_id: int) -> None:
         """Delete a single finding by primary key."""

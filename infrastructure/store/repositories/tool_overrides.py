@@ -108,7 +108,8 @@ class ToolOverridesRepository(ToolOverridesRepositoryPort):
                         now,
                     ),
                 )
-                return cur.lastrowid  # type: ignore[return-value]
+                assert cur.lastrowid is not None
+                return cur.lastrowid
         except sqlite3.IntegrityError as err:
             if _is_tool_name_conflict(err):
                 raise ToolOverrideNameConflict(tool_name) from err

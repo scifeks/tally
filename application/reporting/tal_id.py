@@ -3,20 +3,14 @@
 from __future__ import annotations
 
 from dataclasses import replace
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from domain.findings.entry import Finding
 
 
 def resolve_prefix(abbreviation: str, global_prefix: str) -> str:
-    """Resolve the effective finding ID prefix.
-
-    Priority:
-    1. Project-level abbreviation (if set and non-empty).
-    2. Global ``report_finding_prefix`` (if set and non-empty).
-    3. Empty string: callers fall back to numeric-only IDs (e.g. ``001``).
-    """
+    """Return the effective finding ID prefix."""
     return (abbreviation or "").strip() or (global_prefix or "").strip()
 
 
@@ -25,15 +19,10 @@ def _format_id(index: int, width: int, prefix: str) -> str:
 
 
 def assign_tal_ids(
-    findings: list[dict],  # type: ignore[type-arg]
+    findings: list[dict[str, Any]],
     prefix: str = "",
-) -> list[dict]:  # type: ignore[type-arg]
-    """Return new dicts with ``tal_id`` populated.
-
-    The caller filters to ``should_report=1`` and sorts before calling.
-    IDs zero-pad to a minimum of 3 digits, expanding when the count exceeds
-    999 so all IDs share the same width.
-    """
+) -> list[dict[str, Any]]:
+    """Assign zero-padded TAL IDs to each finding."""
     if not findings:
         return []
     width = max(3, len(str(len(findings))))

@@ -62,7 +62,8 @@ class ReportRepository(ReportRepositoryPort):
                     created_at,
                 ),
             )
-            return cur.lastrowid  # type: ignore[return-value]
+            assert cur.lastrowid is not None
+            return cur.lastrowid
 
     def set_status(self, report_id: int, status: str) -> None:
         if status not in REPORT_STATUSES:
