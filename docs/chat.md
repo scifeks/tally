@@ -13,8 +13,8 @@ Chat is available in two places:
 
 ## Provider support
 
-Chat works with any configured provider: `ollama`, `llama_cpp`, or
-`claude`. The SPA's Chat tab is shown when `chat_inference` is
+Chat works with any configured provider: `ollama`, `llama_cpp`,
+`claude`, or `openai`. The SPA's Chat tab is shown when `chat_inference` is
 configured in `config/global.json`. The capabilities probe (`GET
 /api/v1/capabilities`) returns `chat_enabled: true` when
 `chat_inference` is present.
@@ -31,7 +31,7 @@ To enable chat, edit `config/global.json`:
    }
    ```
 
-   Other providers are `"llama_cpp"` and `"claude"`.
+   Other providers are `"llama_cpp"`, `"claude"`, and `"openai"`.
 
 2. Configure the provider block with the model, host, and port:
 

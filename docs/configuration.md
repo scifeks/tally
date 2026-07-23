@@ -34,6 +34,8 @@ Triage uses the same feature-inference pattern through `triage_inference`. The `
 | `ollama` | object | Ollama provider config. Connection profile for local or remote Ollama instances. See [Provider Config Fields](#provider-config-fields). |
 | `llama_cpp` | object | Llama.cpp provider config. Connection profile for Llama.cpp servers. See [Provider Config Fields](#provider-config-fields). |
 | `claude` | object | Claude provider config. Anthropic API settings. Required when any feature references `"claude"`. See [Claude Provider Fields](#claude-provider-fields). |
+| `openai` | object | OpenAI provider config. Required when any feature references `"openai"`. See [OpenAI Provider Fields](#openai-provider-fields). |
+| `voyage` | object | Voyage AI embedding provider config. Required when `embedding_inference` references `"voyage"`. See [Voyage Provider Fields](#voyage-provider-fields). |
 | `chat_inference` | object | Chat over findings in the REPL and web UI. See [Feature Config Fields](#feature-config-fields). |
 | `enrichment_inference` | object | Feature config for finding enrichment during ingest. See [Feature Config Fields](#feature-config-fields). |
 | `report_inference` | object | Feature config for the `report` command. See [Feature Config Fields](#feature-config-fields). |
@@ -76,6 +78,27 @@ The `ollama` and `llama_cpp` provider configs share the same schema:
 | `max_tokens` | int | `1024` | Maximum tokens in the model response. |
 | `timeout_seconds` | int | `60` | Request timeout in seconds for Anthropic API calls. |
 
+### OpenAI Provider Fields
+
+#### Fields
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `api_key` | string | `""` | OpenAI API key. Leave empty to use the `OPENAI_API_KEY` environment variable instead (recommended). |
+| `model` | string | (required) | OpenAI model ID (e.g. `gpt-4o`, `gpt-4o-mini`). |
+| `max_tokens` | int | `4096` | Maximum tokens in the model response. |
+| `timeout_seconds` | int | `60` | Request timeout in seconds for OpenAI API calls. |
+
+### Voyage Provider Fields
+
+#### Fields
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `api_key` | string | `""` | Voyage AI API key. Leave empty to use the `VOYAGE_API_KEY` environment variable instead (recommended). |
+| `model` | string | (required) | Voyage embedding model ID (e.g. `voyage-3`, `voyage-3-lite`, `voyage-code-3`). |
+| `timeout_seconds` | int | `60` | Request timeout in seconds for Voyage API calls. |
+
 ### Feature Config Fields
 
 Each of the five inference features (`chat_inference`, `enrichment_inference`,
@@ -86,7 +109,7 @@ feature config schema:
 
 | Field | Type | Default | Description |
 |---|---|---|---|
-| `provider` | string | (required) | Name of a provider config block: `"ollama"`, `"llama_cpp"`, or `"claude"`. Required. |
+| `provider` | string | (required) | Name of a provider config block: `"ollama"`, `"llama_cpp"`, `"claude"`, `"openai"`, or `"voyage"`. Required. |
 | `model` | string or null | `null` | Overrides the provider's model for this feature only. If `null`, uses the provider's model. |
 | `timeout_seconds` | int or null | `null` | Overrides the provider's timeout in seconds. Must be positive if set. If `null`, uses the provider's timeout. |
 | `num_ctx` | int or null | `null` | Overrides the provider's context window (local providers only). Must be positive if set. If `null`, uses the provider's value. |

@@ -45,7 +45,7 @@ class TestGetLlmProviderRaisesOnUnknown:
     def test_unknown_enrichment_provider(self, tmp_path: Path) -> None:
         _write_global_config(
             tmp_path,
-            {"enrichment_inference": {"provider": "openai"}},
+            {"enrichment_inference": {"provider": "deepseek"}},
         )
-        with pytest.raises(ValueError, match="openai"):
+        with pytest.raises(ValueError, match="deepseek"):
             get_llm_provider("enrichment", tmp_path)

@@ -8,7 +8,9 @@ from .claude_config import ClaudeConfig
 from .defectdojo_config import DefectDojoGlobalConfig
 from .feature_inference_config import FeatureInferenceConfig
 from .local_inference_config import LocalInferenceConfig
+from .openai_config import OpenAIConfig
 from .opencode_config import OpenCodeConfig
+from .voyage_config import VoyageConfig
 
 TRIAGE_SESSION_TIMEOUT_SECONDS_DEFAULT: int = 300
 
@@ -43,6 +45,8 @@ class GlobalConfig(BaseModel):
     ollama: LocalInferenceConfig | None = None
     llama_cpp: LocalInferenceConfig | None = None
     claude: ClaudeConfig | None = None
+    openai: OpenAIConfig | None = None
+    voyage: VoyageConfig | None = None
     defectdojo: DefectDojoGlobalConfig | None = None
     opencode: OpenCodeConfig | None = None
     chat_inference: FeatureInferenceConfig | None = None

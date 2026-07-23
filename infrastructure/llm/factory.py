@@ -11,6 +11,7 @@ from core.config.manager import ConfigManager
 from .claude_adapter import ClaudeAdapter
 from .llama_cpp_adapter import LlamaCppAdapter
 from .ollama_adapter import OllamaAdapter
+from .openai_adapter import OpenAIAdapter
 
 Role = Literal["chat", "enrichment", "report"]
 
@@ -66,8 +67,15 @@ def get_llm_provider(role: Role, base_path: str | Path) -> LLMProvider:
             max_tokens=merged.get("max_tokens", 1024),
             timeout_seconds=merged.get("timeout_seconds", 60),
         )
+    if provider_name == "openai":
+        return OpenAIAdapter(
+            api_key=merged["api_key"],
+            model=merged["model"],
+            max_tokens=merged.get("max_tokens", 4096),
+            timeout_seconds=merged.get("timeout_seconds", 60),
+        )
     raise ValueError(
         f"Unknown provider {provider_name!r} for "
         f"role {role!r}. "
-        "Registered providers: ollama, llama_cpp, claude"
+        "Registered providers: ollama, llama_cpp, claude, openai"
     )

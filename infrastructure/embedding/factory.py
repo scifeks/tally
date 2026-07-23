@@ -14,6 +14,7 @@ from .llama_cpp_embedding_adapter import (
     LlamaCppEmbeddingAdapter,
 )
 from .ollama_embedding_adapter import OllamaEmbeddingAdapter
+from .voyage_embedding_adapter import VoyageEmbeddingAdapter
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +62,14 @@ def get_embedding_provider(
             timeout_seconds=merged.get("timeout_seconds", 60),
             debug=debug,
         )
+    if provider_name == "voyage":
+        return VoyageEmbeddingAdapter(
+            api_key=merged.get("api_key", ""),
+            model=merged["model"],
+            timeout_seconds=merged.get("timeout_seconds", 60),
+            debug=debug,
+        )
     raise ValueError(
         f"Unknown embedding provider {provider_name!r}. "
-        "Registered providers: ollama, llama_cpp"
+        "Registered providers: ollama, llama_cpp, voyage"
     )
