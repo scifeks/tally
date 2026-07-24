@@ -467,7 +467,7 @@ Either run `tool add` in the REPL or write the entry manually:
 ### Wrapper is registered
 
 ```bash
-.venv/bin/python -c "from application.tools.registry import tool_registry, discover_tools; discover_tools('.'); t = tool_registry.get_tool('<tool-name>'); print(t, t.check_available(), t.scan_segment)"
+.venv/bin/python -c "from application.tools.registry import ToolRegistry, discover_tools; r = ToolRegistry(); discover_tools('.', r); t = r.get_tool('<tool-name>'); print(t, t.check_available(), t.scan_segment)"
 ```
 
 ### Parse round-trip

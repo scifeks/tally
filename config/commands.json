@@ -12,6 +12,11 @@
     "location": "local",
     "path": "/usr/bin/dalfox"
   },
+  "ffuf": {
+    "type": "api",
+    "location": "local",
+    "path": "/usr/bin/ffuf"
+  },
   "garak": {
     "type": "repo",
     "location": "local",
@@ -54,6 +59,11 @@
     "type": "repo",
     "location": "local",
     "path": "/usr/bin/osv-scanner"
+  },
+  "retire": {
+    "type": "repo",
+    "location": "local",
+    "path": "/home/justin/.nvm/versions/node/v24.14.1/bin/retire"
   },
   "semgrep": {
     "type": "repo",

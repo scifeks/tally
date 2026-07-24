@@ -26,10 +26,10 @@ bash install.sh
 
 ## Starting the UI
 
-From inside the Tally REPL:
+From inside the Tally REPL (no active project required):
 
 ```
-[project]> ui serve
+[no-project]> ui serve
 ```
 
 Tally will:
@@ -41,16 +41,10 @@ Tally will:
 5. Wait for Vite to become reachable (polls TCP, 10-second timeout).
 6. Open your default browser at the Vite URL with the session token:
    ```
-   http://127.0.0.1:3000/?h=<token>
+   http://127.0.0.1:3000/?token=<token>&fresh=1
    ```
 
-Both servers run until `ui serve --stop` is called or the REPL exits.
-
-To stop without exiting the REPL:
-
-```
-[project]> ui serve --stop
-```
+Both servers run until you press Ctrl+C or the REPL exits.
 
 If the configured port is already in use, the command prints an error and does not start a server.
 
@@ -65,7 +59,6 @@ All web UI settings live in `config/global.json`. Copy `config/global-example.js
 | `web_ui_host` | `"127.0.0.1"` | Bind address for FastAPI and Vite. `0.0.0.0` and `::` are rejected. |
 | `web_ui_port` | `8080` | FastAPI server port. |
 | `web_ui_vite_port` | `3000` | Vite dev server port. |
-| `web_ui_allowed_origins` | derived | CORS allow-list. Defaults to `["http://<web_ui_host>:<web_ui_vite_port>"]`. Override only for non-standard topologies. |
 
 **Example:**
 
@@ -77,7 +70,7 @@ All web UI settings live in `config/global.json`. Copy `config/global-example.js
 }
 ```
 
-`web_ui_allowed_origins` can be omitted. Tally derives the correct value from `web_ui_host` and `web_ui_vite_port`.
+CORS origins are derived automatically from `web_ui_host` and `web_ui_vite_port`. No manual CORS configuration is needed.
 
 ### Host constraint
 
@@ -151,6 +144,30 @@ Edits set `triaged_by = 'analyst_web'` and record a `triaged_at` timestamp. Only
 
 > **Important:** If you run a new scan after editing findings, the ingest pipeline will overwrite `severity`, `confidence`, `description`, `cwe`, and `meta` with values reported by the scanner. Analyst edits to these fields are not preserved.
 
+### Adding manual findings
+
+Click the plus button above the findings table to add a finding that was discovered outside the scanning pipeline. A modal opens with a form to enter finding details.
+
+Title and severity are required. You must provide at least one location field (repository, file path, or URL) to anchor the finding to a scope.
+
+#### Fields
+
+| Field | Required | Description |
+|---|---|---|
+| Title | Yes | Finding title or summary |
+| Severity | Yes | `critical`, `high`, `medium`, `low`, `informational` |
+| Status | No | `active`, `false_positive`, `fixed`, `wont_fix` (defaults to `active`) |
+| Confidence | No | `confirmed`, `probable`, `potential` |
+| Segment | No | `SAST`, `SCA`, `WEB`, `SECRETS` (populated from active project) |
+| Finding Type | No | `secret`, `vulnerability`, `weakness`, `misconfiguration`, `exposure`, `dependency`, `informational` |
+| Repository | No | Scan target repository (at least one location required) |
+| File | No | File path within the repository (at least one location required) |
+| URL | No | Web address (at least one location required) |
+| CWE | No | Comma or newline-separated CWE identifiers (e.g., CWE-79, CWE-20) |
+| Vulnerability ID | No | CVE, GHSA, or other identifier |
+| Description | No | Detailed explanation of the finding |
+| Notes | No | Internal notes not shared in reports |
+
 ---
 
 ## Scans
@@ -173,7 +190,7 @@ Click "Advanced options" to customize the scan:
 - **Domains**: Check SAST, SCA, WEB, or SECRETS to enable only those segment types.
 - **Tools**: Select specific tools to run. Leave unselected to use all enabled tools.
 - **Skip tools**: Disable specific tools within the selected set.
-- **Skip enrichment**: Omit the enrichment phase if you only want raw findings.
+- **Skip enrichment**: Skip the LLM enrichment step during finding ingest. Findings are stored without AI-generated severity, remediation, and description fields.
 - **Argument profiles**: Apply saved tool argument overrides (see Configuration page).
 
 ### Saved scans
@@ -281,14 +298,55 @@ View and edit the project name, description, and other metadata. Changes are sav
 
 ### Repositories
 
-Add or edit source repositories that will be scanned:
+#### Basic mode
 
-1. Click "Add repository" to create a new entry.
-2. Fill in the repository name, type, local path, languages, and base URLs for DAST scanning.
-3. If the repository has authentication requirements for crawling, configure the auth credentials.
-4. Click Save. The repository is added to the project.
+Click "Add repository" to create a repository entry. Provide the repository name, type, and local path. If you need to configure multiple services (different parts of a monorepo or multi-tenant codebase), switch to Advanced mode instead.
+
+1. Fill in the repository name.
+2. Select type: library, api, ui, or a combination.
+3. Set location mode: local (path on disk) or docker (container name and mount point).
+4. Specify languages used in the repository.
+5. Set base URLs for live crawling (DAST tools).
+6. Click Save.
 
 To edit an existing repository, click the pencil icon. To remove, click the trash icon.
+
+#### Advanced mode
+
+In Advanced mode, you can define multiple named services within a single repository. Each service has its own configuration for type, location mode, languages, base URLs, and crawling settings. This is useful for monorepos, multi-tenant applications, or any codebase with distinct logical services that need different scan settings.
+
+Click "Switch to Advanced" from Basic mode. The interface changes to show a service list on the left. Click "Add Service" to create a new named service within the repository.
+
+Each service has three groups of configuration fields.
+
+#### Location and type
+
+| Field | Required | Description |
+|---|---|---|
+| Service Name | Yes | Identifier for this service within the repository (e.g., `backend`, `frontend`, `auth-service`) |
+| Relative Path | No | Sub-path within the repository root (e.g., `packages/api`, `services/web`) |
+| Type | Yes | `library`, `api`, `ui`, or a combination (library cannot be combined with api or ui) |
+| Location Mode | No | `local` (path on disk) or `docker` (container-mounted code) |
+| Container Name | Required if docker mode | Docker container name where the code is mounted |
+| Mount Point | Required if docker mode | Path inside the container where the code is mounted (e.g., `/app`) |
+
+#### Code context
+
+| Field | Required | Description |
+|---|---|---|
+| Languages | Yes | Languages used in this service (e.g., python, javascript, go). Used by scanners to select rules. |
+| Test Directories | No | Directories to exclude from scanning (e.g., `tests`, `spec`, `__tests__`) |
+| Ignore Directories | No | Directories to skip entirely (e.g., `vendor`, `node_modules`, `.git`) |
+
+#### Scanning targets
+
+| Field | Required | Description |
+|---|---|---|
+| Base URLs | No | Base URLs for DAST tools to scan this service (e.g., `https://api.example.com`). First URL is used as the canonical scope. |
+| Dependencies File | No | Path to dependency manifest for SCA scanning (e.g., `requirements.txt`, `package.json`, `go.sum`) |
+| Enable live crawling | No | Enable the Katana web crawler for this service |
+| Crawl Depth | No | How many levels deep to crawl (1-20 for standard, max 5 if headless mode is enabled) |
+| Katana headless mode | No | Use Chrome to render JavaScript routes (required for single-page applications, max crawl depth 5) |
 
 ### Tool overrides
 

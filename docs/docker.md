@@ -1,8 +1,30 @@
-# Docker Containers for npm-audit and composer-audit
+# Docker Tool Execution
 
-Two optional Docker containers provide `npm audit` and `composer audit` to Tally via `docker exec`. They are not required, but if you use them, configure them during tool setup in the Tally REPL.
+Tally supports Docker execution for any security scanning tool configured with `"location": "docker"` in `config/commands.json`. Tools running in Docker execute via `docker exec` inside a user-provided container with access to your repository code.
 
-## Structure
+## Supported Tools
+
+The following tools have Docker wrapper support. You can run any of these inside a container by setting `"location": "docker"` in `config/commands.json` and providing the container name and mount path.
+
+- composer-audit
+- gitleaks
+- graphql-cop
+- npm-audit
+- nuclei
+- osv-scanner
+- php-psalm
+- pip-audit
+- semgrep
+- xsstrike
+- zap
+
+---
+
+## Pre-Built Convenience Containers
+
+Two optional Docker containers are provided for `npm audit` and `composer audit`. They are not required, but if you use them, configure them during tool setup in the Tally REPL.
+
+### Structure
 
 ```
 .
@@ -35,6 +57,16 @@ docker compose up -d
 ```
 
 The containers will stay running in the background and wait for commands.
+
+---
+
+## Configuration Fields
+
+When you configure a tool to run in Docker, you must specify two fields for each repository:
+
+**container_name.** The name of a running Docker container as shown by `docker ps`. This is the container where the tool will execute. Use the `tool add` REPL command to set the tool path once, then the `repo add` command to set `container_name` and `docker_path` for each repository.
+
+**docker_path.** The mount path where your repository is accessible inside the container. For example, if you run `docker run -v /host/repo:/internal/app my-container`, set `docker_path` to `/internal/app`.
 
 ---
 
@@ -80,3 +112,9 @@ docker compose build --build-arg NODE_VERSION=22 node-auditor
 ```bash
 docker compose down
 ```
+
+---
+
+## AI Triage Containers
+
+Tally also uses Docker containers for AI-driven triage operations. See [docs/triage.md](triage.md) for setup and configuration of triage-specific containers.

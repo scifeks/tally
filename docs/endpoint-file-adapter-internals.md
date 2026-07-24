@@ -29,6 +29,7 @@ infrastructure/endpoints/converters/
   oas2.py          # OAS2/Swagger → OAS3 via swagger2openapi
   postman.py       # Postman Collection → OAS3 via postman-to-openapi
   har.py           # HAR → OAS3 (pure Python)
+  katana.py        # Katana JSONL → OAS3 (pure Python)
 ```
 
 ### Public API
@@ -158,6 +159,7 @@ _ADAPTER_MAP = {
     "oas2": OAS2Adapter,
     "postman": PostmanAdapter,
     "har": HARAdapter,
+    "katana": KatanaAdapter,
     "your_format_name": YourFormatAdapter,   # add this
 }
 ```

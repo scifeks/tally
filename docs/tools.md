@@ -1,25 +1,30 @@
 # Tools
 
+Tally is designed for authorized security assessments. Run these tools only against systems you own or have explicit permission to test.
+
 ## Supported Tools
 
 | Tool | Category | What it does |
 |---|---|---|
-| ffuf | DAST | Fast web fuzzer for discovering hidden files, directories, and parameters via wordlist-based brute-force |
-| Nuclei | DAST | Template-based vulnerability scanner; known CVE fingerprinting, misconfiguration detection, and DAST fuzzing |
-| OWASP ZAP | DAST | Dynamic web/API security scanning |
-| XSStrike | DAST | XSS-focused dynamic scanner; context-aware payload generation and WAF evasion to complement ZAP |
-| graphql-cop | DAST | GraphQL security auditing; tests for introspection, batching, alias abuse, field suggestions, and other misconfigurations |
-| OWASP Noir | Pre-DAST | Static endpoint discovery; produces an OAS3 spec for ZAP |
-| Psalm | SAST | PHP taint analysis; traces data flow from user input to dangerous sinks (SQL injection, XSS, command injection) |
-| Semgrep | SAST | Static analysis across many languages |
-| tree-sitter | SAST | AST-based code analysis (Python library) |
-| Gitleaks | Secrets | Git history and working-tree secret scanning |
-| osv-scanner | SCA | Dependency vulnerability scanning via OSV database |
-| pip-audit | SCA | Python dependency audit (PyPI advisory database) |
-| npm-audit | SCA | Node.js dependency audit |
-| composer-audit | SCA | PHP Composer dependency audit |
-| Retire.js | SCA | Vulnerable JavaScript library detector; scans JS files directly for known CVEs without requiring a lockfile |
-| Garak | LLM Security | LLM vulnerability scanning for prompt injection, jailbreaks, data leakage, and toxicity |
+| [ffuf](https://github.com/ffuf/ffuf) | DAST | Fast web fuzzer for discovering hidden files, directories, and parameters via wordlist-based brute-force |
+| [Nuclei](https://github.com/projectdiscovery/nuclei) | DAST | Template-based vulnerability scanner; known CVE fingerprinting, misconfiguration detection, and DAST fuzzing |
+| [OWASP ZAP](https://github.com/zaproxy/zaproxy) | DAST | Dynamic web/API security scanning |
+| [XSStrike](https://github.com/s0md3v/XSStrike) | DAST | XSS-focused dynamic scanner; context-aware payload generation and WAF evasion to complement ZAP |
+| [sqlmap](https://github.com/sqlmapproject/sqlmap) | DAST | SQL injection scanner; tests multiple injection techniques across 40+ DBMS backends |
+| [graphql-cop](https://github.com/dolevf/graphql-cop) | DAST | GraphQL security auditing; tests for introspection, batching, alias abuse, field suggestions, and other misconfigurations |
+| [DalFox](https://github.com/hahwul/dalfox) | DAST | XSS scanner using headless Chrome; detects cross-site scripting vulnerabilities in JavaScript-heavy applications and SPAs |
+| [OWASP Noir](https://github.com/noir-cr/noir) | Pre-DAST | Static endpoint discovery; produces an OAS3 spec for ZAP |
+| [Katana](https://github.com/projectdiscovery/katana) | Discovery | Runtime web crawler for endpoint discovery; follows links and extracts XHR endpoints; produces OAS3 output for DAST tools |
+| [Psalm](https://github.com/vimeo/psalm) | SAST | PHP taint analysis; traces data flow from user input to dangerous sinks (SQL injection, XSS, command injection) |
+| [Semgrep](https://github.com/semgrep/semgrep) | SAST | Static analysis across many languages |
+| [tree-sitter](https://github.com/tree-sitter/tree-sitter) | SAST | AST-based code analysis (Python library) |
+| [Gitleaks](https://github.com/gitleaks/gitleaks) | Secrets | Git history and working-tree secret scanning |
+| [osv-scanner](https://github.com/google/osv-scanner) | SCA | Dependency vulnerability scanning via OSV database |
+| [pip-audit](https://github.com/pypa/pip-audit) | SCA | Python dependency audit (PyPI advisory database) |
+| npm-audit | SCA | Node.js dependency audit (built into [npm](https://github.com/npm/cli)) |
+| composer-audit | SCA | PHP Composer dependency audit (built into [Composer](https://github.com/composer/composer)) |
+| [Retire.js](https://github.com/RetireJS/retire.js) | SCA | Vulnerable JavaScript library detector; scans JS files directly for known CVEs without requiring a lockfile |
+| [Garak](https://github.com/NVIDIA/garak) | LLM Security | LLM vulnerability scanning for prompt injection, jailbreaks, data leakage, and toxicity |
 
 All tools are optional. Tally skips any tool that is not detected.
 

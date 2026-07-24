@@ -2,6 +2,8 @@
 
 This guide covers the REPL (terminal) interface. Most of these workflows are also available in the web UI. See [docs/ui.md](ui.md) for the browser-based walkthrough.
 
+Tally is designed for authorized security assessments. Run scans only against systems you own or have explicit permission to test.
+
 ## Starting Tally
 
 ```bash
@@ -345,12 +347,23 @@ model, or when enrichment fields are not needed immediately.
 
 `--skip-enrichment` is compatible with all other scan flags.
 
+**Scan since a specific commit:**
+
+Scan only files changed since a given commit. Useful when re-scanning after a recent change or in CI pipelines that run only against new code.
+
+```
+[acme-security-audit]> scan --since-commit=abc1234
+[acme-security-audit]> scan --since-commit=HEAD~2 --tool=semgrep
+[acme-security-audit]> scan --repo=backend --since-commit=v1.0.0
+```
+
 **Combine flags:**
 
 ```
 [acme-security-audit]> scan --repo=api-server --tool=semgrep
 [acme-security-audit]> scan --tool=semgrep --domain=code
 [acme-security-audit]> scan --repo=api-server --skip-tools=zap
+[acme-security-audit]> scan --since-commit=abc1234 --skip-enrichment
 ```
 
 ### Noir and endpoint files
@@ -525,6 +538,74 @@ View a summary of what has been ingested:
 
 ---
 
+## Document Ingest
+
+Add markdown and text files to the RAG knowledge base to augment findings search and chat with custom reference documents, internal standards, or policy guidelines.
+
+### Add a document
+
+```
+[acme-security-audit]> docs add /path/to/document.md
+Added: document.md (12 chunks)
+```
+
+Supported file types: `.md` (Markdown) and `.txt` (plain text). Files are automatically chunked and embedded into ChromaDB.
+
+### List ingested documents
+
+```
+[acme-security-audit]> docs list
+  document.md (12 chunks)
+  internal-standards.txt (8 chunks)
+```
+
+### Remove a document
+
+```
+[acme-security-audit]> docs remove document.md
+Removed: document.md (12 chunks)
+```
+
+### View document statistics
+
+```
+[acme-security-audit]> docs stats
+Documents: 42 chunks stored
+```
+
+---
+
+## Vulnerability Data
+
+Download and manage vulnerability reference data used to enrich findings with CWE and EPSS (Exploit Prediction Scoring System) scores.
+
+### Check vulnerability data status
+
+```
+[acme-security-audit]> vuln-data status
+Loaded: 148,291 CWE entries, 234,567 EPSS scores
+```
+
+If no data is cached, the command prints:
+
+```
+[acme-security-audit]> vuln-data status
+No vulnerability data cached.
+Run 'vuln-data update' to download CWE and EPSS data.
+```
+
+### Download or update vulnerability data
+
+```
+[acme-security-audit]> vuln-data update
+Downloading vulnerability reference data...
+Updated: 148,291 CWE entries, 234,567 EPSS scores
+```
+
+Data is cached locally and reused across projects. Updates download the latest versions from upstream sources.
+
+---
+
 ## Purging Data
 
 Remove findings from the knowledge base when you want to re-scan cleanly.
@@ -613,20 +694,6 @@ Proceed with triage? [y/N]: y
 Starting triage containers...
 Triage containers ready.
 Triage: 3 sessions run, 2 success, 1 failed, 0 incomplete
-```
-
-To preview batching without invoking the agent:
-
-```
-[acme-security-audit]> triage --batch
-Created 3 batches
-```
-
-To render prompts to the DEBUG log without invoking the agent:
-
-```
-[acme-security-audit]> triage --dry-run
-Rendered 3 batch prompt(s); see DEBUG log
 ```
 
 To rebuild the triage Docker image (no active project required):

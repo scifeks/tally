@@ -32,7 +32,7 @@ Run security scans across one or more repositories.
 
 ```
 tally --project NAME --command scan [--repo REPOS] [--tool TOOLS | --skip-tools TOOLS]
-                                    [--domain DOMAINS] [--skip-enrichment]
+                                    [--domain DOMAINS] [--since-commit COMMIT] [--skip-enrichment]
 ```
 
 | Flag | Description |
@@ -41,6 +41,7 @@ tally --project NAME --command scan [--repo REPOS] [--tool TOOLS | --skip-tools 
 | `--tool TOOLS` | Comma-separated tools to use (overrides defaults) |
 | `--skip-tools TOOLS` | Comma-separated tools to exclude |
 | `--domain DOMAINS` | Comma-separated domains (for DAST tools) |
+| `--since-commit COMMIT` | Scan only files changed since this commit |
 | `--skip-enrichment` | Skip finding enrichment after scanning |
 
 `--tool` and `--skip-tools` are mutually exclusive. Repository, tool, and domain names are validated against the project configuration; unknown names exit with code 2.
@@ -56,6 +57,9 @@ python3 tally-cli.py --project myapp --command scan --repo backend,api --tool se
 
 # Scan everything except bandit
 python3 tally-cli.py --project myapp --command scan --skip-tools bandit
+
+# Scan only files changed since a commit
+python3 tally-cli.py --project myapp --command scan --since-commit abc1234
 ```
 
 ### run
@@ -136,26 +140,21 @@ python3 tally-cli.py --project myapp --command report --type shell --engagement-
 Classify and score findings using an LLM agent.
 
 ```
-tally --project NAME --command triage [--batch] [--dry-run]
+tally --project NAME --command triage
 tally --command triage --rebuild-container
 ```
 
 | Flag | Description |
 |------|-------------|
-| `--batch` | Create triage batches without invoking the agent (no Docker required) |
-| `--dry-run` | Render batch prompts to the debug log without executing |
 | `--rebuild-container` | Stop containers, rebuild the triage image, and exit |
 
-Full triage (no flags) requires Docker. It builds the triage agent image if needed, starts containers, and runs triage sessions against untriaged findings. Batch mode prepares the batches without running the agent. Dry-run mode writes the rendered prompts to the debug log for inspection.
+Full triage requires Docker. It builds the triage agent image if needed, starts containers, and runs triage sessions against untriaged findings.
 
 `--rebuild-container` does not require `--project`.
 
 ```bash
 # Full triage with Docker
 python3 tally-cli.py --project myapp --command triage
-
-# Batch mode (no Docker)
-python3 tally-cli.py --project myapp --command triage --batch
 
 # Rebuild the triage container image
 python3 tally-cli.py --command triage --rebuild-container
