@@ -62,4 +62,5 @@ class SubprocessRunnerPort(Protocol):
         cwd: str | None = None,
         env: dict[str, str] | None = None,
         cancel_token: CancellationToken | None = None,
+        stdin_data: str | None = None,
     ) -> SubprocessResult: ...

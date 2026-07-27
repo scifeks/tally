@@ -55,6 +55,7 @@ class GlobalConfig(BaseModel):
     noir_inference: FeatureInferenceConfig | None = None
     embedding_inference: FeatureInferenceConfig | None = None
     triage_inference: FeatureInferenceConfig | None = None
+    antares_inference: FeatureInferenceConfig | None = None
     projects_dir: str = Field(default="./projects")
     location_attestation_confirmed: bool = Field(default=False)
     enrichment_max_concurrency: int = Field(default=4)
