@@ -6,7 +6,7 @@ Tally's CLI (`tally-cli.py`) is a non-interactive entry point that exposes the s
 
 ## Prerequisites
 
-Before using the CLI, you must complete the location attestation once through the interactive REPL (`python3 tally.py`). The CLI checks this attestation on every invocation and exits with code 1 if it has not been confirmed. See [docs/usage.md](usage.md) for REPL setup instructions.
+Before using the CLI, you must complete the location attestation once through the interactive REPL (`python3 tally.py`). The CLI checks this attestation on every invocation and exits with code 1 if it has not been confirmed. See [docs/repl.md](repl.md) for REPL setup instructions.
 
 You also need at least one project created through the REPL or web UI before the CLI can operate on it.
 
@@ -16,11 +16,11 @@ You also need at least one project created through the REPL or web UI before the
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
-| `--command COMMAND` | string | *(required)* | Command to execute: `scan`, `run`, `report`, `triage`, `purge`, `stats`, `integration-sync`, `ui` |
+| `--command COMMAND` | string | *(required)* | Command to execute: `scan`, `run`, `report`, `triage`, `purge`, `stats`, `integration-sync`, `ui`, `project-create`, `project-list`, `repo-add`, `repo-list`, `repo-edit`, `repo-delete` |
 | `--base-path DIR` | string | `.` | Base directory for projects |
 | `--project NAME` | string | *(required)* | Target project name |
 
-`--project` is required for all commands except `--command ui` and `--command triage --rebuild-container`.
+`--project` is required for all commands except `--command ui`, `--command project-list`, and `--command triage --rebuild-container`.
 
 ---
 
@@ -140,12 +140,14 @@ python3 tally-cli.py --project myapp --command report --type shell --engagement-
 Classify and score findings using an LLM agent.
 
 ```
-tally --project NAME --command triage
+tally --project NAME --command triage [--batch] [--dry-run]
 tally --command triage --rebuild-container
 ```
 
 | Flag | Description |
 |------|-------------|
+| `--batch` | Run in batch mode (non-interactive) |
+| `--dry-run` | Preview what would be triaged without executing |
 | `--rebuild-container` | Stop containers, rebuild the triage image, and exit |
 
 Full triage requires Docker. It builds the triage agent image if needed, starts containers, and runs triage sessions against untriaged findings.
@@ -155,6 +157,12 @@ Full triage requires Docker. It builds the triage agent image if needed, starts 
 ```bash
 # Full triage with Docker
 python3 tally-cli.py --project myapp --command triage
+
+# Batch mode triage
+python3 tally-cli.py --project myapp --command triage --batch
+
+# Preview what would be triaged
+python3 tally-cli.py --project myapp --command triage --dry-run
 
 # Rebuild the triage container image
 python3 tally-cli.py --command triage --rebuild-container
@@ -205,12 +213,13 @@ python3 tally-cli.py --project myapp --command stats
 Export findings to configured integrations. Currently supports DefectDojo.
 
 ```
-tally --project NAME --command integration-sync [--run-id ID]
+tally --project NAME --command integration-sync [--run-id ID] [--engagement-type TYPE]
 ```
 
 | Flag | Description |
 |------|-------------|
 | `--run-id ID` | Export findings from a specific scan run only |
+| `--engagement-type TYPE` | Override the engagement type for this sync |
 
 Requires DefectDojo connection settings in `config/global.json` and targeting settings in the project's `project.json`. See [docs/integrations/defect-dojo.md](integrations/defect-dojo.md) for configuration.
 
@@ -236,6 +245,110 @@ Does not require `--project`. Starts the API server and frontend dev server, the
 
 ```bash
 python3 tally-cli.py --command ui
+```
+
+### project-create
+
+Create a new project without the interactive REPL wizard.
+
+```
+tally --command project-create --project NAME [--company-name NAME]
+      [--department-name NAME] [--abbreviation CODE]
+```
+
+| Flag | Description |
+|------|-------------|
+| `--company-name NAME` | Company name for report headers |
+| `--department-name NAME` | Department name (optional) |
+| `--abbreviation CODE` | Finding ID prefix, max 3 chars (optional) |
+
+```bash
+python3 tally-cli.py --command project-create --project myapp --company-name "Acme Corp" --abbreviation ACM
+```
+
+### project-list
+
+List all projects.
+
+```
+tally --command project-list
+```
+
+Does not require `--project`.
+
+```bash
+python3 tally-cli.py --command project-list
+```
+
+### repo-add
+
+Add a repository to a project.
+
+```
+tally --project NAME --command repo-add --repo-name NAME --repo-path PATH
+      [--languages LANGS] [--repo-type TYPES] [--base-urls URLS]
+      [--container-name NAME] [--docker-path PATH] [--dependencies-file PATH]
+      [--test-dirs DIRS] [--ignore-dirs DIRS] [--no-crawl]
+      [--graphql-paths PATHS] [--psalm-stubs STUBS] [--graphql-cop-headers JSON]
+```
+
+| Flag | Description |
+|------|-------------|
+| `--repo-name NAME` | Repository identifier (required) |
+| `--repo-path PATH` | Filesystem path to the repository (required) |
+| `--languages LANGS` | Comma-separated languages (e.g. `python,javascript`) |
+| `--repo-type TYPES` | Comma-separated service types: `library`, `api`, `ui` |
+| `--base-urls URLS` | Comma-separated base URLs for DAST tools |
+| `--container-name NAME` | Docker container name (enables Docker mode) |
+| `--docker-path PATH` | Mount path inside the container |
+| `--dependencies-file PATH` | Dependencies file for SCA scanning |
+| `--test-dirs DIRS` | Comma-separated test directory names to exclude |
+| `--ignore-dirs DIRS` | Comma-separated directory names to skip |
+| `--no-crawl` | Disable Katana/Noir crawling for this repo |
+| `--graphql-paths PATHS` | Comma-separated GraphQL endpoint paths |
+| `--psalm-stubs STUBS` | Comma-separated Psalm stub packages |
+| `--graphql-cop-headers JSON` | JSON string of HTTP headers for graphql-cop |
+
+```bash
+python3 tally-cli.py --project myapp --command repo-add --repo-name backend --repo-path /opt/code/backend --languages python --repo-type api --base-urls https://api.example.com
+```
+
+### repo-list
+
+List repositories in a project.
+
+```
+tally --project NAME --command repo-list
+```
+
+```bash
+python3 tally-cli.py --project myapp --command repo-list
+```
+
+### repo-edit
+
+Edit an existing repository.
+
+```
+tally --project NAME --command repo-edit --repo-name NAME [flags...]
+```
+
+Accepts the same flags as `repo-add`. Only the specified flags are updated; unspecified fields keep their current values.
+
+```bash
+python3 tally-cli.py --project myapp --command repo-edit --repo-name backend --base-urls https://api.example.com,https://staging.example.com
+```
+
+### repo-delete
+
+Delete a repository from a project.
+
+```
+tally --project NAME --command repo-delete --repo-name NAME
+```
+
+```bash
+python3 tally-cli.py --project myapp --command repo-delete --repo-name backend
 ```
 
 ---

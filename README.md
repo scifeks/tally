@@ -22,9 +22,9 @@ Tally is a security auditing platform that eliminates the noise and busy work in
 
 ## Three Interfaces
 
-**Web UI** (recommended). Start with `ui serve` from the REPL. Tally opens a React SPA backed by FastAPI with a graphical interface for scanning, triage, reporting, and chat. See [docs/ui.md](docs/ui.md) for the full walkthrough.
+**Web UI** (recommended). Start with `ui serve` from the REPL. Tally opens a React SPA backed by FastAPI with a graphical interface for scanning, triage, reporting, and chat. See [docs/web-ui.md](docs/web-ui.md) for the full walkthrough.
 
-**REPL**. A terminal interface with interactive commands for scanning, triage, reporting, and configuration. Use the REPL when a web UI is inappropriate: remote servers, SSH sessions, or client-sensitive audits where browser exposure is a concern. See [docs/usage.md](docs/usage.md) for workflows and examples.
+**REPL**. A terminal interface with interactive commands for scanning, triage, reporting, and configuration. Use the REPL when a web UI is inappropriate: remote servers, SSH sessions, or client-sensitive audits where browser exposure is a concern. See [docs/repl.md](docs/repl.md) for workflows and examples.
 
 **CLI**. A non-interactive entry point for cron jobs, CI pipelines, and scripted automation. See [docs/cli.md](docs/cli.md) for flags and examples.
 
@@ -99,8 +99,10 @@ Tools can run locally or inside a Docker container. The execution mode is config
 
 ## Documentation
 
-- [docs/ui.md](docs/ui.md) - Web UI walkthrough: dashboard, findings, scans, triage, reports, chat, and configuration
-- [docs/usage.md](docs/usage.md) - REPL and CLI usage guide with examples
+- [docs/usage.md](docs/usage.md) - Choosing an interface: web UI, REPL, or CLI
+- [docs/web-ui.md](docs/web-ui.md) - Web UI walkthrough: dashboard, findings, scans, triage, reports, chat, and configuration
+- [docs/repl.md](docs/repl.md) - REPL commands and terminal workflows
+- [docs/cli.md](docs/cli.md) - Non-interactive CLI for automation, CI pipelines, and scripted workflows
 - [docs/configuration.md](docs/configuration.md) - Config file reference
 - [docs/tools.md](docs/tools.md) - Supported tools and detection strategies
 - [docs/llm-providers.md](docs/llm-providers.md) - LLM provider setup and configuration for chat, enrichment, reports, embeddings, and triage

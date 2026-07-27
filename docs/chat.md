@@ -113,7 +113,7 @@ augment the RAG knowledge base with custom markdown or text documents using the
 Supported file types are `.md` and `.txt`. Documents are chunked and embedded
 alongside findings, allowing chat to draw answers from both sources. This is
 useful for providing custom runbooks, remediation guides, or domain-specific
-context that improves answer quality. See [docs/usage.md](usage.md) for the
+context that improves answer quality. See [docs/repl.md](repl.md) for the
 full `docs` command reference.
 
 ## Limitations

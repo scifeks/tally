@@ -18,7 +18,7 @@ Both backends run inside a Docker container with filesystem and network sandboxi
 The agent receives the finding and source content inline, produces a structured JSON
 verdict, and exits. No persistent agent state is kept between findings.
 
-Triage can also be started from the web UI. The Triage page shows batch progress in real time and lets you resume failed runs. See [docs/ui.md](ui.md) for the UI walkthrough.
+Triage can also be started from the web UI. The Triage page shows batch progress in real time and lets you resume failed runs. See [docs/web-ui.md](web-ui.md) for the UI walkthrough.
 
 ---
 
