@@ -67,7 +67,7 @@
     "schema_version": "1.0",
     "request_id": "abc123",
     "mode": "sweep",
-    "model": "granite-3.0-1b",
+    "model": "granite3-dense:2b",
     "target": "/path/to/repo"
   },
   "warnings": []

@@ -10,6 +10,7 @@ from core.config.schemas.repo_service import RepoService
 from domain.tools.base import ToolResult
 from domain.tools.execution_config import ToolExecutionConfig
 from domain.tools.interface import ExecutionContext
+from infrastructure.llm.antares_config_resolver import AntaresResolvedConfig
 from infrastructure.tools.wrappers.local.antares import AntaresLocalTool
 
 
@@ -54,206 +55,179 @@ def _make_context(
 class TestAntaresShimLifecycle:
     """Tests for shim lifecycle in Antares wrapper."""
 
-    @patch("core.config.manager.ConfigManager")
     @patch("infrastructure.tools.wrappers.base.antares.CompletionsShim")
-    def test_shim_started_when_ollama_provider(
-        self, mock_shim_class, mock_config_manager, tmp_path
-    ) -> None:
+    def test_shim_started_when_ollama_provider(self, mock_shim_class, tmp_path) -> None:
         """Verify shim is created and started for Ollama provider."""
-        # Setup mocks
-        mock_config = MagicMock()
-        mock_config_manager.return_value.global_config = mock_config
-
         mock_shim_instance = MagicMock()
         mock_shim_instance.start.return_value = "http://127.0.0.1:12345"
         mock_shim_class.return_value = mock_shim_instance
 
-        resolved_config = MagicMock()
-        resolved_config.needs_shim = True
-        resolved_config.ollama_base_url = "http://localhost:11434"
-        resolved_config.model = "neural-chat"
-        resolved_config.endpoint_url = "http://localhost:11434"
-        resolved_config.timeout_seconds = 300
+        resolved_config = AntaresResolvedConfig(
+            endpoint_url="http://localhost:11434",
+            model="neural-chat",
+            needs_shim=True,
+            ollama_base_url="http://localhost:11434",
+            timeout_seconds=300,
+            max_cwes=None,
+            workers=None,
+        )
+        repo = _make_repo(str(tmp_path))
+        tool_config = ToolExecutionConfig(
+            noir_provider=None,
+            antares_config=resolved_config,
+        )
+        ctx = _make_context(repo, str(tmp_path), tool_config=tool_config)
+        tool = AntaresLocalTool()
+        passes = tool.build_execution_passes(ctx)
 
-        with patch(
-            "infrastructure.llm.antares_config_resolver.resolve_antares_config",
-            return_value=resolved_config,
-        ):
-            repo = _make_repo(str(tmp_path))
-            ctx = _make_context(repo, str(tmp_path))
-            tool = AntaresLocalTool()
-            passes = tool.build_execution_passes(ctx)
+        mock_shim_class.assert_called_once_with(
+            "http://localhost:11434", "neural-chat", 300
+        )
+        mock_shim_instance.start.assert_called_once()
 
-            # Verify shim was created with correct args
-            mock_shim_class.assert_called_once_with(
-                "http://localhost:11434", "neural-chat"
-            )
-            mock_shim_instance.start.assert_called_once()
+        assert passes[0].env is not None
+        assert passes[0].env["ANTARES_ENDPOINT"] == "http://127.0.0.1:12345"
 
-            # Verify endpoint in env is the shim URL
-            assert passes[0].env is not None
-            assert passes[0].env["ANTARES_ENDPOINT"] == "http://127.0.0.1:12345"
-
-    @patch("core.config.manager.ConfigManager")
     @patch("infrastructure.tools.wrappers.base.antares.CompletionsShim")
-    def test_no_shim_when_direct_provider(
-        self, mock_shim_class, mock_config_manager, tmp_path
-    ) -> None:
+    def test_no_shim_when_direct_provider(self, mock_shim_class, tmp_path) -> None:
         """Verify shim is not created for direct providers."""
-        # Setup mocks
-        mock_config = MagicMock()
-        mock_config_manager.return_value.global_config = mock_config
+        resolved_config = AntaresResolvedConfig(
+            endpoint_url="http://direct-llm.local:8000",
+            model="my-model",
+            needs_shim=False,
+            ollama_base_url=None,
+            timeout_seconds=300,
+            max_cwes=None,
+            workers=None,
+        )
+        repo = _make_repo(str(tmp_path))
+        tool_config = ToolExecutionConfig(
+            noir_provider=None,
+            antares_config=resolved_config,
+        )
+        ctx = _make_context(repo, str(tmp_path), tool_config=tool_config)
+        tool = AntaresLocalTool()
+        passes = tool.build_execution_passes(ctx)
 
-        resolved_config = MagicMock()
-        resolved_config.needs_shim = False
-        resolved_config.endpoint_url = "http://direct-llm.local:8000"
-        resolved_config.model = "my-model"
-        resolved_config.timeout_seconds = 300
+        mock_shim_class.assert_not_called()
 
-        with patch(
-            "infrastructure.llm.antares_config_resolver.resolve_antares_config",
-            return_value=resolved_config,
-        ):
-            repo = _make_repo(str(tmp_path))
-            ctx = _make_context(repo, str(tmp_path))
-            tool = AntaresLocalTool()
-            passes = tool.build_execution_passes(ctx)
-
-            # Verify shim was NOT created
-            mock_shim_class.assert_not_called()
-
-            # Verify endpoint in env is the direct URL
-            assert passes[0].env is not None
-            assert passes[0].env["ANTARES_ENDPOINT"] == "http://direct-llm.local:8000"
+        assert passes[0].env is not None
+        assert passes[0].env["ANTARES_ENDPOINT"] == "http://direct-llm.local:8000"
 
     def test_shim_stopped_in_merge_pass_results(self) -> None:
         """Verify shim.stop() is called in merge_pass_results."""
-        # Setup a mock shim
         mock_shim = MagicMock()
 
         tool = AntaresLocalTool()
         tool._shim = mock_shim
 
-        # Create mock results
-        result = MagicMock(spec=ToolResult)
-        results = cast(list[ToolResult], [result])
+        result = ToolResult(
+            tool_name="antares",
+            success=True,
+            output="{}",
+            parsed_data={"findings": []},
+            output_files={},
+            timestamp="2025-01-01T00:00:00Z",
+            duration_seconds=1.0,
+        )
 
-        # Call merge_pass_results
-        output = tool.merge_pass_results(results)
+        tool.merge_pass_results([result])
 
-        # Verify shim was stopped
         mock_shim.stop.assert_called_once()
         assert tool._shim is None
-        assert output is result
 
     def test_shim_stopped_even_on_error(self) -> None:
         """Verify shim.stop() is called even if merge fails."""
-        # Setup a mock shim
         mock_shim = MagicMock()
 
         tool = AntaresLocalTool()
         tool._shim = mock_shim
 
-        # Create mock results that will fail
         results = cast(list[ToolResult], [])
 
-        # Call merge_pass_results with empty results (will raise IndexError)
         try:
             tool.merge_pass_results(results)
         except IndexError:
             pass
 
-        # Verify shim was still stopped
         mock_shim.stop.assert_called_once()
         assert tool._shim is None
 
-    @patch("core.config.manager.ConfigManager")
     @patch("infrastructure.tools.wrappers.base.antares.CompletionsShim")
-    def test_env_vars_set_from_config(
-        self, mock_shim_class, mock_config_manager, tmp_path
-    ) -> None:
+    def test_env_vars_set_from_config(self, mock_shim_class, tmp_path) -> None:
         """Verify all Antares env vars are set from resolved config."""
-        # Setup mocks
-        mock_config = MagicMock()
-        mock_config_manager.return_value.global_config = mock_config
-
         mock_shim_instance = MagicMock()
         mock_shim_instance.start.return_value = "http://127.0.0.1:54321"
         mock_shim_class.return_value = mock_shim_instance
 
-        resolved_config = MagicMock()
-        resolved_config.needs_shim = True
-        resolved_config.ollama_base_url = "http://localhost:11434"
-        resolved_config.model = "mistral"
-        resolved_config.endpoint_url = "http://localhost:11434"
-        resolved_config.timeout_seconds = 600
+        resolved_config = AntaresResolvedConfig(
+            endpoint_url="http://localhost:11434",
+            model="mistral",
+            needs_shim=True,
+            ollama_base_url="http://localhost:11434",
+            timeout_seconds=600,
+            max_cwes=None,
+            workers=None,
+        )
+        repo = _make_repo(str(tmp_path))
+        tool_config = ToolExecutionConfig(
+            noir_provider=None,
+            antares_config=resolved_config,
+        )
+        ctx = _make_context(repo, str(tmp_path), tool_config=tool_config)
+        tool = AntaresLocalTool()
+        passes = tool.build_execution_passes(ctx)
 
-        with patch(
-            "infrastructure.llm.antares_config_resolver.resolve_antares_config",
-            return_value=resolved_config,
-        ):
-            repo = _make_repo(str(tmp_path))
-            ctx = _make_context(repo, str(tmp_path))
-            tool = AntaresLocalTool()
-            passes = tool.build_execution_passes(ctx)
+        env = passes[0].env
+        assert env is not None
+        assert env["ANTARES_ENDPOINT"] == "http://127.0.0.1:54321"
+        assert env["ANTARES_MODEL"] == "mistral"
+        assert env["ANTARES_REMOTE_TIMEOUT_SECONDS"] == "600"
 
-            # Verify all env vars are set
-            env = passes[0].env
-            assert env is not None
-            assert env["ANTARES_ENDPOINT"] == "http://127.0.0.1:54321"
-            assert env["ANTARES_MODEL"] == "mistral"
-            assert env["ANTARES_REMOTE_TIMEOUT_SECONDS"] == "600"
-
-    @patch("core.config.manager.ConfigManager")
-    def test_env_vars_without_shim(self, mock_config_manager, tmp_path) -> None:
+    def test_env_vars_without_shim(self, tmp_path) -> None:
         """Verify env vars are still set when shim is not needed."""
-        # Setup mocks
-        mock_config = MagicMock()
-        mock_config_manager.return_value.global_config = mock_config
+        resolved_config = AntaresResolvedConfig(
+            endpoint_url="https://api.anthropic.com",
+            model="claude-opus",
+            needs_shim=False,
+            ollama_base_url=None,
+            timeout_seconds=120,
+            max_cwes=None,
+            workers=None,
+        )
+        repo = _make_repo(str(tmp_path))
+        tool_config = ToolExecutionConfig(
+            noir_provider=None,
+            antares_config=resolved_config,
+        )
+        ctx = _make_context(repo, str(tmp_path), tool_config=tool_config)
+        tool = AntaresLocalTool()
+        passes = tool.build_execution_passes(ctx)
 
-        resolved_config = MagicMock()
-        resolved_config.needs_shim = False
-        resolved_config.endpoint_url = "https://api.anthropic.com"
-        resolved_config.model = "claude-opus"
-        resolved_config.timeout_seconds = 120
+        env = passes[0].env
+        assert env is not None
+        assert env["ANTARES_ENDPOINT"] == "https://api.anthropic.com"
+        assert env["ANTARES_MODEL"] == "claude-opus"
+        assert env["ANTARES_REMOTE_TIMEOUT_SECONDS"] == "120"
 
-        with patch(
-            "infrastructure.llm.antares_config_resolver.resolve_antares_config",
-            return_value=resolved_config,
-        ):
-            repo = _make_repo(str(tmp_path))
-            ctx = _make_context(repo, str(tmp_path))
-            tool = AntaresLocalTool()
-            passes = tool.build_execution_passes(ctx)
-
-            # Verify env vars are set with direct endpoint
-            env = passes[0].env
-            assert env is not None
-            assert env["ANTARES_ENDPOINT"] == "https://api.anthropic.com"
-            assert env["ANTARES_MODEL"] == "claude-opus"
-            assert env["ANTARES_REMOTE_TIMEOUT_SECONDS"] == "120"
-
-    @patch("core.config.manager.ConfigManager")
-    def test_no_shim_set_when_not_needed(self, mock_config_manager, tmp_path) -> None:
+    def test_no_shim_set_when_not_needed(self, tmp_path) -> None:
         """Verify _shim remains None when shim is not needed."""
-        # Setup mocks
-        mock_config = MagicMock()
-        mock_config_manager.return_value.global_config = mock_config
+        resolved_config = AntaresResolvedConfig(
+            endpoint_url="https://api.anthropic.com",
+            model="claude-opus",
+            needs_shim=False,
+            ollama_base_url=None,
+            timeout_seconds=120,
+            max_cwes=None,
+            workers=None,
+        )
+        repo = _make_repo(str(tmp_path))
+        tool_config = ToolExecutionConfig(
+            noir_provider=None,
+            antares_config=resolved_config,
+        )
+        ctx = _make_context(repo, str(tmp_path), tool_config=tool_config)
+        tool = AntaresLocalTool()
+        tool.build_execution_passes(ctx)
 
-        resolved_config = MagicMock()
-        resolved_config.needs_shim = False
-        resolved_config.endpoint_url = "https://api.anthropic.com"
-        resolved_config.model = "claude-opus"
-        resolved_config.timeout_seconds = 120
-
-        with patch(
-            "infrastructure.llm.antares_config_resolver.resolve_antares_config",
-            return_value=resolved_config,
-        ):
-            repo = _make_repo(str(tmp_path))
-            ctx = _make_context(repo, str(tmp_path))
-            tool = AntaresLocalTool()
-            tool.build_execution_passes(ctx)
-
-            # Verify _shim is still None
-            assert tool._shim is None
+        assert tool._shim is None

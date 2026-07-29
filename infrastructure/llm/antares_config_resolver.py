@@ -21,6 +21,8 @@ class AntaresResolvedConfig:
     needs_shim: bool
     ollama_base_url: str | None
     timeout_seconds: int
+    max_cwes: int | None
+    workers: int | None
 
 
 def resolve_antares_config(config: GlobalConfig) -> AntaresResolvedConfig:
@@ -36,12 +38,18 @@ def resolve_antares_config(config: GlobalConfig) -> AntaresResolvedConfig:
     timeout_seconds = antares.timeout_seconds or 300
     needs_shim = provider_name == "ollama"
 
+    sweep_config = config.antares_sweep_config or {}
+    max_cwes = sweep_config.get("max_cwes")
+    workers = sweep_config.get("workers")
+
     return AntaresResolvedConfig(
         endpoint_url=endpoint_url,
         model=model,
         needs_shim=needs_shim,
         ollama_base_url=ollama_base_url,
         timeout_seconds=timeout_seconds,
+        max_cwes=max_cwes,
+        workers=workers,
     )
 
 

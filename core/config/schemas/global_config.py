@@ -1,6 +1,6 @@
 """GlobalConfig schema."""
 
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -56,6 +56,7 @@ class GlobalConfig(BaseModel):
     embedding_inference: FeatureInferenceConfig | None = None
     triage_inference: FeatureInferenceConfig | None = None
     antares_inference: FeatureInferenceConfig | None = None
+    antares_sweep_config: dict[str, Any] | None = None
     projects_dir: str = Field(default="./projects")
     location_attestation_confirmed: bool = Field(default=False)
     enrichment_max_concurrency: int = Field(default=4)
@@ -126,3 +127,6 @@ class GlobalConfig(BaseModel):
         if self.web_ui_allowed_origins:
             return list(self.web_ui_allowed_origins)
         return [f"http://{self.web_ui_host}:{self.web_ui_vite_port}"]
+
+
+GlobalConfig.model_rebuild()

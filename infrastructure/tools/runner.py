@@ -74,11 +74,12 @@ class SubprocessRunner(SubprocessRunnerPort):
                 raise SubprocessTimeout(cmd, timeout)
             try:
                 stdout, stderr = proc.communicate(
-                    input=stdin_data, timeout=min(_CANCEL_POLL_INTERVAL, remaining)
+                    input=stdin_data,
+                    timeout=min(_CANCEL_POLL_INTERVAL, remaining),
                 )
-                stdin_data = None
                 break
             except subprocess.TimeoutExpired:
+                stdin_data = None
                 continue
 
         return SubprocessResult(

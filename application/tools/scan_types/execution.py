@@ -42,9 +42,22 @@ def _build_tool_execution_config(
                 model=provider_config.model,
                 num_ctx=getattr(provider_config, "num_ctx", None),
             )
+
+    antares_config = None
+    if gc.antares_inference is not None:
+        try:
+            from infrastructure.llm.antares_config_resolver import (
+                resolve_antares_config,
+            )
+
+            antares_config = resolve_antares_config(gc)
+        except (ValueError, Exception):
+            pass
+
     return ToolExecutionConfig(
         noir_provider=noir_snapshot,
         blind_xss_callback_url=gc.blind_xss_callback_url,
+        antares_config=antares_config,
     )
 
 
@@ -179,8 +192,15 @@ def execute_tool_passes(
     if changed_files and getattr(tool, "supports_include", False):
         for p in passes:
             p.kwargs["include"] = changed_files
-    pass_results = [executor.run(p, tool) for p in passes]
-    return tool.merge_pass_results(pass_results)
+    try:
+        pass_results = [executor.run(p, tool) for p in passes]
+        return tool.merge_pass_results(pass_results)
+    except Exception:
+        try:
+            tool.merge_pass_results([])
+        except Exception:
+            pass
+        raise
 
 
 def normalize_success(result: ToolResult, tool: ToolInterface) -> ToolResult:

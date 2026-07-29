@@ -29,11 +29,11 @@ Requires Ollama to be running locally. Tally automatically starts the completion
 {
   "ollama": {
     "base_url": "http://localhost:11434",
-    "model": "granite-3.0-1b"
+    "model": "granite3-dense:2b"
   },
   "antares_inference": {
     "provider": "ollama",
-    "model": "granite-3.0-1b"
+    "model": "granite3-dense:2b"
   }
 }
 ```
@@ -85,6 +85,20 @@ Add an `antares_inference` block to your global config (`config/global.json`):
 | `base_url` | string | No | From provider config | Override endpoint URL. Required for `llama_cpp` and `vllm` if not set in their provider blocks |
 | `timeout_seconds` | int | No | `300` | Timeout in seconds for completions requests. Accounts for cold-start after model load |
 
+Optionally add an `antares_sweep_config` block for CWE sweep parameters:
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `max_cwes` | int | No | Unset | Maximum CWE vulnerability classes to scan per sweep. Lower values reduce scan time and improve results with smaller models |
+| `workers` | int | No | Unset | Maximum concurrent CWE workers. Reduce when Ollama has limited parallelism (`OLLAMA_NUM_PARALLEL`) |
+
+### Model Selection
+
+Antares requires a model capable of multi-turn tool-use reasoning. Smaller models (2B parameters) will fail on most CWE investigations. Recommended minimums:
+
+- **Production scans:** 7B+ model (e.g., `granite3-dense:8b`, `qwen2.5:7b`)
+- **Quick validation:** 2B model with `max_cwes` set to 5-10
+
 ### Model Resolution Fallback
 
 If you do not set `antares_inference.model`, Tally resolves the model using this chain (for Ollama only):
@@ -102,7 +116,7 @@ For `llama_cpp` and `vllm`, only that provider's own config is checked.
 {
   "ollama": {
     "base_url": "http://localhost:11434",
-    "model": "granite-3.0-1b",
+    "model": "granite3-dense:2b",
     "timeout_seconds": 60
   },
   "chat_inference": {
@@ -111,11 +125,15 @@ For `llama_cpp` and `vllm`, only that provider's own config is checked.
   "antares_inference": {
     "provider": "ollama",
     "timeout_seconds": 300
+  },
+  "antares_sweep_config": {
+    "max_cwes": 15,
+    "workers": 4
   }
 }
 ```
 
-When `antares_inference.model` is not set, Tally uses the chat model (`granite-3.0-1b` from the Ollama config).
+When `antares_inference.model` is not set, Tally uses the chat model (`granite3-dense:2b` from the Ollama config).
 
 ### Example: Llama-server
 
@@ -124,7 +142,7 @@ When `antares_inference.model` is not set, Tally uses the chat model (`granite-3
   "antares_inference": {
     "provider": "llama_cpp",
     "base_url": "http://localhost:8000",
-    "model": "granite-3.0-1b",
+    "model": "granite3-dense:2b",
     "timeout_seconds": 300
   }
 }
@@ -164,7 +182,7 @@ When you run a scan that includes Antares:
 **Cause:** The model name does not exist on the server, or the model has not been pulled yet.
 
 **Fix:**
-- For Ollama, pull the model first: `ollama pull granite-3.0-1b`
+- For Ollama, pull the model first: `ollama pull granite3-dense:2b`
 - Verify the model name in `antares_inference.model` (or fallback chain) matches a model on the server
 - For llama-server or vLLM, verify the model is loaded
 

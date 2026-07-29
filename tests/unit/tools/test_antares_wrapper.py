@@ -12,6 +12,7 @@ from core.config.schemas import Repository
 from core.config.schemas.repo_service import RepoService
 from domain.tools.execution_config import ToolExecutionConfig
 from domain.tools.interface import ExecutionContext
+from infrastructure.llm.antares_config_resolver import AntaresResolvedConfig
 from infrastructure.tools.wrappers.local.antares import AntaresLocalTool
 
 
@@ -60,12 +61,7 @@ class TestAntaresLocalTool:
         """Verify build_command with default mode."""
         tool = AntaresLocalTool()
         cmd = tool.build_command()
-        assert cmd[0] == "antares"
-        assert "tool" in cmd
-        assert "sweep" in cmd
-        assert "--stdin" in cmd
-        assert "--format" in cmd
-        assert "json" in cmd
+        assert cmd == ["antares", "tool", "sweep", "--stdin"]
 
     def test_build_command_query_mode(self) -> None:
         """Verify build_command with query mode."""
@@ -101,105 +97,91 @@ class TestAntaresLocalTool:
 class TestAntaresBuildExecutionPasses:
     """Tests for build_execution_passes method."""
 
-    def _mock_config_manager(self):
-        """Create a mock ConfigManager with resolved Antares config."""
-        resolved_config = MagicMock()
-        resolved_config.needs_shim = False
-        resolved_config.endpoint_url = "http://localhost:8000"
-        resolved_config.model = "test-model"
-        resolved_config.timeout_seconds = 300
+    def _make_resolved_config(self):
+        """Create a resolved Antares config for testing."""
+        return AntaresResolvedConfig(
+            endpoint_url="http://localhost:8000",
+            model="test-model",
+            needs_shim=False,
+            ollama_base_url=None,
+            timeout_seconds=300,
+            max_cwes=None,
+            workers=None,
+        )
 
-        mock_config_manager = MagicMock()
-        mock_config_manager.return_value.global_config = MagicMock()
-
-        return mock_config_manager, resolved_config
-
-    @patch("core.config.manager.ConfigManager")
-    def test_single_pass_returned(self, mock_config_manager, tmp_path) -> None:
+    def test_single_pass_returned(self, tmp_path) -> None:
         """Verify build_execution_passes returns exactly one pass."""
-        mock_mgr, resolved_config = self._mock_config_manager()
-        mock_config_manager.side_effect = mock_mgr
+        resolved_config = self._make_resolved_config()
+        repo = _make_repo(str(tmp_path))
+        tool_config = ToolExecutionConfig(
+            noir_provider=None,
+            antares_config=resolved_config,
+        )
+        ctx = _make_context(repo, str(tmp_path), tool_config=tool_config)
+        tool = AntaresLocalTool()
+        passes = tool.build_execution_passes(ctx)
+        assert len(passes) == 1
+        assert passes[0].stdin_data is not None
+        assert passes[0].env is not None
 
-        with patch(
-            "infrastructure.llm.antares_config_resolver.resolve_antares_config",
-            return_value=resolved_config,
-        ):
-            repo = _make_repo(str(tmp_path))
-            ctx = _make_context(repo, str(tmp_path))
-            tool = AntaresLocalTool()
-            passes = tool.build_execution_passes(ctx)
-            assert len(passes) == 1
-
-    @patch("core.config.manager.ConfigManager")
-    def test_pass_has_stdin_data(self, mock_config_manager, tmp_path) -> None:
+    def test_pass_has_stdin_data(self, tmp_path) -> None:
         """Verify pass contains stdin_data with JSON payload."""
-        mock_mgr, resolved_config = self._mock_config_manager()
-        mock_config_manager.side_effect = mock_mgr
+        resolved_config = self._make_resolved_config()
+        repo = _make_repo(str(tmp_path))
+        tool_config = ToolExecutionConfig(
+            noir_provider=None,
+            antares_config=resolved_config,
+        )
+        ctx = _make_context(repo, str(tmp_path), tool_config=tool_config)
+        tool = AntaresLocalTool()
+        passes = tool.build_execution_passes(ctx)
+        stdin_data = passes[0].stdin_data
+        assert stdin_data is not None
+        payload = json.loads(stdin_data)
+        assert isinstance(payload, dict)
+        assert "target" in payload
 
-        with patch(
-            "infrastructure.llm.antares_config_resolver.resolve_antares_config",
-            return_value=resolved_config,
-        ):
-            repo = _make_repo(str(tmp_path))
-            ctx = _make_context(repo, str(tmp_path))
-            tool = AntaresLocalTool()
-            passes = tool.build_execution_passes(ctx)
-            stdin_data = passes[0].stdin_data
-            assert stdin_data is not None
-            payload = json.loads(stdin_data)
-            assert isinstance(payload, dict)
-            assert "target" in payload
-
-    @patch("core.config.manager.ConfigManager")
-    def test_payload_contains_repo_path(self, mock_config_manager, tmp_path) -> None:
+    def test_payload_contains_repo_path(self, tmp_path) -> None:
         """Verify stdin payload includes the repository path."""
-        mock_mgr, resolved_config = self._mock_config_manager()
-        mock_config_manager.side_effect = mock_mgr
+        resolved_config = self._make_resolved_config()
+        repo = _make_repo(str(tmp_path))
+        tool_config = ToolExecutionConfig(
+            noir_provider=None,
+            antares_config=resolved_config,
+        )
+        ctx = _make_context(repo, str(tmp_path), tool_config=tool_config)
+        tool = AntaresLocalTool()
+        passes = tool.build_execution_passes(ctx)
+        stdin_data = passes[0].stdin_data
+        assert stdin_data is not None
+        payload = json.loads(stdin_data)
+        assert payload["target"] == str(tmp_path)
 
-        with patch(
-            "infrastructure.llm.antares_config_resolver.resolve_antares_config",
-            return_value=resolved_config,
-        ):
-            repo = _make_repo(str(tmp_path))
-            ctx = _make_context(repo, str(tmp_path))
-            tool = AntaresLocalTool()
-            passes = tool.build_execution_passes(ctx)
-            stdin_data = passes[0].stdin_data
-            assert stdin_data is not None
-            payload = json.loads(stdin_data)
-            assert payload["target"] == str(tmp_path)
-
-    @patch("core.config.manager.ConfigManager")
-    def test_label_suffix_is_repo_name(self, mock_config_manager, tmp_path) -> None:
+    def test_label_suffix_is_repo_name(self, tmp_path) -> None:
         """Verify label_suffix uses repository name."""
-        mock_mgr, resolved_config = self._mock_config_manager()
-        mock_config_manager.side_effect = mock_mgr
+        resolved_config = self._make_resolved_config()
+        repo = _make_repo(str(tmp_path))
+        tool_config = ToolExecutionConfig(
+            noir_provider=None,
+            antares_config=resolved_config,
+        )
+        ctx = _make_context(repo, str(tmp_path), tool_config=tool_config)
+        tool = AntaresLocalTool()
+        passes = tool.build_execution_passes(ctx)
+        assert passes[0].label_suffix == "test-repo"
 
-        with patch(
-            "infrastructure.llm.antares_config_resolver.resolve_antares_config",
-            return_value=resolved_config,
-        ):
-            repo = _make_repo(str(tmp_path))
-            ctx = _make_context(repo, str(tmp_path))
-            tool = AntaresLocalTool()
-            passes = tool.build_execution_passes(ctx)
-            assert passes[0].label_suffix == "test-repo"
-
-    @patch("core.config.manager.ConfigManager")
-    def test_empty_kwargs(self, mock_config_manager, tmp_path) -> None:
+    def test_empty_kwargs(self, tmp_path) -> None:
         """Verify kwargs are empty (payload goes via stdin)."""
-        mock_mgr, resolved_config = self._mock_config_manager()
-        mock_config_manager.side_effect = mock_mgr
-
-        with patch(
-            "infrastructure.llm.antares_config_resolver.resolve_antares_config",
-            return_value=resolved_config,
-        ):
-            repo = _make_repo(str(tmp_path))
-            ctx = _make_context(repo, str(tmp_path))
-            tool = AntaresLocalTool()
-            passes = tool.build_execution_passes(ctx)
-            assert passes[0].kwargs == {}
+        resolved_config = self._make_resolved_config()
+        repo = _make_repo(str(tmp_path))
+        tool_config = ToolExecutionConfig(
+            noir_provider=None,
+            antares_config=resolved_config,
+        )
+        ctx = _make_context(repo, str(tmp_path), tool_config=tool_config)
+        tool = AntaresLocalTool()
+        passes = tool.build_execution_passes(ctx)
+        assert passes[0].kwargs == {}
 
 
 class TestAntaresCountFindings:
@@ -356,3 +338,113 @@ class TestAntaresExitCodeHandling:
         tool = AntaresLocalTool()
         result = tool.parse_output("not json", {})
         assert "error" in result
+
+    def test_log_scan_warnings_logs_warnings_array(
+        self,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """Verify _log_scan_warnings logs entries from warnings array."""
+        tool = AntaresLocalTool()
+        data = {
+            "warnings": [
+                "43/50 CWE workers failed; some vulnerability classes were not scanned",
+                "Model response timeout on CWE-89",
+            ],
+            "summary": {},
+            "findings": [],
+            "per_cwe_results": [],
+        }
+        with caplog.at_level(logging.WARNING):
+            tool._log_scan_warnings(data)
+        assert "43/50 CWE workers failed" in caplog.text
+        assert "Model response timeout on CWE-89" in caplog.text
+
+    def test_log_scan_warnings_model_capability_warning(
+        self,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """Verify model capability warning when >50% workers fail."""
+        tool = AntaresLocalTool()
+        data = {
+            "warnings": [],
+            "summary": {
+                "total_findings": 0,
+                "failed_workers": 26,
+                "total_workers": 50,
+            },
+            "findings": [],
+            "per_cwe_results": [],
+        }
+        with caplog.at_level(logging.WARNING):
+            tool._log_scan_warnings(data)
+        assert "26/50 CWE workers failed" in caplog.text
+        assert "larger model (7B+)" in caplog.text
+
+    def test_log_scan_warnings_no_model_warning_when_50_percent(
+        self,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """Verify no model warning when exactly 50% workers fail."""
+        tool = AntaresLocalTool()
+        data = {
+            "warnings": [],
+            "summary": {
+                "total_findings": 0,
+                "failed_workers": 25,
+                "total_workers": 50,
+            },
+            "findings": [],
+            "per_cwe_results": [],
+        }
+        with caplog.at_level(logging.WARNING):
+            tool._log_scan_warnings(data)
+        assert "failed worker" in caplog.text
+        assert "larger model" not in caplog.text
+
+    def test_log_scan_warnings_empty_warnings_array(
+        self,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """Verify _log_scan_warnings handles empty warnings array."""
+        tool = AntaresLocalTool()
+        data = {
+            "warnings": [],
+            "summary": {
+                "total_findings": 2,
+                "failed_workers": 0,
+            },
+            "findings": [],
+            "per_cwe_results": [],
+        }
+        with caplog.at_level(logging.WARNING):
+            tool._log_scan_warnings(data)
+        assert caplog.text == ""
+
+    def test_parse_output_stores_warnings_in_parsed_data(self) -> None:
+        """Verify parse_output stores warnings in parsed_data."""
+        tool = AntaresLocalTool()
+        output = json.dumps(
+            {
+                "warnings": ["Warning 1", "Warning 2"],
+                "summary": {"total_findings": 0},
+                "findings": [],
+                "per_cwe_results": [],
+            }
+        )
+        result = tool.parse_output(output, {})
+        assert "scan_warnings" in result
+        assert result["scan_warnings"] == ["Warning 1", "Warning 2"]
+
+    def test_parse_output_omits_scan_warnings_when_empty(self) -> None:
+        """Verify parse_output omits scan_warnings key when empty."""
+        tool = AntaresLocalTool()
+        output = json.dumps(
+            {
+                "warnings": [],
+                "summary": {"total_findings": 0},
+                "findings": [],
+                "per_cwe_results": [],
+            }
+        )
+        result = tool.parse_output(output, {})
+        assert "scan_warnings" not in result

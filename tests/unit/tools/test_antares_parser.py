@@ -90,7 +90,7 @@ def sample_json_output() -> str:
                 "schema_version": "1.0",
                 "request_id": "abc123",
                 "mode": "sweep",
-                "model": "granite-3.0-1b",
+                "model": "granite3-dense:2b",
                 "target": "/path/to/repo",
             },
             "warnings": [],
@@ -301,12 +301,12 @@ class TestAntaresHandlerNormalize:
         assert rows[1].get("rule_id") == "CWE-502"
         assert rows[2].get("rule_id") == "CWE-78"
 
-    def test_meta_includes_submission_rank(
+    def test_row_includes_submission_rank(
         self,
         antares_handler: AntaresHandler,
         sample_json_output: str,
     ) -> None:
-        """Verify meta dict includes submission_rank."""
+        """Verify rows include submission_rank as top-level key."""
         parsed = parse_antares_json_string(sample_json_output)
         result = ToolResult(
             tool_name="antares",
@@ -319,16 +319,14 @@ class TestAntaresHandlerNormalize:
         )
         rows = antares_handler.normalize(result, "default")
         for row in rows:
-            meta_str = row.get("meta", "{}")
-            meta = json.loads(meta_str)
-            assert "submission_rank" in meta
+            assert "submission_rank" in row
 
-    def test_meta_includes_per_cwe_stats(
+    def test_row_includes_per_cwe_stats(
         self,
         antares_handler: AntaresHandler,
         sample_json_output: str,
     ) -> None:
-        """Verify meta dict includes per-CWE statistics."""
+        """Verify rows include per-CWE stats as top-level keys."""
         parsed = parse_antares_json_string(sample_json_output)
         result = ToolResult(
             tool_name="antares",
@@ -340,11 +338,27 @@ class TestAntaresHandlerNormalize:
             duration_seconds=120.5,
         )
         rows = antares_handler.normalize(result, "default")
-        # First row is CWE-78 which has per_cwe_results
-        meta_str = rows[0].get("meta", "{}")
-        meta = json.loads(meta_str)
-        assert "cwe_tool_calls" in meta
-        assert meta["cwe_tool_calls"] == 15
+        assert rows[0]["cwe_tool_calls"] == 15
+
+    def test_row_includes_likelihood_of_exploit(
+        self,
+        antares_handler: AntaresHandler,
+        sample_json_output: str,
+    ) -> None:
+        """Verify rows preserve raw likelihood_of_exploit value."""
+        parsed = parse_antares_json_string(sample_json_output)
+        result = ToolResult(
+            tool_name="antares",
+            success=True,
+            output=sample_json_output,
+            parsed_data=parsed,
+            output_files={},
+            timestamp="2025-07-27T12:00:00+00:00",
+            duration_seconds=120.5,
+        )
+        rows = antares_handler.normalize(result, "default")
+        assert rows[0]["likelihood_of_exploit"] == "High"
+        assert rows[1]["likelihood_of_exploit"] == "Medium"
 
     def test_domain_and_segment_in_row(
         self,

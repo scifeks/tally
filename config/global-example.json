@@ -54,8 +54,12 @@
   },
   "antares_inference": {
     "provider": "ollama",
-    "model": "granite-3.0-1b",
+    "model": "granite3-dense:2b",
     "timeout_seconds": 300
+  },
+  "antares_sweep_config": {
+    "max_cwes": 15,
+    "workers": 4
   },
   "defectdojo": {
     "url": "https://defectdojo.example.com",

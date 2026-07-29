@@ -16,14 +16,27 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
+MAX_REQUEST_BYTES = 10 * 1024 * 1024
+
+
+class _QuietHTTPServer(HTTPServer):
+    """HTTPServer that silences broken-pipe tracebacks on stderr."""
+
+    def handle_error(self, _request: Any, _client_address: Any) -> None:
+        logger.debug("Suppressed HTTP handler error", exc_info=True)
+
 
 def translate_completions_to_generate(
     openai_req: dict[str, Any], model: str
 ) -> dict[str, Any]:
     """Map OpenAI completions fields to Ollama generate format."""
+    prompt = openai_req.get("prompt", "")
+    if not isinstance(prompt, str):
+        prompt = str(prompt)
+
     return {
         "model": model,
-        "prompt": openai_req.get("prompt", ""),
+        "prompt": prompt,
         "raw": True,
         "stream": openai_req.get("stream", False),
         "options": {
@@ -51,16 +64,17 @@ def translate_generate_to_completions(ollama_resp: dict[str, Any]) -> dict[str, 
 class CompletionsShim:
     """HTTP server that shims OpenAI completions API to Ollama generate API."""
 
-    def __init__(self, ollama_url: str, model: str) -> None:
+    def __init__(self, ollama_url: str, model: str, timeout: float = 300.0) -> None:
         self._ollama_url = ollama_url.rstrip("/")
         self._model = model
+        self._timeout = timeout
         self._server: HTTPServer | None = None
         self._thread: threading.Thread | None = None
 
     def start(self) -> str:
         """Start the shim on a random port and return its URL."""
         handler = self._make_handler()
-        self._server = HTTPServer(("127.0.0.1", 0), handler)
+        self._server = _QuietHTTPServer(("127.0.0.1", 0), handler)
         addr = self._server.server_address
         host = addr[0]
         port = addr[1]
@@ -86,6 +100,7 @@ class CompletionsShim:
         """Create a request handler class bound to this shim instance."""
         ollama_url = self._ollama_url
         model = self._model
+        request_timeout = self._timeout
 
         class CompletionsHandler(BaseHTTPRequestHandler):
             def do_POST(self) -> None:
@@ -99,6 +114,10 @@ class CompletionsShim:
                 except ValueError as e:
                     logger.error("Invalid Content-Length header: %s", e)
                     self.send_error(400, "Invalid Content-Length")
+                    return
+
+                if content_length > MAX_REQUEST_BYTES:
+                    self.send_error(413, "Request too large")
                     return
 
                 try:
@@ -117,9 +136,14 @@ class CompletionsShim:
                         self._handle_streaming(ollama_req)
                     else:
                         self._handle_non_streaming(ollama_req)
+                except (BrokenPipeError, ConnectionResetError):
+                    return
                 except Exception as e:
                     logger.error("Error proxying to Ollama: %s", e)
-                    self.send_error(502, "Bad Gateway")
+                    try:
+                        self.send_error(502, "Bad Gateway")
+                    except (BrokenPipeError, ConnectionResetError):
+                        return
 
             def _handle_non_streaming(self, ollama_req: dict[str, Any]) -> None:
                 """Handle non-streaming completion request."""
@@ -128,7 +152,10 @@ class CompletionsShim:
                         response = client.post(
                             f"{ollama_url}/api/generate",
                             json=ollama_req,
-                            timeout=60.0,
+                            timeout=httpx.Timeout(
+                                request_timeout,
+                                read=request_timeout,
+                            ),
                         )
                         response.raise_for_status()
                     except httpx.HTTPError:
@@ -136,6 +163,10 @@ class CompletionsShim:
                         return
 
                 ollama_resp = response.json()
+                if "response" not in ollama_resp:
+                    self.send_error(502, "Invalid Ollama response")
+                    return
+
                 completions_resp = translate_generate_to_completions(ollama_resp)
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json")
@@ -154,10 +185,17 @@ class CompletionsShim:
                     "POST",
                     f"{ollama_url}/api/generate",
                     json=ollama_req,
-                    timeout=60.0,
+                    timeout=httpx.Timeout(
+                        request_timeout,
+                        read=request_timeout,
+                    ),
                 ) as http_response:
                     if http_response.status_code != 200:
-                        self.wfile.write(b"data: [ERROR]\n\n")
+                        error_resp = json.dumps(
+                            {"choices": [{"text": "", "finish_reason": "error"}]}
+                        )
+                        self.wfile.write(f"data: {error_resp}\n\n".encode())
+                        self.wfile.write(b"data: [DONE]\n\n")
                         return
 
                     for line in http_response.iter_lines():
@@ -165,6 +203,9 @@ class CompletionsShim:
                             continue
                         try:
                             ollama_resp = json.loads(line)
+                            if "response" not in ollama_resp:
+                                continue
+
                             completions_resp = translate_generate_to_completions(
                                 ollama_resp
                             )

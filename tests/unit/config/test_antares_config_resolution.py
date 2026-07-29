@@ -34,13 +34,13 @@ class TestAntaresConfigResolution:
                 {
                     "antares_inference": {
                         "provider": "ollama",
-                        "model": "granite-3.0-1b",
+                        "model": "granite3-dense:2b",
                     },
                 }
             )
         )
         resolved = resolve_antares_config(cfg)
-        assert resolved.model == "granite-3.0-1b"
+        assert resolved.model == "granite3-dense:2b"
         assert resolved.needs_shim is True
         assert resolved.ollama_base_url == "http://localhost:11434"
 
@@ -110,7 +110,7 @@ class TestAntaresConfigResolution:
                 "antares_inference": {
                     "provider": "vllm",
                     "base_url": "http://gpu-server:8000",
-                    "model": "granite-3.0-1b",
+                    "model": "granite3-dense:2b",
                 },
             }
         )
@@ -290,3 +290,31 @@ class TestAntaresConfigResolution:
         )
         with pytest.raises(ValueError, match="Could not resolve model"):
             resolve_antares_config(cfg)
+
+    def test_sweep_config_provides_max_cwes_and_workers(self) -> None:
+        cfg = _build_config(
+            _base(
+                {
+                    "antares_inference": {"provider": "ollama"},
+                    "antares_sweep_config": {
+                        "max_cwes": 20,
+                        "workers": 6,
+                    },
+                }
+            )
+        )
+        resolved = resolve_antares_config(cfg)
+        assert resolved.max_cwes == 20
+        assert resolved.workers == 6
+
+    def test_sweep_config_defaults_to_none(self) -> None:
+        cfg = _build_config(
+            _base(
+                {
+                    "antares_inference": {"provider": "ollama"},
+                }
+            )
+        )
+        resolved = resolve_antares_config(cfg)
+        assert resolved.max_cwes is None
+        assert resolved.workers is None

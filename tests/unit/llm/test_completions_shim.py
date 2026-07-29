@@ -1,12 +1,10 @@
-"""Unit tests for completions shim translation and lifecycle."""
+"""Unit tests for completions shim translation."""
 
 from __future__ import annotations
 
-import socket
 from typing import Any
 
 from infrastructure.llm.completions_shim import (
-    CompletionsShim,
     translate_completions_to_generate,
     translate_generate_to_completions,
 )
@@ -57,8 +55,8 @@ class TestTranslateCompletionsToGenerate:
         assert result["raw"] is True
 
     def test_sets_model(self) -> None:
-        result = translate_completions_to_generate({"prompt": ""}, "granite-3.0-1b")
-        assert result["model"] == "granite-3.0-1b"
+        result = translate_completions_to_generate({"prompt": ""}, "granite3-dense:2b")
+        assert result["model"] == "granite3-dense:2b"
 
     def test_maps_stream(self) -> None:
         result_streaming = translate_completions_to_generate(
@@ -85,8 +83,8 @@ class TestTranslateCompletionsToGenerate:
             "stop": ["<|end_of_text|>", "<|start_of_role|>"],
             "stream": True,
         }
-        result = translate_completions_to_generate(antares_req, "granite-3.0-1b")
-        assert result["model"] == "granite-3.0-1b"
+        result = translate_completions_to_generate(antares_req, "granite3-dense:2b")
+        assert result["model"] == "granite3-dense:2b"
         assert result["prompt"] == "<|start_of_role|>system<|end_of_role|>..."
         assert result["raw"] is True
         assert result["stream"] is True
@@ -119,44 +117,3 @@ class TestTranslateGenerateToCompletions:
         ollama_resp = {"done": True}
         result = translate_generate_to_completions(ollama_resp)
         assert result["choices"][0]["text"] == ""
-
-
-class TestCompletionsShimLifecycle:
-    """Tests for CompletionsShim startup and shutdown."""
-
-    def test_start_returns_url(self) -> None:
-        shim = CompletionsShim("http://localhost:11434", "test-model")
-        url = shim.start()
-        try:
-            assert url.startswith("http://127.0.0.1:")
-            port_str = url.split(":")[-1]
-            port = int(port_str)
-            assert 1024 <= port <= 65535
-        finally:
-            shim.stop()
-
-    def test_stop_shuts_down(self) -> None:
-        shim = CompletionsShim("http://localhost:11434", "test-model")
-        url = shim.start()
-        port = int(url.split(":")[-1])
-        shim.stop()
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        try:
-            result = sock.connect_ex(("127.0.0.1", port))
-            assert result != 0
-        finally:
-            sock.close()
-
-    def test_double_stop_is_safe(self) -> None:
-        shim = CompletionsShim("http://localhost:11434", "test-model")
-        shim.start()
-        shim.stop()
-        shim.stop()
-
-    def test_strips_trailing_slash_from_ollama_url(self) -> None:
-        shim = CompletionsShim("http://localhost:11434/", "test-model")
-        assert shim._ollama_url == "http://localhost:11434"
-
-    def test_stores_model_name(self) -> None:
-        shim = CompletionsShim("http://localhost:11434", "granite-3.0-1b")
-        assert shim._model == "granite-3.0-1b"

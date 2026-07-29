@@ -17,18 +17,6 @@ class AntaresLocalTool(BaseAntaresTool):
     def command(self) -> str:
         return "antares"
 
-    @property
-    def category(self) -> str:
-        return "sast"
-
-    @property
-    def scope(self) -> str:
-        return "repository"
-
-    @property
-    def description(self) -> str:
-        return "CWE vulnerability localization scanner using LLM agents"
-
     def check_available(self) -> bool:
         return shutil.which("antares") is not None
 
@@ -37,11 +25,4 @@ class AntaresLocalTool(BaseAntaresTool):
 
     def build_command(self, **kwargs: Any) -> list[str]:
         mode = kwargs.get("mode", "sweep")
-        return [
-            "antares",
-            "tool",
-            mode,
-            "--stdin",
-            "--format",
-            "json",
-        ]
+        return ["antares", "tool", mode, "--stdin"]

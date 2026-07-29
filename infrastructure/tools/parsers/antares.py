@@ -6,11 +6,6 @@ from typing import Any, cast
 
 from domain.tools.base import ToolResult
 from domain.tools.enrichment import FieldEnrichmentSpec, PromptStrategy
-from infrastructure.tools.antares_trace import (
-    build_trace_detail,
-    build_trace_summary,
-    parse_trace_file,
-)
 
 from ._shared import _first_output_file, _shared_meta
 
@@ -28,7 +23,7 @@ def parse_antares_json(json_path: Path) -> dict[str, Any]:
             data = json.load(f)
     except (OSError, json.JSONDecodeError) as exc:
         return {"error": f"JSON parse error: {exc}"}
-    return _parse_antares_data(data)
+    return parse_antares_data(data)
 
 
 def parse_antares_json_string(json_string: str) -> dict[str, Any]:
@@ -36,16 +31,19 @@ def parse_antares_json_string(json_string: str) -> dict[str, Any]:
     try:
         data = json.loads(json_string)
     except json.JSONDecodeError as exc:
-        return {"error": f"JSON parse error: {exc}", "raw_output": json_string}
-    return _parse_antares_data(data)
+        return {
+            "error": f"JSON parse error: {exc}",
+            "raw_output": json_string,
+        }
+    return parse_antares_data(data)
 
 
-def _parse_antares_data(data: dict[str, Any]) -> dict[str, Any]:
+def parse_antares_data(data: dict[str, Any]) -> dict[str, Any]:
     findings = data.get("findings", [])
     parsed_findings = [_parse_finding(f) for f in findings]
 
     by_severity: dict[str, int] = {}
-    files_scanned: set = set()
+    files_scanned: set[str] = set()
     for finding in parsed_findings:
         sev = finding["severity"]
         by_severity[sev] = by_severity.get(sev, 0) + 1
@@ -64,15 +62,24 @@ def _parse_antares_data(data: dict[str, Any]) -> dict[str, Any]:
 
 
 def _parse_finding(finding: dict[str, Any]) -> dict[str, Any]:
-    likelihood = finding.get("likelihood_of_exploit", "Low")
-    severity = _SEVERITY_MAP.get(likelihood.lower(), "low")
-    cwe_ids = finding.get("cwe_ids", [])
+    raw_likelihood = finding.get("likelihood_of_exploit", "")
+    severity_key = str(raw_likelihood).lower() if raw_likelihood else ""
+    severity = _SEVERITY_MAP.get(severity_key, "low")
+
+    raw_cwe = finding.get("cwe_ids", [])
+    if isinstance(raw_cwe, str):
+        cwe_ids = [raw_cwe]
+    elif isinstance(raw_cwe, list):
+        cwe_ids = raw_cwe
+    else:
+        cwe_ids = []
+
     return {
         "title": finding.get("title", ""),
         "file_path": finding.get("file_path", ""),
         "cwe_ids": cwe_ids,
         "submission_rank": finding.get("submission_rank", 0),
-        "likelihood_of_exploit": likelihood,
+        "likelihood_of_exploit": (str(raw_likelihood) if raw_likelihood else ""),
         "severity": severity,
     }
 
@@ -128,7 +135,7 @@ class AntaresHandler:
         parsed: dict[str, Any] = cast(dict[str, Any], result.parsed_data or {})
         findings: list[dict[str, Any]] = parsed.get("findings", [])
         per_cwe_results: list[dict[str, Any]] = parsed.get("per_cwe_results", [])
-        trace_map: dict[str, Path] = parsed.get("trace_map", {})
+        trace_data: dict[str, dict[str, Any]] = parsed.get("trace_data", {})
 
         cwe_map: dict[str, dict[str, Any]] = {}
         for cwe_result in per_cwe_results:
@@ -145,29 +152,6 @@ class AntaresHandler:
             cwe_ids: list[str] = finding.get("cwe_ids", [])
             primary_cwe = cwe_ids[0] if cwe_ids else ""
             severity = finding.get("severity", "low")
-            title = finding.get("title", "")
-            file_path = finding.get("file_path", "")
-            submission_rank = finding.get("submission_rank", 0)
-            likelihood = finding.get("likelihood_of_exploit", "")
-
-            meta_dict: dict[str, Any] = {
-                "submission_rank": submission_rank,
-                "likelihood_of_exploit": likelihood,
-            }
-            if primary_cwe in cwe_map:
-                cwe_stats = cwe_map[primary_cwe]
-                meta_dict["cwe_tool_calls"] = cwe_stats.get("tool_call_count", 0)
-                meta_dict["cwe_duration_seconds"] = cwe_stats.get(
-                    "duration_seconds", 0.0
-                )
-
-            if primary_cwe in trace_map:
-                trace_path = trace_map[primary_cwe]
-                events = parse_trace_file(trace_path)
-                trace_summary = build_trace_summary(events)
-                trace_detail = build_trace_detail(events)
-                meta_dict["investigation_trace_summary"] = trace_summary
-                meta_dict["investigation_trace_detail"] = trace_detail
 
             row: dict[str, Any] = {
                 "tool": "antares",
@@ -176,22 +160,32 @@ class AntaresHandler:
                 "severity": severity,
                 "confidence": "potential",
                 "rule_id": primary_cwe,
-                "file_path": file_path,
-                "description": title,
+                "file_path": finding.get("file_path", ""),
+                "description": finding.get("title", ""),
                 "cwe": json.dumps(cwe_ids),
                 "timestamp": timestamp,
                 "source_file": source_file,
-                "meta": json.dumps(meta_dict),
+                "submission_rank": finding.get("submission_rank", 0),
+                "likelihood_of_exploit": finding.get("likelihood_of_exploit", ""),
             }
 
-            row.update(_shared_meta(self, "weakness"))
+            if primary_cwe in cwe_map:
+                cwe_stats = cwe_map[primary_cwe]
+                row["cwe_tool_calls"] = cwe_stats.get("tool_call_count", 0)
+                row["cwe_duration_seconds"] = cwe_stats.get("duration_seconds", 0.0)
 
+            if primary_cwe in trace_data:
+                td = trace_data[primary_cwe]
+                row["investigation_trace_summary"] = td.get("summary", "")
+                row["investigation_trace_detail"] = td.get("detail", [])
+
+            row.update(_shared_meta(self, "weakness"))
             rows.append(row)
 
         return rows
 
     def render(self, row: dict) -> str:
-        """Render a row as a human-readable string for ChromaDB indexing."""
+        """Render a finding as text for ChromaDB indexing."""
         parts = [
             f"CWE: {row.get('rule_id', '')}",
             f"File: {row.get('file_path', '')}",
@@ -210,14 +204,9 @@ class AntaresHandler:
         if row.get("owasp_name"):
             parts.append(f"OWASP category: {row['owasp_name']}")
 
-        meta_str = row.get("meta", "{}")
-        try:
-            meta = json.loads(meta_str) if isinstance(meta_str, str) else meta_str
-            trace_summary = meta.get("investigation_trace_summary")
-            if trace_summary:
-                parts.append(f"Investigation:\n{trace_summary}")
-        except (json.JSONDecodeError, ValueError):
-            pass
+        trace_summary = row.get("investigation_trace_summary")
+        if trace_summary:
+            parts.append(f"Investigation:\n{trace_summary}")
 
         return "[antares] " + " | ".join(parts)
 

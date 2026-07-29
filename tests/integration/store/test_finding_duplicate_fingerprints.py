@@ -66,10 +66,8 @@ class TestDuplicateFingerprintsInSameRun:
 
         assert count == 2
 
-    def test_duplicate_fingerprints_across_runs_are_all_stored(
-        self, tmp_path: Path
-    ) -> None:
-        """Same fingerprint across two runs → two rows (one per run)."""
+    def test_duplicate_fingerprints_across_runs_dedup(self, tmp_path: Path) -> None:
+        """Same fingerprint across two runs updates seen_count."""
         factory = ConnectionFactory(tmp_path / "findings.db")
         factory.init_schema()
         run_repo = RunRepository(factory)
@@ -83,5 +81,32 @@ class TestDuplicateFingerprintsInSameRun:
 
         with factory.connect() as conn:
             count = conn.execute("SELECT COUNT(*) FROM findings").fetchone()[0]
+            row = conn.execute(
+                "SELECT run_id, seen_count FROM findings LIMIT 1"
+            ).fetchone()
 
-        assert count == 2
+        assert count == 1
+        assert row["run_id"] == run_id2
+        assert row["seen_count"] == 2
+
+    def test_identical_findings_within_run_deduplicated(self, tmp_path: Path) -> None:
+        """Identical findings in one run with same fingerprint are deduplicated.
+
+        When a tool produces duplicate findings with identical fingerprints,
+        only the first occurrence is persisted to avoid redundant rows.
+        """
+        factory = ConnectionFactory(tmp_path / "findings.db")
+        factory.init_schema()
+        run_repo = RunRepository(factory)
+        finding_repo = FindingRepository(factory)
+
+        run_id = run_repo.create_run({})
+        finding_repo.insert_findings(run_id, normalize_test_findings([_FINDING_A]))
+        finding_repo.insert_findings(run_id, normalize_test_findings([_FINDING_A]))
+
+        with factory.connect() as conn:
+            count = conn.execute(
+                "SELECT COUNT(*) FROM findings WHERE run_id = ?", (run_id,)
+            ).fetchone()[0]
+
+        assert count == 1

@@ -9,6 +9,7 @@ configuration types.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 
 @dataclass(frozen=True)
@@ -22,3 +23,4 @@ class NoirProviderSnapshot:
 class ToolExecutionConfig:
     noir_provider: NoirProviderSnapshot | None
     blind_xss_callback_url: str = ""
+    antares_config: Any = None

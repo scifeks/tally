@@ -112,7 +112,8 @@ class TestAntaresPipeline:
             "description",
             "cwe",
             "timestamp",
-            "meta",
+            "submission_rank",
+            "likelihood_of_exploit",
         ]
         for row in rows:
             for field in required_fields:
