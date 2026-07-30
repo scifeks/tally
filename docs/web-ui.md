@@ -74,9 +74,9 @@ CORS origins are derived automatically from `web_ui_host` and `web_ui_vite_port`
 
 ### Host constraint
 
-`web_ui_host` controls both the FastAPI bind address and the Vite bind address. Tally writes `ui/.env.local` before starting Vite so both servers always share the same hostname. This is required for `SameSite=Strict` session cookies to work across the two ports. Cookies are scoped to a registrable domain, not an origin, so they flow cross-port when the hostname matches.
+`web_ui_host` must be an explicit IP (e.g. `127.0.0.1` or a LAN address). `0.0.0.0` and `::` are rejected because the findings UI exposes real security findings that should not be reachable from other machines.
 
-`0.0.0.0` and `::` are rejected at config load with a clear error message. Running the findings UI on a network-visible address would expose real security findings to other machines.
+Both the FastAPI server and the Vite dev server bind to this address so session cookies work across the two ports.
 
 ---
 
@@ -96,77 +96,25 @@ The dashboard (`/`) is the entry point when you launch the UI. It displays a sum
 
 ## Findings
 
-The Findings page (`/findings`) displays all discovered security issues from scanners in a searchable, filterable table.
+The Findings page (`/findings`) displays all discovered security issues in a searchable, filterable table.
 
-Each finding row shows: ID, tool, severity (color-coded), confidence level, finding type, file path, rule or alert name, description, URL, status, whether it will be included in reports, title, remediation guidance, and CWE.
+Each finding row shows: ID, tool, severity (color-coded), confidence, finding type, file path, rule or alert name, description, URL, status, report inclusion flag, title, remediation guidance, and CWE.
 
 ### Filtering and searching
 
-Use the filter header to narrow findings by severity, status, and tool. You can filter by any of: `critical`, `high`, `medium`, `low`, `informational` for severity; `active`, `false_positive`, `fixed`, `wont_fix` for status; and any scanner name (Semgrep, Gitleaks, ZAP, npm-audit, etc.) for tool.
-
-Enter text in the search box to filter by finding description or title.
-
-Click column headers to sort by severity, title, tool, status, or first-seen date. Sorting direction toggles with repeated clicks.
+Use the filter header to narrow findings by severity, status, and tool. Enter text in the search box to filter by description or title. Click column headers to sort; clicking again toggles direction.
 
 ### Inline editing
 
-Click any cell in a writable column to edit. Press Enter to save or Escape to cancel.
+Click any editable cell to modify it in place. Press Enter to save or Escape to cancel. Editable fields include: severity, confidence, finding type, description, status, report inclusion, business impact, TAL ID, CWE, title, remediation, and OWASP category.
 
-Editable columns are listed below. After each edit, the change is written to SQLite and synced to ChromaDB.
+Read-only fields (ID, tool, file, rule, URL, first-seen date) cannot be edited.
 
-#### Named fields
-
-| Field | Type | Values |
-|---|---|---|
-| `severity` | Enum | `critical`, `high`, `medium`, `low`, `informational` |
-| `confidence` | Enum | `confirmed`, `probable`, `potential` |
-| `finding_type` | Array | `secret`, `vulnerability`, `weakness`, `misconfiguration`, `exposure`, `dependency`, `informational` |
-| `description` | Text | Free text |
-| `status` | Enum | `active`, `false_positive`, `fixed`, `wont_fix` |
-| `should_report` | Boolean | Include in generated reports |
-| `business_impact` | Text | Free text |
-| `tal_id` | Text | Free text identifier |
-| `cwe` | Array | JSON array of CWE numbers or names |
-
-#### Meta fields
-
-| Field | Type | Values |
-|---|---|---|
-| `title` | Text | Finding title or summary |
-| `remediation` | Text | Fix guidance or mitigation steps |
-| `owasp_name` | Text | Valid OWASP category or null |
-
-Read-only columns (locked from editing): ID, tool, file, rule_id, url, first_seen.
-
-### Write safety
-
-Edits set `triaged_by = 'analyst_web'` and record a `triaged_at` timestamp. Only the editable fields listed above are written. Locked fields including `tool`, `domain`, `fingerprint`, and raw scanner metadata are never touched.
-
-> **Important:** If you run a new scan after editing findings, the ingest pipeline will overwrite `severity`, `confidence`, `description`, `cwe`, and `meta` with values reported by the scanner. Analyst edits to these fields are not preserved.
+> **Note:** Running a new scan overwrites scanner-provided fields (severity, confidence, description, CWE) with fresh values. Analyst edits to those fields are not preserved across re-scans. Fields that scanners do not produce (title, remediation, business impact, status) are preserved.
 
 ### Adding manual findings
 
-Click the plus button above the findings table to add a finding that was discovered outside the scanning pipeline. A modal opens with a form to enter finding details.
-
-Title and severity are required. You must provide at least one location field (repository, file path, or URL) to anchor the finding to a scope.
-
-#### Fields
-
-| Field | Required | Description |
-|---|---|---|
-| Title | Yes | Finding title or summary |
-| Severity | Yes | `critical`, `high`, `medium`, `low`, `informational` |
-| Status | No | `active`, `false_positive`, `fixed`, `wont_fix` (defaults to `active`) |
-| Confidence | No | `confirmed`, `probable`, `potential` |
-| Segment | No | `SAST`, `SCA`, `WEB`, `SECRETS` (populated from active project) |
-| Finding Type | No | `secret`, `vulnerability`, `weakness`, `misconfiguration`, `exposure`, `dependency`, `informational` |
-| Repository | No | Scan target repository (at least one location required) |
-| File | No | File path within the repository (at least one location required) |
-| URL | No | Web address (at least one location required) |
-| CWE | No | Comma or newline-separated CWE identifiers (e.g., CWE-79, CWE-20) |
-| Vulnerability ID | No | CVE, GHSA, or other identifier |
-| Description | No | Detailed explanation of the finding |
-| Notes | No | Internal notes not shared in reports |
+Click the plus button above the findings table to add a finding discovered outside the scanning pipeline. Title and severity are required. You must provide at least one location (repository, file path, or URL).
 
 ---
 
@@ -178,9 +126,7 @@ The Scans page (`/scans`) is where you configure and launch security assessments
 
 Click the Play button at the top left to start a scan with the default configuration (all repos, all tools, all segments).
 
-A real-time progress panel appears, showing elapsed time, enrichment progress, and a log of scan events (tool invocation, file processing, enrichment steps). The radar visualization animates while the scan runs.
-
-When the scan completes, it appears in the recent scans table on the dashboard.
+A real-time progress panel appears, showing elapsed time, enrichment progress, and a log of scan events. The radar visualization animates while the scan runs.
 
 ### Advanced options
 
@@ -191,7 +137,7 @@ Click "Advanced options" to customize the scan:
 - **Tools**: Select specific tools to run. Leave unselected to use all enabled tools.
 - **Skip tools**: Disable specific tools within the selected set.
 - **Skip enrichment**: Skip the LLM enrichment step during finding ingest. Findings are stored without AI-generated severity, remediation, and description fields.
-- **Argument profiles**: Apply saved tool argument overrides (see Configuration page).
+- **Argument profiles**: Apply custom argument profiles you created on the Configuration page. Profiles override the default arguments for specific tools.
 
 ### Saved scans
 
@@ -201,13 +147,13 @@ Create a new saved scan by configuring advanced options and clicking "Save scan"
 
 ### Tool run history
 
-After a scan completes, the page shows detailed timing and status for each tool run (SAST, SCA, WEB, SECRETS). Expand each tool group to see per-repo or per-host timing information.
+After a scan completes, the page shows detailed timing and status for each tool run grouped by domain (SAST, SCA, WEB, SECRETS). Expand each tool group to see per-repo or per-host timing information.
 
 ---
 
 ## Triage
 
-The Triage page (`/triage`) uses an AI agent to analyze SAST and API findings. The agent reads each finding and its source code, then produces a verdict with severity, confidence, remediation, and attack vector. Two backends are supported: Claude Code (Anthropic API) and OpenCode (local Ollama). See [docs/triage.md](triage.md) for backend setup and the container security model.
+The Triage page (`/triage`) uses an AI agent to analyze findings. The agent reads each finding and its source code, then produces a verdict with severity, confidence, remediation, and attack vector. Two backends are supported: Claude Code (Anthropic API) and OpenCode (local Ollama). See [docs/triage.md](triage.md) for backend setup and the container security model.
 
 ### Starting triage
 
@@ -217,54 +163,37 @@ Triage requires Docker and a configured `triage_inference` block in `config/glob
 
 ### Real-time progress
 
-As triage runs, the page displays:
-
-- Overall progress: findings processed / total findings eligible
-- Batch list: grouped by segment (SAST, SCA, WEB, SECRETS) with status, attempt count, and timing for each batch
-- Live log: detailed events as each batch is sent to the agent, receives responses, and persists results
-- Elapsed time counter
+As triage runs, the page displays overall progress (findings processed / total eligible), a batch list grouped by segment with status and timing, a live event log, and an elapsed time counter.
 
 ### Batch visualization
 
-Expand a batch in the list to see the AI-generated content. Each batch groups related findings (by segment, rule, or file) to provide context to the agent.
-
-Batches can have status: pending, running, succeeded, failed. Failed batches can be retried manually.
+Expand a batch to see the AI-generated content. Each batch groups related findings (by segment, rule, or file) to give the agent context. Batches show status: pending, running, succeeded, or failed. Failed batches can be retried manually.
 
 ### Prompt injection warning
 
-A warning banner appears when you launch triage, reminding you that source files and finding metadata are sent to the configured LLM. This is a security reminder that repository content may contain adversarial input. See [docs/triage.md](triage.md) for the full security model.
+A warning banner appears when you launch triage, reminding you that source files and finding metadata are sent to the configured LLM. Repository content may contain adversarial input. See [docs/triage.md](triage.md) for the full security model.
 
 ### Resume from failure
 
-If a triage run fails mid-way, the page shows a resume option with the failed finding ID. Click "Resume triage" to restart processing from that point, without re-processing already-completed batches.
+If a triage run fails mid-way, the page shows a resume option. Click "Resume triage" to restart from the failure point without re-processing completed batches.
 
 ---
 
 ## Reports
 
-The Reports page (`/reports`) generates compliance and security assessment reports in PDF, JSON, or HTML formats.
+The Reports page (`/reports`) generates security assessment reports in PDF, JSON, or HTML formats.
 
 ### Report generation
 
-Select a report format from the dropdown (PDF, JSON, or HTML), choose the testing type (`white_box`, `grey_box`, or `black_box`), and click "Generate report" to start.
-
-The page shows a pre-flight checklist: verify your project name, findings count, and recent scans are correct before generating.
+Select a format from the dropdown, choose the testing type (`white_box`, `grey_box`, or `black_box`), and click "Generate report". The page shows a pre-flight checklist of your project name, findings count, and recent scans.
 
 ### Draft sections
 
-You can generate individual draft sections (executive-summary, risk-level, critical-issues, improvement-points, scope-and-methodology, general-recommendations) without assembling a full report. This lets you preview content and save drafts for review. See [docs/report.md](report.md) for the full PDF assembly workflow.
-
-When you generate drafts, each section appears as a card showing the AI-generated content, word count, and a preview pane. Edit any section by clicking the edit icon and re-generating.
+You can generate individual draft sections (executive summary, risk level, critical issues, improvement points, scope and methodology, general recommendations) without assembling a full report. Each section appears as a card with the AI-generated content, word count, and a preview pane. Edit any section by clicking the edit icon and re-generating. See [docs/report.md](report.md) for the full PDF assembly workflow.
 
 ### Report history
 
-A table below the generation section lists all previously generated reports, with format, filename, file size, creation time, and a download link.
-
-Reports are stored in the project's `reports/` directory on disk.
-
-### Download
-
-When a report finishes generating, its status changes to "done" and a download link appears. Click the link to save the file to your local machine.
+A table below the generation section lists all previously generated reports with format, filename, file size, creation time, and a download link.
 
 ---
 
@@ -274,118 +203,173 @@ The Chat page (`/chat`) provides a multi-turn conversation interface scoped to y
 
 ### Sessions
 
-The left panel shows a list of chat sessions. Click a session to load its message history. Create a new session with the plus button at the top.
-
-Each session is isolated and stores messages specific to that project. Switching projects clears all session history, as chats are project-scoped.
+The left panel shows chat sessions. Click a session to load its history. Create a new session with the plus button. Each session is project-scoped and isolated from other projects.
 
 ### Messages
 
-Send a message by typing in the input box at the bottom and clicking Send or pressing Enter. The response streams in real time and is automatically added to the session history. Answers are grounded in the active project's findings via RAG retrieval from ChromaDB.
-
-### Session management
-
-Delete a session by clicking the trash icon next to the session name. Deleted sessions and their message history are removed permanently.
+Type in the input box and press Enter or click Send. Responses stream in real time and are grounded in the active project's findings via RAG retrieval. Delete a session with the trash icon; deleted sessions and their messages are removed permanently.
 
 ---
 
 ## Project Configuration
 
-The Configuration page (`/config`) is where you manage project metadata, repositories, tool settings, and argument profiles.
+The Configuration page (`/config`) is the most feature-rich page in the app. It manages project metadata, repositories, endpoint files, auth credentials, tool execution overrides, and custom argument profiles. The page uses a two-column layout: repositories on the left, tool overrides on the right.
 
 ### Project information
 
-View and edit the project name, description, and other metadata. Changes are saved immediately.
+View and edit the project name and metadata at the top of the left column.
 
 ### Repositories
 
+Repositories define what Tally scans. Each repository points to a codebase on disk (or in a Docker container) and carries configuration for languages, scan targets, dependencies, endpoint files, and auth credentials.
+
 #### Basic mode
 
-Click "Add repository" to create a repository entry. Provide the repository name, type, and local path. If you need to configure multiple services (different parts of a monorepo or multi-tenant codebase), switch to Advanced mode instead.
+Basic mode treats a repository as a single unit. Click "Add repository" and fill in:
 
-1. Fill in the repository name.
-2. Select type: library, api, ui, or a combination.
-3. Set location mode: local (path on disk) or docker (container name and mount point).
-4. Specify languages used in the repository.
-5. Set base URLs for live crawling (DAST tools).
-6. Click Save.
+1. **Repository name.** A short identifier used in scan output (e.g. `api-server`).
+2. **Repository path.** The absolute filesystem path to the code on your machine.
+3. **Type.** Select `library`, `api`, `ui`, or a combination. `library` is mutually exclusive with `api` and `ui`. Type controls which scan segments apply.
+4. **Location mode.** Toggle between `local` (code lives on the host filesystem) and `docker` (code is mounted inside a running container).
+   - **Local:** No additional fields. Scanners access code via the repository path.
+   - **Docker:** Two additional fields appear: **Container Name** (the `docker ps` name of a running container) and **Mount Point** (the path inside the container where the code is mounted, e.g. `/app`).
+5. **Languages.** Tag the programming languages used (e.g. `python`, `javascript`, `php`). This controls which SCA tools run: `python` selects pip-audit, `javascript`/`typescript` select npm-audit, `php` selects composer-audit.
+6. **Base URLs.** One or more URLs where the application is running (e.g. `http://localhost:8080`). DAST tools (ZAP, Nuclei, XSStrike, DalFox, sqlmap) scan these. Leave empty to skip web scanning.
+7. **Test directories.** Directory names (e.g. `tests`, `spec`, `__tests__`) excluded from SAST and secrets results. Matched by name at any depth, case-insensitive.
+8. **Ignore directories.** Directory names (e.g. `vendor`, `node_modules`) excluded from all scans.
 
-To edit an existing repository, click the pencil icon. To remove, click the trash icon.
+Click Save to create the repository. To edit, click the pencil icon. To delete, click the trash icon.
 
-#### Advanced mode
+#### Crawler settings
 
-In Advanced mode, you can define multiple named services within a single repository. Each service has its own configuration for type, location mode, languages, base URLs, and crawling settings. This is useful for monorepos, multi-tenant applications, or any codebase with distinct logical services that need different scan settings.
+When base URLs are configured, crawler settings appear:
 
-Click "Switch to Advanced" from Basic mode. The interface changes to show a service list on the left. Click "Add Service" to create a new named service within the repository.
+- **Enable live crawling.** Turns on the Katana web crawler, which spiders your application and discovers endpoints at scan time.
+- **Katana headless mode.** Uses Chrome to render JavaScript routes. Required for single-page applications. Automatically caps crawl depth at 5 to prevent stalls on cyclic apps.
+- **Crawl depth.** How many link levels deep to crawl (1-20 in standard mode, 1-5 in headless mode).
 
-Each service has three groups of configuration fields.
+#### Dependencies file
 
-#### Location and type
+Set the path to a dependency manifest so SCA tools can scope their scan. For local repositories, use a path relative to the repo root (e.g. `requirements.txt`). For Docker repositories, use the container-internal path (e.g. `/app/requirements.txt`).
 
-| Field | Required | Description |
-|---|---|---|
-| Service Name | Yes | Identifier for this service within the repository (e.g., `backend`, `frontend`, `auth-service`) |
-| Relative Path | No | Sub-path within the repository root (e.g., `packages/api`, `services/web`) |
-| Type | Yes | `library`, `api`, `ui`, or a combination (library cannot be combined with api or ui) |
-| Location Mode | No | `local` (path on disk) or `docker` (container-mounted code) |
-| Container Name | Required if docker mode | Docker container name where the code is mounted |
-| Mount Point | Required if docker mode | Path inside the container where the code is mounted (e.g., `/app`) |
+When no dependencies file is set, pip-audit is skipped for local repositories. Docker repositories fall back to scanning all installed packages in the container.
 
-#### Code context
+#### Endpoint file
 
-| Field | Required | Description |
-|---|---|---|
-| Languages | Yes | Languages used in this service (e.g., python, javascript, go). Used by scanners to select rules. |
-| Test Directories | No | Directories to exclude from scanning (e.g., `tests`, `spec`, `__tests__`) |
-| Ignore Directories | No | Directories to skip entirely (e.g., `vendor`, `node_modules`, `.git`) |
+Upload an API specification or capture file to provide DAST tools with a pre-built list of endpoints. Accepted formats: OpenAPI 3.x, Swagger 2.0, Postman collections, HAR (HTTP Archive), and Katana JSONL output. The format is auto-detected.
 
-#### Scanning targets
+When an endpoint file is uploaded and base URLs are configured, a checkbox appears: **"Also run live crawlers to supplement the endpoint file?"** When unchecked, ZAP and other DAST tools rely entirely on the endpoint file. When checked, Tally also runs Katana and Noir to discover additional endpoints. Both sources are merged and deduplicated before scanning.
 
-| Field | Required | Description |
-|---|---|---|
-| Base URLs | No | Base URLs for DAST tools to scan this service (e.g., `https://api.example.com`). First URL is used as the canonical scope. |
-| Dependencies File | No | Path to dependency manifest for SCA scanning (e.g., `requirements.txt`, `package.json`, `go.sum`) |
-| Enable live crawling | No | Enable the Katana web crawler for this service |
-| Crawl Depth | No | How many levels deep to crawl (1-20 for standard, max 5 if headless mode is enabled) |
-| Katana headless mode | No | Use Chrome to render JavaScript routes (required for single-page applications, max crawl depth 5) |
+Uploading a new file replaces the previous one. See [docs/endpoint-files.md](endpoint-files.md) for format details and [docs/url-discovery.md](url-discovery.md) for how endpoint files interact with the URL discovery pipeline.
+
+#### Garak LLM config
+
+Upload a YAML configuration file for the Garak LLM vulnerability scanner. The file specifies the target model, probes to run, and connection settings. One config file per repository. When no garak config is present, garak is skipped for that repository. See [docs/tools.md](tools.md#garak-llm-scanner) for the config format.
+
+#### Auth credentials
+
+At the bottom of each repository form, an **Auth Credentials** section stores login credentials used by crawlers to authenticate before scanning. Set:
+
+- **Login URL.** The login form endpoint (e.g. `https://example.com/login`).
+- **Username** and **Password.** Credentials for form-based login.
+
+Credentials are write-only: they are never echoed back from the server after saving. When editing an existing repository, credential fields show "Stored" as a placeholder. Enter new values to replace them, or leave blank to keep the existing credentials.
+
+Click "Save Auth" to persist credentials independently from the main repository save. Credentials are stored per-repository and apply to all services within that repository.
+
+#### Advanced mode (multi-service)
+
+For monorepos or applications with multiple logical services that need different scan settings, switch to Advanced mode. Click "Switch to Advanced" at the top of the repository form. The interface changes to show a service list on the left side of the repository panel.
+
+Each service within the repository gets its own:
+
+- **Service name** (e.g. `backend`, `frontend`, `auth-service`)
+- **Relative path** within the repository root (e.g. `packages/api`)
+- **Type, location mode, languages, base URLs, test/ignore directories, dependencies file, and crawler settings** (same fields as basic mode, but per-service)
+
+Click "Add Service" to create additional services. Click a service name to select and edit it. Delete a service with the trash icon (disabled when only one service remains).
+
+Switching to advanced mode is one-way when multiple services exist. You can only switch back to basic mode if you reduce to a single service named "default".
 
 ### Tool overrides
 
-Enable or disable individual scanners. For each enabled tool, you can override:
+The right column of the Configuration page controls how individual tools execute for this project. By default, tools use the global configuration from `config/commands.json`. Project-level overrides let you change how a specific tool runs without affecting other projects.
 
-- **Container image**: Use a different Docker image version or variant.
-- **Mount paths**: Configure volume mounts for the scanner container.
-- **Arguments**: Set custom command-line arguments or environment variables for the tool.
+#### Adding an override
 
-Create argument templates to save and reuse common configurations across scans. Templates are named bundles of tool-specific arguments.
+Click "Add Override" and select a tool from the dropdown. For each override, configure:
 
-### Tool catalog
+**Type.** Toggle between `repo` (repository-scoped tools like Semgrep, Gitleaks, pip-audit) and `api` (network-scoped tools like ZAP, Nuclei, sqlmap). This controls whether the tool receives a repository path or a target URL.
 
-A read-only browser shows all tools Tally supports, grouped by category (SAST, SCA, Web, Secrets, Dependency Management). Each tool entry lists the default command and available arguments.
+**Location.** Toggle between `local` and `docker`:
+
+- **Local:** Provide the absolute path to the tool binary on the host (e.g. `/usr/local/bin/semgrep`).
+- **Docker:** Provide the container name and the path to the tool binary inside the container (e.g. container `semgrep-container`, tool path `/usr/local/bin/semgrep`). Some tools do not support Docker execution; the Docker option is disabled for those tools.
+
+**Args.** Toggle between `stock` and `custom`:
+
+- **Stock:** The tool runs with its default arguments. No additional configuration needed.
+- **Custom:** An argument template editor appears where you build named argument profiles.
+
+#### Argument profiles
+
+When args mode is set to `custom`, you can create one or more named argument templates (profiles). Each profile is a named set of command-line flags and values that override the tool's defaults at scan time.
+
+Click "Add Template" to create a new profile. Give it a descriptive name (e.g. `aggressive-scan`, `quick-check`, `with-custom-wordlist`). Then add arguments:
+
+Each argument has:
+- **Argument name.** The flag (e.g. `--wordlist`, `-v`, `--severity-threshold`).
+- **Operator.** `=` (value joined with equals sign) or space (value as separate argument).
+- **Type.** `None` for boolean flags that take no value, `String` for text values, or `File` for file uploads. File arguments are uploaded and stored with the profile.
+- **Value.** The argument value (for String and File types).
+
+Add as many arguments as needed per profile. Create multiple profiles for different scan scenarios. When you launch a scan on the Scans page, the "Argument profiles" advanced option lets you select which profile to apply.
+
+Click "Done" to close the editor. Profiles are saved when you save the tool override. Click the trash icon to delete a profile.
+
+#### Editing and removing overrides
+
+Select an existing override from the dropdown to edit it. Click "Remove Override" to delete it and revert to the global configuration for that tool.
 
 ---
 
 ## URL Lists
 
-The URL Lists page (`/urls`) manages target lists for web-based scanners (ZAP, custom HTTP tools).
+The URL Lists page (`/urls`) shows a unified inventory of all endpoints known to Tally for the active project. This is a read-only view. URLs come from three sources:
 
-Create a new list by clicking "New list" and pasting or uploading a file of URLs (newline-separated). Tally parses each URL and displays them in a table.
+1. **Endpoint files** uploaded on the Configuration page (OpenAPI, Swagger, Postman, HAR, Katana JSONL).
+2. **Katana crawls** that discover endpoints by spidering your running application during scans.
+3. **Noir analysis** that discovers endpoints by statically analyzing your source code during scans.
 
-Filter URLs by HTTP method (GET, POST, PUT, DELETE, etc.), protocol (HTTP, HTTPS), hostname, port, path, and source repository.
+URLs from all sources are merged and deduplicated. Identical endpoints discovered by multiple tools or files appear once. When both Noir and Katana discover the same path, Noir's query parameter metadata is merged into the Katana entry.
 
-Search for URLs by hostname, path, or query string.
+### What the table shows
 
-Sort the table by any column. The table uses virtual scrolling for fast rendering of large lists.
+Each row represents a discovered endpoint with columns for HTTP method (color-coded), protocol (http/https), host, port, path, and source repository. The table uses virtual scrolling to handle thousands of URLs.
+
+### Filtering and sorting
+
+Filter by any column dimension: HTTP method, protocol, host, port, path, or repository. Each filter dropdown shows available values with counts. Multiple filters combine to narrow results.
+
+Enter text in the search box to search across path, method, host, and repository name.
+
+Click any column header to sort. Click again to toggle direction. Click a third time to clear the sort.
+
+### How URL lists are consumed
+
+Before each DAST tool runs, Tally rebuilds two merged artifacts from the URL inventory:
+
+- **`merged_urls.txt`**: A deduplicated list of URLs, one per line. Used by XSStrike, DalFox, and Nuclei as seed URLs.
+- **`merged_oas3.json`**: An OpenAPI 3.0 document combining all discovered paths and methods. Used by ZAP via its `-openapifile` flag for targeted API scanning.
+
+You do not need to manage these files. Tally generates them automatically before each scan from whatever URLs exist in the inventory at that point.
 
 ---
 
 ## Security Model
 
-When `ui serve` runs, Tally generates a one-time session token using `secrets.token_hex(16)`. The token is valid for the lifetime of the server process and is never written to disk or stored in the database.
-
-The full URL including the token is opened in your browser directly. After the SPA loads, the token is exchanged for session cookies and removed from the address bar. Closing the tab or refreshing the page after the exchange does not require the original URL.
-
-Every request to the FastAPI server must be authenticated via session cookie. The handshake token URL is single-use. A second visit after the exchange has completed receives a 401.
+When `ui serve` runs, Tally generates a one-time session token. The full URL including the token is opened in your browser. After the SPA loads, the token is exchanged for session cookies and removed from the address bar. The handshake URL is single-use; a second visit after the exchange receives a 401.
 
 The server binds to `web_ui_host` only (default `127.0.0.1`). It is not accessible from other machines on the network.
 
-CORS is enabled for the Vite origin only (`http://<web_ui_host>:<web_ui_vite_port>`). Wildcard (`*`) is never used.
+CORS is enabled for the Vite origin only. Wildcard (`*`) is never used.
