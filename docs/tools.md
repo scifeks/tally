@@ -6,6 +6,7 @@ Tally is designed for authorized security assessments. Run these tools only agai
 
 | Tool | Category | What it does |
 |---|---|---|
+| [Antares](https://github.com/IBM/Antares) | SAST | CWE vulnerability localization using LLM agent investigation; identifies files likely to contain specific CWE weaknesses by exploring the codebase with a small language model. Requires endpoint configuration; see [docs/antares-shim.md](antares-shim.md) |
 | [ffuf](https://github.com/ffuf/ffuf) | DAST | Fast web fuzzer for discovering hidden files, directories, and parameters via wordlist-based brute-force |
 | [Nuclei](https://github.com/projectdiscovery/nuclei) | DAST | Template-based vulnerability scanner; known CVE fingerprinting, misconfiguration detection, and DAST fuzzing |
 | [OWASP ZAP](https://github.com/zaproxy/zaproxy) | DAST | Dynamic web/API security scanning |
@@ -81,6 +82,45 @@ ffuf is a fast web fuzzer written in Go that discovers hidden files, directories
 ### How it works
 
 ffuf appends `/FUZZ` to each configured `base_url` and sends one HTTP request per wordlist entry, filtering responses by status code (200, 201, 301, 302, 307, 401, 403, 405, 500). Each discovered path becomes an "exposure" finding with its HTTP status, response length, and content type.
+
+---
+
+## Antares
+
+Antares is a SAST scanner that uses a small language model to investigate your codebase and identify files likely to contain specific CWE weaknesses. Unlike pattern-based scanners, Antares explores source code paths and data flows to localize where weaknesses are most likely to exist. It uses IBM's Granite model and requires a completions-compatible LLM endpoint.
+
+### Requirements
+
+- **Antares binary.** The `antares` command must be on `$PATH` or configured in `config/commands.json`.
+- **An LLM endpoint.** Antares needs a completions-capable backend. Three options: Ollama (with automatic shim), llama-server, or vLLM. See [docs/antares-shim.md](antares-shim.md) for setup.
+
+### How it works
+
+Antares receives a JSON payload via stdin specifying the target repository, model, and endpoint. It dispatches concurrent workers, one per CWE class, that use the language model to explore the codebase and identify files likely to contain that weakness. Each worker produces findings with file paths, CWE IDs, and an investigation trace showing the model's reasoning path.
+
+When using Ollama, Tally automatically starts a local completions shim that translates between the OpenAI-format `/v1/completions` API that Antares expects and Ollama's `/api/generate` endpoint. The shim sets `raw=True` so Antares can format prompts using Granite's native template. The shim is stopped after the scan completes.
+
+### Configuration
+
+Add `antares_inference` and optionally `antares_sweep_config` to `config/global.json`:
+
+```json
+{
+  "antares_inference": {
+    "provider": "ollama",
+    "model": "granite3-dense:2b",
+    "timeout_seconds": 300
+  },
+  "antares_sweep_config": {
+    "max_cwes": 15,
+    "workers": 4
+  }
+}
+```
+
+If `antares_inference.model` is not set and the provider is Ollama, Tally resolves the model from the chat, triage, or base Ollama config in that order.
+
+See [docs/antares-shim.md](antares-shim.md) for full configuration reference, backend options, and troubleshooting.
 
 ---
 
@@ -244,6 +284,17 @@ Run `search --show-fields --tool=<tool>` to see all available fields for a tool.
 | `package_name` | Name of the affected package |
 | `severity` | Severity level (low, medium, high, critical) |
 | `vulnerability_id` | CVE or advisory ID |
+
+### antares
+
+| Field | Description |
+|---|---|
+| `confidence` | Confidence level (potential) |
+| `cwe` | CWE ID of the identified weakness |
+| `file_path` | Source file path where the weakness was localized |
+| `finding_type` | Type of finding (weakness) |
+| `rule_id` | Primary CWE ID |
+| `severity` | Severity level (low, medium, high, critical) |
 
 ### dalfox
 
@@ -460,6 +511,6 @@ Run `search --show-fields --tool=<tool>` to see all available fields for a tool.
 Tally calls `check_system_tools()` on startup and when you run the `tools` REPL command.
 Three detection strategies are used:
 
-1. **PATH lookup** (`shutil.which`). Used by most tools (semgrep, gitleaks, osv-scanner, pip-audit, npm-audit, composer-audit). A tool is available if its binary is on `$PATH`.
+1. **PATH lookup** (`shutil.which`). Used by most tools (antares, semgrep, gitleaks, osv-scanner, pip-audit, npm-audit, composer-audit). A tool is available if its binary is on `$PATH`.
 2. **Configured path** (`Path.exists`). Used by OWASP ZAP. Checks the absolute path set in `config/commands.json` (e.g. `/usr/share/zaproxy/zap.sh`), which allows ZAP to be detected even when not on `$PATH`.
 3. **Python import** (`importlib.util.find_spec`). Used by tree-sitter. Checks that `tree_sitter` and `tree_sitter_language_pack` are importable in the active environment.

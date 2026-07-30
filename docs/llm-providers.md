@@ -1,6 +1,6 @@
 # LLM Provider Configuration
 
-Tally uses LLMs for chat over findings, enrichment during scans, report generation, vector embeddings for RAG search, and AI triage of SAST findings. You configure one or more provider connection profiles in `config/global.json`, then point each feature independently to the provider you want. Multiple providers can coexist in the same configuration.
+Tally uses LLMs for chat over findings, enrichment during scans, report generation, vector embeddings for RAG search, AI triage of SAST findings, and the Antares CWE scanner. You configure one or more provider connection profiles in `config/global.json`, then point each feature independently to the provider you want. Multiple providers can coexist in the same configuration.
 
 ---
 
@@ -174,16 +174,17 @@ Leave `api_key` empty to use the `VOYAGE_API_KEY` environment variable.
 
 ## Feature Configuration
 
-Each of the five LLM features can use a different provider independently. Configure them by adding a feature inference block to `config/global.json`.
+Each LLM feature can use a different provider independently. Configure them by adding a feature inference block to `config/global.json`.
 
 | Feature | Block name | Purpose | Supported providers |
-|---------|-----------|---------|-------------------|
+|---|---|---|---|
 | Chat | `chat_inference` | Chat over findings in the REPL and web UI | `ollama`, `llama_cpp`, `claude`, `openai` |
 | Enrichment | `enrichment_inference` | Finding enrichment during scan ingest | `ollama`, `llama_cpp`, `claude`, `openai` |
 | Reporting | `report_inference` | Report generation via the `report` command | `ollama`, `llama_cpp`, `claude`, `openai` |
 | Embeddings | `embedding_inference` | Vector embeddings for RAG retrieval | `ollama`, `llama_cpp`, `voyage` |
 | Noir AI | `noir_inference` | AI-assisted endpoint discovery for Noir | `ollama`, `llama_cpp` |
 | Triage | `triage_inference` | AI triage of SAST findings in Docker | `ollama`, `llama_cpp`, `claude` |
+| Antares | `antares_inference` | CWE vulnerability localization via LLM agents | `ollama`, `llama_cpp`, `vllm` |
 
 **Feature configuration fields:**
 

@@ -52,6 +52,15 @@
     "provider": "ollama",
     "timeout_seconds": 120
   },
+  "antares_inference": {
+    "provider": "ollama",
+    "model": "granite3-dense:2b",
+    "timeout_seconds": 300
+  },
+  "antares_sweep_config": {
+    "max_cwes": 15,
+    "workers": 4
+  },
   "defectdojo": {
     "url": "https://defectdojo.example.com",
     "api_token": "",

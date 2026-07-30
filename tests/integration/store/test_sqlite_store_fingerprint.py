@@ -89,22 +89,28 @@ _GITLEAKS_FINDINGS = [
 
 
 class TestFingerprint:
-    def test_same_finding_two_runs_produces_two_rows(self, tmp_path: Path) -> None:
-        """Same finding in two different runs produces two separate rows.
-
-        Scans are INSERT-only; each run_id gets its own findings rows.
-        """
+    def test_same_finding_two_runs_deduplicates(self, tmp_path: Path) -> None:
+        """Same finding across runs updates seen_count, not row count."""
         store = _make_store(tmp_path)
 
         run_id1 = store.create_run({"args": []})
-        store.insert_findings(run_id1, normalize_test_findings(_GITLEAKS_FINDINGS[:1]))
+        store.insert_findings(
+            run_id1,
+            normalize_test_findings(_GITLEAKS_FINDINGS[:1]),
+        )
 
         run_id2 = store.create_run({"args": []})
-        store.insert_findings(run_id2, normalize_test_findings(_GITLEAKS_FINDINGS[:1]))
+        store.insert_findings(
+            run_id2,
+            normalize_test_findings(_GITLEAKS_FINDINGS[:1]),
+        )
 
         conn = store._connect()
         count = conn.execute("SELECT COUNT(*) FROM findings").fetchone()[0]
-        assert count == 2
+        row = conn.execute("SELECT run_id, seen_count FROM findings LIMIT 1").fetchone()
+        assert count == 1
+        assert row["run_id"] == run_id2
+        assert row["seen_count"] == 2
 
     def test_fingerprint_uniqueness(self, tmp_path: Path) -> None:
         """Two different findings produce different fingerprints."""

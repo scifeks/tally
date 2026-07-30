@@ -17,6 +17,7 @@ from unittest.mock import patch
 
 import pytest
 
+from application.pipeline.chromadb_ids import chromadb_doc_id
 from application.pipeline.strategies import PersistOnlyStrategy
 from application.ports.embedding_provider import EmbeddingProvider
 from application.rag.knowledge_base import FindingKnowledgeBase
@@ -67,13 +68,14 @@ def _write_global_config(base_path: Path) -> None:
     shutil.copy(real_config, config_dir / "global.json")
 
 
-def _seed_finding(finding_repo: object, run_id: int, row: dict) -> int:
+def _seed_finding(finding_repo: object, run_id: int, row: dict) -> tuple[int, str]:
     normalized = normalize_test_findings([row])
     finding_repo.insert_findings(  # type: ignore[union-attr]
         run_id, normalized
     )
-    ids = finding_repo.get_ids_by_fingerprints([normalized[0].fingerprint])  # type: ignore[union-attr]
-    return ids[0]
+    fp = normalized[0].fingerprint
+    ids = finding_repo.get_ids_by_fingerprints([fp])  # type: ignore[union-attr]
+    return ids[0], fp
 
 
 def _dispatch(env: dict, ids: list[int]) -> None:
@@ -124,13 +126,14 @@ class TestEnrichedChromaText:
             "risk_type": "injection",
             "remediation": "sanitize inputs",
         }
-        finding_id = _seed_finding(env["finding_repo"], env["run_id"], row)
+        finding_id, fp = _seed_finding(env["finding_repo"], env["run_id"], row)
 
         _dispatch(env, [finding_id])
 
         kb = _build_test_kb(env["project_name"], Path(env["base_path"]))
         try:
-            doc = kb.get_finding(str(finding_id))
+            doc_id = chromadb_doc_id(fp, "default")
+            doc = kb.get_finding(doc_id)
             assert doc is not None, "ChromaDB document was not written"
             text = doc["document"]
             assert text is not None
@@ -157,13 +160,14 @@ class TestEnrichedChromaText:
             "severity": "medium",
             "finding_type": json.dumps(["vulnerability"]),
         }
-        finding_id = _seed_finding(env["finding_repo"], env["run_id"], row)
+        finding_id, fp = _seed_finding(env["finding_repo"], env["run_id"], row)
 
         _dispatch(env, [finding_id])
 
         kb = _build_test_kb(env["project_name"], Path(env["base_path"]))
         try:
-            doc = kb.get_finding(str(finding_id))
+            doc_id = chromadb_doc_id(fp, "default")
+            doc = kb.get_finding(doc_id)
             assert doc is not None, "ChromaDB document was not written"
             assert doc["metadata"] is not None
             assert doc["metadata"]["tool"] == "semgrep"

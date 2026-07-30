@@ -42,6 +42,7 @@ class _StubRunner(SubprocessRunnerPort):
         cwd: str | None = None,
         env: dict[str, str] | None = None,
         cancel_token: CancellationToken | None = None,
+        stdin_data: str | None = None,
     ) -> SubprocessResult:
         self.calls.append(cmd)
         if self._side_effect is not None:

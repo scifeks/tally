@@ -4,12 +4,12 @@
 
 **This tool is for authorized security assessments only. Use Tally only on systems you own or have explicit written permission to test. Unauthorized access to computer systems is illegal.**
 
-Tally is a security auditing platform that eliminates the noise and busy work involved in application security audits. It wraps 19+ security scanners across static analysis, dependency scanning, secrets detection, and web testing. It triages findings with AI, generates reports, and lets you collaborate with an LLM over your findings. Tally is not a replacement for manual auditing and penetration testing, nor does it guarantee finding all vulnerabilities.
+Tally is a security auditing platform that eliminates the noise and busy work involved in application security audits. It wraps 20+ security scanners across static analysis, dependency scanning, secrets detection, and web testing. It triages findings with AI, generates reports, and lets you collaborate with an LLM over your findings. Tally is not a replacement for manual auditing and penetration testing, nor does it guarantee finding all vulnerabilities.
 
 ## What Tally Does
 
 - Browser-based graphical dashboard for scanning, findings management, triage, reporting, and chat
-- Wraps 19+ security scanners across SAST, SCA, DAST, and secrets detection (see [docs/tools.md](docs/tools.md) for the full list)
+- Wraps 20+ security scanners across SAST, SCA, DAST, and secrets detection (see [docs/tools.md](docs/tools.md) for the full list)
 - AI triage: an LLM agent analyzes each finding with its source code, producing verdict, severity, confidence, remediation, and attack vector
 - Four report formats: Markdown, HTML, JSON, and assembled PDF with LLM-drafted narrative sections
 - RAG-powered search and chat over ingested findings
@@ -106,6 +106,7 @@ Tools can run locally or inside a Docker container. The execution mode is config
 - [docs/configuration.md](docs/configuration.md) - Config file reference
 - [docs/tools.md](docs/tools.md) - Supported tools and detection strategies
 - [docs/llm-providers.md](docs/llm-providers.md) - LLM provider setup and configuration for chat, enrichment, reports, embeddings, and triage
+- [docs/antares-shim.md](docs/antares-shim.md) - Antares CWE scanner Ollama completions shim configuration
 - [docs/chat.md](docs/chat.md) - RAG chat configuration and usage
 - [docs/report.md](docs/report.md) - Report generation guide and PDF assembly
 - [docs/triage.md](docs/triage.md) - AI triage setup, container lifecycle, and security model

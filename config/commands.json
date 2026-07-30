@@ -1,4 +1,9 @@
 {
+  "antares": {
+    "type": "repo",
+    "location": "local",
+    "path": "/usr/local/bin/antares"
+  },
   "composer-audit": {
     "type": "repo",
     "location": "docker",

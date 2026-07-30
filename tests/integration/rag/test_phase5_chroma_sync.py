@@ -1,4 +1,4 @@
-"""Integration tests: FindingsService patch upserts into ChromaDB by sqlite id."""
+"""Integration tests: FindingsService patch upserts into ChromaDB."""
 
 from __future__ import annotations
 
@@ -13,6 +13,7 @@ import pytest
 from application.findings.analyst_service import FindingAnalystService
 from application.findings.findings_service import FindingsService
 from application.locking import LockQueryService
+from application.pipeline.chromadb_ids import chromadb_doc_id
 from application.ports.embedding_provider import EmbeddingProvider
 from application.ports.finding_event_sink import NullFindingEventSink
 from application.rag.knowledge_base import FindingKnowledgeBase
@@ -36,13 +37,15 @@ class _DeterministicEmbedding(EmbeddingProvider):
         return list(struct.unpack(f"<{_DIM}f", digest[: _DIM * 4]))
 
 
-def _seed_finding(finding_repo: object, run_id: int, row: dict) -> int:
+def _seed_finding(finding_repo: object, run_id: int, row: dict) -> tuple[int, str]:
+    """Seed a finding and return (sqlite_id, fingerprint)."""
     normalized = normalize_test_findings([row])
     finding_repo.insert_findings(  # type: ignore[union-attr]
         run_id, normalized
     )
-    ids = finding_repo.get_ids_by_fingerprints([normalized[0].fingerprint])  # type: ignore[union-attr]
-    return ids[0]
+    fp = normalized[0].fingerprint
+    ids = finding_repo.get_ids_by_fingerprints([fp])  # type: ignore[union-attr]
+    return ids[0], fp
 
 
 def _make_kb(base_path: Path, project_name: str) -> FindingKnowledgeBase:
@@ -108,7 +111,7 @@ def phase5_env(tmp_path: Path) -> dict:
         "finding_type": json.dumps(["vulnerability"]),
         "meta": json.dumps({"profile": "default"}),
     }
-    finding_id = _seed_finding(finding_repo, run_id, semgrep_row)
+    finding_id, fp = _seed_finding(finding_repo, run_id, semgrep_row)
 
     kb = _make_kb(base_path, project_name)
 
@@ -116,6 +119,7 @@ def phase5_env(tmp_path: Path) -> dict:
         "base_path": base_path,
         "project_name": project_name,
         "finding_id": finding_id,
+        "finding_fp": fp,
         "finding_repo": finding_repo,
         "history_repo": history_repo,
         "project_repo": project_repo,
@@ -141,22 +145,25 @@ def _patch(env: dict, finding_id: int | None = None) -> None:
 
 
 class TestPhase5ChromaSync:
-    def test_upsert_creates_doc_with_sqlite_id(self, phase5_env: dict) -> None:
-        finding_id = phase5_env["finding_id"]
+    def test_upsert_creates_doc_with_fingerprint_id(self, phase5_env: dict) -> None:
         _patch(phase5_env)
 
-        doc = phase5_env["kb"].get_finding(str(finding_id))
+        doc_id = chromadb_doc_id(phase5_env["finding_fp"], "default")
+        doc = phase5_env["kb"].get_finding(doc_id)
         assert doc is not None
 
     def test_doc_has_tool_and_profile_only(self, phase5_env: dict) -> None:
         _patch(phase5_env)
 
-        finding_id = phase5_env["finding_id"]
-        doc = phase5_env["kb"].get_finding(str(finding_id))
+        doc_id = chromadb_doc_id(phase5_env["finding_fp"], "default")
+        doc = phase5_env["kb"].get_finding(doc_id)
         assert doc is not None
-        assert set(doc["metadata"].keys()) == {"tool", "profile"}
-        assert doc["metadata"]["tool"] == "semgrep"
-        assert doc["metadata"]["profile"] == "default"
+        meta = doc["metadata"]
+        assert meta["tool"] == "semgrep"
+        assert meta["profile"] == "default"
+        assert "run_id" in meta
+        assert "severity" in meta
+        assert "fingerprint" in meta
 
     def test_sync_is_idempotent(self, phase5_env: dict) -> None:
         _patch(phase5_env)
