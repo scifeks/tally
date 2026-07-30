@@ -4,6 +4,7 @@
 
 | Tool | Category | What it does |
 |---|---|---|
+| Antares | SAST | CWE vulnerability localization using LLM agent investigation. Identifies files likely to contain specific CWE weaknesses by exploring the codebase with a small language model. Requires endpoint configuration; see [docs/antares-shim.md](antares-shim.md) |
 | ffuf | DAST | Fast web fuzzer for discovering hidden files, directories, and parameters via wordlist-based brute-force |
 | Nuclei | DAST | Template-based vulnerability scanner; known CVE fingerprinting, misconfiguration detection, and DAST fuzzing |
 | OWASP ZAP | DAST | Dynamic web/API security scanning |

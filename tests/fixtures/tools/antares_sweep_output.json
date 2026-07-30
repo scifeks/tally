@@ -1,0 +1,74 @@
+{
+  "summary": {
+    "total_findings": 3,
+    "tool_call_count": 45,
+    "duration_seconds": 120.5,
+    "cwe_ids_triggered": ["CWE-78", "CWE-502"],
+    "failed_tool_calls": 2,
+    "retried_turns": 1,
+    "generation_errors": 0,
+    "failed_workers": 0,
+    "total_workers": 5,
+    "incomplete_reason": null
+  },
+  "findings": [
+    {
+      "title": "Potential OS command injection via subprocess call",
+      "file_path": "src/utils/runner.py",
+      "cwe_ids": ["CWE-78"],
+      "submission_rank": 1,
+      "likelihood_of_exploit": "High"
+    },
+    {
+      "title": "Unsafe deserialization of user-supplied data",
+      "file_path": "src/api/handlers.py",
+      "cwe_ids": ["CWE-502"],
+      "submission_rank": 1,
+      "likelihood_of_exploit": "Medium"
+    },
+    {
+      "title": "Secondary command injection surface in task dispatcher",
+      "file_path": "src/workers/dispatch.py",
+      "cwe_ids": ["CWE-78", "CWE-77"],
+      "submission_rank": 2,
+      "likelihood_of_exploit": "High"
+    }
+  ],
+  "per_cwe_results": [
+    {
+      "cwe_id": "CWE-78",
+      "finding_count": 2,
+      "tool_call_count": 15,
+      "duration_seconds": 45.2,
+      "error_message": null,
+      "failed_tool_calls": 1,
+      "retried_turns": 0
+    },
+    {
+      "cwe_id": "CWE-502",
+      "finding_count": 1,
+      "tool_call_count": 12,
+      "duration_seconds": 38.7,
+      "error_message": null,
+      "failed_tool_calls": 0,
+      "retried_turns": 1
+    },
+    {
+      "cwe_id": "CWE-89",
+      "finding_count": 0,
+      "tool_call_count": 15,
+      "duration_seconds": 36.6,
+      "error_message": null,
+      "failed_tool_calls": 1,
+      "retried_turns": 0
+    }
+  ],
+  "metadata": {
+    "schema_version": "1.0",
+    "request_id": "abc123",
+    "mode": "sweep",
+    "model": "granite3-dense:2b",
+    "target": "/path/to/repo"
+  },
+  "warnings": []
+}

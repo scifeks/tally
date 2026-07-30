@@ -37,12 +37,13 @@ class SubprocessRunner(SubprocessRunnerPort):
         cwd: str | None = None,
         env: dict[str, str] | None = None,
         cancel_token: CancellationToken | None = None,
+        stdin_data: str | None = None,
     ) -> SubprocessResult:
         effective_env = {**os.environ, **env} if env else None
         try:
             proc = subprocess.Popen(
                 cmd,
-                stdin=subprocess.DEVNULL,
+                stdin=subprocess.PIPE if stdin_data is not None else subprocess.DEVNULL,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
@@ -73,10 +74,12 @@ class SubprocessRunner(SubprocessRunnerPort):
                 raise SubprocessTimeout(cmd, timeout)
             try:
                 stdout, stderr = proc.communicate(
-                    timeout=min(_CANCEL_POLL_INTERVAL, remaining)
+                    input=stdin_data,
+                    timeout=min(_CANCEL_POLL_INTERVAL, remaining),
                 )
                 break
             except subprocess.TimeoutExpired:
+                stdin_data = None
                 continue
 
         return SubprocessResult(

@@ -229,6 +229,7 @@ Tools can run locally or inside a Docker container. The execution mode is config
 - [docs/triage.md](docs/triage.md) - AI triage: setup, container lifecycle, and security model
 - [docs/configuration.md](docs/configuration.md) - Config file reference
 - [docs/tools.md](docs/tools.md) - Supported tools and how each is detected at startup
+- [docs/antares-shim.md](docs/antares-shim.md) - Antares CWE scanner Ollama completions shim configuration
 - [docs/url-discovery.md](docs/url-discovery.md) - URL discovery pipeline: Katana, Noir, user-provided endpoint files, auth, merging, and downstream consumers
 - [docs/endpoint-files.md](docs/endpoint-files.md) - Supplying your own OAS3/Swagger/Postman/HAR endpoint file
 - [docs/endpoint-file-adapter-internals.md](docs/endpoint-file-adapter-internals.md) - Developer guide for adding endpoint file format adapters

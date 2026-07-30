@@ -20,6 +20,20 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+_ANALYST_COLUMNS = frozenset(
+    {
+        "severity",
+        "confidence",
+        "description",
+        "status",
+        "should_report",
+        "business_impact",
+        "tal_id",
+    }
+)
+
+_ENRICHMENT_COLUMNS = frozenset({"severity", "confidence", "description"})
+
 
 class FindingRepository(FindingRepositoryPort):
     """CRUD and search operations for the findings table."""
@@ -28,56 +42,27 @@ class FindingRepository(FindingRepositoryPort):
         self._factory = factory
 
     def insert_findings(self, run_id: int, findings: list[NormalizedFinding]) -> None:
-        """Insert finding rows from a scan, mapping ChromaDB fields to schema."""
+        """Insert or deduplicate finding rows from a scan.
+
+        When a fingerprint already exists, updates run_id, last_seen,
+        and increments seen_count. New fingerprints get a fresh row.
+        """
         if not findings:
             return
 
-        rows: list[tuple] = []
-        for finding in findings:
-            columns = finding.columns
-            meta = finding.meta
-            fingerprint = finding.fingerprint
-
-            repo_id_raw = columns.get("repo_id")
-            repo_id_val: int | None
-            if isinstance(repo_id_raw, int):
-                repo_id_val = repo_id_raw
-            elif isinstance(repo_id_raw, str) and repo_id_raw.isdigit():
-                repo_id_val = int(repo_id_raw)
-            else:
-                repo_id_val = None
-
-            rows.append(
-                (
-                    fingerprint,
-                    run_id,
-                    columns.get("tool"),
-                    columns.get("domain"),
-                    columns.get("segment"),
-                    repo_id_val,
-                    columns.get("finding_type"),
-                    columns.get("severity"),
-                    columns.get("confidence"),
-                    columns.get("file"),
-                    columns.get("rule_id"),
-                    columns.get("url"),
-                    columns.get("vulnerability_id"),
-                    columns.get("package_name"),
-                    columns.get("ecosystem"),
-                    columns.get("description"),
-                    columns.get("package_version"),
-                    columns.get("cwe"),
-                    0,
-                    json.dumps(meta),
-                )
-            )
-
         from datetime import UTC, datetime
 
-        now = datetime.now(UTC).isoformat()
-        rows_with_ts = [(*row, now, now, 1, "active", 0) for row in rows]
+        seen_fingerprints: set[str] = set()
+        deduped: list[NormalizedFinding] = []
+        for finding in findings:
+            if finding.fingerprint not in seen_fingerprints:
+                seen_fingerprints.add(finding.fingerprint)
+                deduped.append(finding)
+        findings = deduped
 
-        sql = """
+        now = datetime.now(UTC).isoformat()
+
+        insert_sql = """
             INSERT INTO findings (
                 fingerprint, run_id, tool, domain, segment,
                 repo_id, finding_type, severity,
@@ -92,8 +77,74 @@ class FindingRepository(FindingRepositoryPort):
                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
             )
         """
+        update_sql = """
+            UPDATE findings
+            SET run_id = ?, last_seen = ?, seen_count = seen_count + 1
+            WHERE id = ?
+        """
+
         with self._factory.connect() as conn:
-            conn.executemany(sql, rows_with_ts)
+            for finding in findings:
+                columns = finding.columns
+                meta = finding.meta
+                fingerprint = finding.fingerprint
+
+                existing = conn.execute(
+                    "SELECT id FROM findings WHERE fingerprint = ? LIMIT 1",
+                    (fingerprint,),
+                ).fetchone()
+
+                if existing is not None:
+                    existing_run_id = conn.execute(
+                        "SELECT run_id FROM findings WHERE id = ?",
+                        (existing["id"],),
+                    ).fetchone()["run_id"]
+                    if existing_run_id != run_id:
+                        conn.execute(
+                            update_sql,
+                            (run_id, now, existing["id"]),
+                        )
+                    continue
+
+                repo_id_raw = columns.get("repo_id")
+                repo_id_val: int | None
+                if isinstance(repo_id_raw, int):
+                    repo_id_val = repo_id_raw
+                elif isinstance(repo_id_raw, str) and repo_id_raw.isdigit():
+                    repo_id_val = int(repo_id_raw)
+                else:
+                    repo_id_val = None
+
+                conn.execute(
+                    insert_sql,
+                    (
+                        fingerprint,
+                        run_id,
+                        columns.get("tool"),
+                        columns.get("domain"),
+                        columns.get("segment"),
+                        repo_id_val,
+                        columns.get("finding_type"),
+                        columns.get("severity"),
+                        columns.get("confidence"),
+                        columns.get("file"),
+                        columns.get("rule_id"),
+                        columns.get("url"),
+                        columns.get("vulnerability_id"),
+                        columns.get("package_name"),
+                        columns.get("ecosystem"),
+                        columns.get("description"),
+                        columns.get("package_version"),
+                        columns.get("cwe"),
+                        0,
+                        json.dumps(meta),
+                        now,
+                        now,
+                        1,
+                        "active",
+                        0,
+                    ),
+                )
 
     def delete_findings(self, tools: list[str] | None = None) -> None:
         """Delete findings, scoping to specific tools when provided."""
@@ -426,6 +477,10 @@ class FindingRepository(FindingRepositoryPort):
         if row is None:
             return False
 
+        unknown = set(columns.keys()) - _ANALYST_COLUMNS
+        if unknown:
+            raise ValueError(f"Unknown column names: {unknown}")
+
         try:
             existing_meta: dict[str, Any] = json.loads(row["meta"] or "{}")
         except (json.JSONDecodeError, TypeError):
@@ -473,6 +528,10 @@ class FindingRepository(FindingRepositoryPort):
 
         if not ids or not fields:
             return 0
+
+        unknown = set(fields.keys()) - _ANALYST_COLUMNS
+        if unknown:
+            raise ValueError(f"Unknown column names: {unknown}")
 
         now_iso = datetime.now(UTC).isoformat()
 
@@ -571,6 +630,10 @@ class FindingRepository(FindingRepositoryPort):
         row = self._get_row(finding_id)
         if row is None:
             return
+
+        unknown = set(columns.keys()) - _ENRICHMENT_COLUMNS
+        if unknown:
+            raise ValueError(f"Unknown column names: {unknown}")
 
         try:
             existing_meta: dict[str, Any] = json.loads(row["meta"] or "{}")

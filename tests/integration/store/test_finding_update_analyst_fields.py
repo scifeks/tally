@@ -202,3 +202,29 @@ class TestUpdateAnalystFields:
         meta_result = row.meta
         assert meta_result["risk_type"] == "rce"
         assert row.triaged_by == "analyst_web"
+
+    def test_update_analyst_fields_rejects_unknown_columns(
+        self,
+        factory: ConnectionFactory,
+        repo: FindingRepository,
+        run_repo: RunRepository,
+    ) -> None:
+        """Unknown column names must raise ValueError."""
+        _seed(run_repo, repo, [{"tool": "semgrep", "severity": "low"}])
+        fid = _first_id(factory)
+
+        with pytest.raises(ValueError, match="Unknown column names"):
+            repo.update_analyst_fields(fid, {"malicious_col": "value"}, {})
+
+    def test_batch_update_analyst_fields_rejects_unknown_columns(
+        self,
+        factory: ConnectionFactory,
+        repo: FindingRepository,
+        run_repo: RunRepository,
+    ) -> None:
+        """Batch update must reject unknown column names."""
+        _seed(run_repo, repo, [{"tool": "semgrep", "severity": "low"}])
+        fid = _first_id(factory)
+
+        with pytest.raises(ValueError, match="Unknown column names"):
+            repo.batch_update_analyst_fields([fid], {"injected_col": "value"})

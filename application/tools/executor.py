@@ -106,6 +106,7 @@ class ToolExecutor:
         cwd: str | None = None,
         env: dict[str, str] | None = None,
         raw_cmd: list[str] | None = None,
+        stdin_data: str | None = None,
         **kwargs,
     ) -> ToolResult:
         """Build, approve, run, and capture a tool execution."""
@@ -149,7 +150,15 @@ class ToolExecutor:
 
         start = perf_counter()
         run_result = self._run_with_escalation(
-            cmd, tool.name, timestamp, timeout, cwd, start, findings_exit_ok, env
+            cmd,
+            tool.name,
+            timestamp,
+            timeout,
+            cwd,
+            start,
+            findings_exit_ok,
+            env,
+            stdin_data,
         )
         if isinstance(run_result, ToolResult):
             return run_result
@@ -220,6 +229,7 @@ class ToolExecutor:
             label=pass_.label_suffix,
             cwd=pass_.cwd,
             env=pass_.env,
+            stdin_data=pass_.stdin_data,
             **pass_.kwargs,
         )
 
@@ -295,6 +305,7 @@ class ToolExecutor:
         timeout: int,
         cwd: str | None,
         env: dict[str, str] | None,
+        stdin_data: str | None = None,
     ) -> SubprocessResult:
         """Delegate to the SubprocessRunner port; translate cancellation."""
         try:
@@ -304,6 +315,7 @@ class ToolExecutor:
                 cwd=cwd,
                 env=env,
                 cancel_token=self._cancel_token,
+                stdin_data=stdin_data,
             )
         except SubprocessCancelled as exc:
             raise ToolCancelled from exc
@@ -318,9 +330,10 @@ class ToolExecutor:
         start: float,
         findings_exit_ok: bool,
         env: dict[str, str] | None = None,
+        stdin_data: str | None = None,
     ) -> _RunResult | ToolResult:
         try:
-            proc = self._spawn(cmd, timeout, cwd, env)
+            proc = self._spawn(cmd, timeout, cwd, env, stdin_data)
         except SubprocessTimeout:
             return self._timeout_result(tool_name, timestamp, start, timeout)
         except SubprocessNotFound:
@@ -340,7 +353,7 @@ class ToolExecutor:
                 self._sudo_approved = True
                 start = perf_counter()
                 try:
-                    proc = self._spawn(sudo_cmd, timeout, cwd, env)
+                    proc = self._spawn(sudo_cmd, timeout, cwd, env, stdin_data)
                 except SubprocessTimeout:
                     return self._timeout_result(tool_name, timestamp, start, timeout)
                 except SubprocessNotFound:
@@ -350,7 +363,7 @@ class ToolExecutor:
                     )
                     start = perf_counter()
                     try:
-                        proc = self._spawn(su_cmd, timeout, cwd, env)
+                        proc = self._spawn(su_cmd, timeout, cwd, env, stdin_data)
                     except SubprocessTimeout:
                         return self._timeout_result(
                             tool_name, timestamp, start, timeout
