@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 from pydantic import (
     AliasChoices,
     BaseModel,
@@ -282,6 +284,31 @@ class ProjectInfoPatchRequest(BaseModel):
     company_name: str | None = None
     department_name: str | None = None
     abbreviation: str | None = Field(default=None, max_length=3)
+
+
+_PROJECT_NAME_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9 \-]*$")
+
+
+class ProjectCreateRequest(BaseModel):
+    """Body for POST /api/v1/projects."""
+
+    name: str
+    company_name: str = ""
+    department_name: str = ""
+    abbreviation: str = Field(default="", max_length=3)
+
+    @field_validator("name")
+    @classmethod
+    def _validate_name(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("Project name is required")
+        if not _PROJECT_NAME_RE.match(v):
+            raise ValueError(
+                "Name must start with a letter or digit and "
+                "contain only letters, digits, spaces, or hyphens"
+            )
+        return v
 
 
 class RepositoryItem(BaseModel):
