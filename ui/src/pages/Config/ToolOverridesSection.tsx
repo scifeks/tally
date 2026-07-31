@@ -190,7 +190,7 @@ export function ToolOverridesSection({
   const canSelectDocker = selectedTool?.supportsDocker ?? true
 
   return (
-    <Panel>
+    <Panel bodyClassName="p-4">
       <SectionHeader icon={Wrench} title="TOOL OVERRIDES">
         <div className="flex items-center gap-2">
           {overrides.length > 0 && (
@@ -512,7 +512,7 @@ export function ToolOverridesSection({
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setSelectedToolId(null)}
-                className="flex items-center gap-1 px-3 h-8 text-[10px] uppercase tracking-wider border border-border text-muted-foreground hover:bg-muted/30 transition-colors"
+                className="flex items-center gap-1 px-3 h-8 text-[10px] uppercase tracking-wider border border-border-strong text-muted-foreground hover:border-primary/50 hover:text-foreground transition-colors"
               >
                 Cancel
               </button>
@@ -530,8 +530,8 @@ export function ToolOverridesSection({
                   argsMode === 'custom' ||
                     (form.location === 'local' && form.path) ||
                     (form.location === 'docker' && form.container?.name && form.container?.toolPath)
-                    ? 'bg-accent text-background hover:bg-accent/80'
-                    : 'bg-muted text-dim cursor-not-allowed'
+                    ? 'bg-accent text-background hover:bg-accent/80 hover:shadow-[0_0_8px_rgba(57,255,20,0.15)]'
+                    : 'bg-muted text-dim opacity-40 cursor-not-allowed'
                 )}
               >
                 <Save className="h-3 w-3" />

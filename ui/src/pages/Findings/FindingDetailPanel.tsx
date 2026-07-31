@@ -222,27 +222,29 @@ export function FindingDetailPanel({
             onClick={handleTriageClick}
             disabled={triageDisabled}
             className={cn(
-              'text-[11px] uppercase tracking-wider py-1.5 border border-accent text-accent hover:bg-muted',
-              triageDisabled && 'opacity-40 cursor-not-allowed hover:bg-transparent'
+              'text-[11px] uppercase tracking-wider py-1.5 border transition-colors',
+              triageDisabled
+                ? 'border-border text-dim opacity-40 cursor-not-allowed'
+                : 'border-accent text-accent hover:bg-accent/10 hover:shadow-[0_0_6px_rgba(57,255,20,0.1)]'
             )}
           >
             &gt; triage
           </button>
           <button
             onClick={() => onUpdate({ status: 'fixed' })}
-            className="text-[11px] uppercase tracking-wider py-1.5 border border-border-strong text-foreground hover:bg-muted"
+            className="text-[11px] uppercase tracking-wider py-1.5 border border-border-strong text-foreground hover:border-primary/50 hover:bg-muted/50 transition-colors"
           >
             mark fixed
           </button>
           <button
             onClick={() => onUpdate({ status: 'false_positive' })}
-            className="text-[11px] uppercase tracking-wider py-1.5 border border-border text-muted-foreground hover:bg-muted"
+            className="text-[11px] uppercase tracking-wider py-1.5 border border-border text-muted-foreground hover:border-primary/50 hover:text-foreground transition-colors"
           >
             false-pos
           </button>
           <button
             onClick={() => onUpdate({ status: 'wont_fix' })}
-            className="text-[11px] uppercase tracking-wider py-1.5 border border-border text-muted-foreground hover:bg-muted"
+            className="text-[11px] uppercase tracking-wider py-1.5 border border-border text-muted-foreground hover:border-primary/50 hover:text-foreground transition-colors"
           >
             wontfix
           </button>

@@ -119,6 +119,10 @@ interface UIState {
 
   scanWatchState: ScanWatchState | null
   setScanWatchState: (state: ScanWatchState | null) => void
+
+  toast: { message: string; tone: 'success' | 'error' } | null
+  showToast: (message: string, tone?: 'success' | 'error') => void
+  dismissToast: () => void
 }
 
 export const useUI = create<UIState>()(
@@ -167,6 +171,10 @@ export const useUI = create<UIState>()(
 
       scanWatchState: null,
       setScanWatchState: state => set({ scanWatchState: state }),
+
+      toast: null,
+      showToast: (message, tone = 'success') => set({ toast: { message, tone } }),
+      dismissToast: () => set({ toast: null }),
     }),
     {
       // activeProjectId persists across browser reloads; the `?fresh=1`
