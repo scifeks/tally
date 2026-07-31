@@ -12,7 +12,6 @@ if TYPE_CHECKING:
     from application.triage.readiness import TriageReadiness
 
 # Custom box: vertical edge/divider lines with a header separator only.
-# Each line = 4 chars: left-edge, fill, column-divider, right-edge.
 HELP_BOX = box.Box("┌─┬┐\n│ ││\n├─┼┤\n│ ││\n├─┼┤\n├─┼┤\n│ ││\n└─┴┘\n")
 
 # Help registry: (group, command, argument, description)
@@ -34,6 +33,14 @@ _HELP_REGISTRY = [
     ),
     ("project", "project list", None, "List all projects"),
     ("project", "project info", None, "Show active project details"),
+    (
+        "project",
+        "project key",
+        "status",
+        "Show encryption status and key file location",
+    ),
+    ("project", "project key", "setup", "Create an encryption key for this project"),
+    ("project", "project key", "change", "Rotate passphrase or move key file"),
     (
         "project",
         "project delete",

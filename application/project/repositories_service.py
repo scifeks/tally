@@ -46,6 +46,36 @@ class RepoLookupResult:
     available: list[int] = field(default_factory=list)
 
 
+_FORM_ONLY_FIELDS = frozenset(
+    {
+        "login_url",
+        "username_field",
+        "password_field",
+        "extra_fields",
+        "credentials_env",
+        "username",
+        "password",
+    }
+)
+
+
+def _clean_auth_type_switch(
+    merged: dict[str, Any],
+    old: dict[str, Any],
+) -> dict[str, Any]:
+    """Clear fields that belong to the previous auth type."""
+    new_type = merged.get("auth_type", "form")
+    old_type = old.get("auth_type", "form")
+    if new_type == old_type:
+        return merged
+    if new_type == "header":
+        for k in _FORM_ONLY_FIELDS:
+            merged[k] = type(merged.get(k, ""))()
+    elif new_type == "form":
+        merged["auth_headers"] = []
+    return merged
+
+
 class ProjectRepositoriesService:
     """CRUD facade for the active repositories of a project."""
 
@@ -155,6 +185,7 @@ class ProjectRepositoriesService:
             raise RepositoryNotFound(f"Repository {repo_id} not found")
         existing_auth = existing.auth.model_dump() if existing.auth is not None else {}
         merged_auth = {**existing_auth, **auth_patch}
+        merged_auth = _clean_auth_type_switch(merged_auth, existing_auth)
         new_auth = RepoAuth(**merged_auth)
         updated = existing.model_copy(update={"auth": new_auth})
         repo_repo.update(repo_id, updated)

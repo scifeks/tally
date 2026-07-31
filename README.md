@@ -16,6 +16,8 @@ Tally is a security auditing platform that eliminates the noise and busy work in
 - CLI REPL for terminal-based workflows and scripting
 - Human-in-the-loop approval before each tool execution
 - Docker execution support for all tools
+- Header-based authentication for repository access: bearer tokens, API key pairs, and custom HTTP headers with environment variable support (see [docs/configuration.md](docs/configuration.md#repositories-json))
+- Automatic encryption of repository credentials at rest (see [docs/configuration.md](docs/configuration.md#repositories-json))
 
 ## Requirements
 
@@ -84,6 +86,7 @@ The REPL provides the same capabilities as the web UI in a terminal interface. A
 | `project switch <name>` | Switch active project |
 | `project info` | Show active project details |
 | `project delete <name>` | Delete a project and all its data |
+| `project key [status\|setup\|change]` | Manage per-project encryption keys |
 
 ### Repository Management
 

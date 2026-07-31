@@ -364,6 +364,7 @@ Stores the list of repositories configured for the project.
 | `test_dirs` | array of string | no | Directory names treated as test directories (matched by name at any depth, case-insensitive). Findings in these directories are excluded from SAST and secrets results. |
 | `ignore_dirs` | array of string | no | Directory names to exclude from SAST and secrets scans (matched by name at any depth, case-insensitive). |
 | `dependencies_file` | string | no | Path to a Python dependencies file for pip-audit. See [pip-audit dependency file](tools.md#pip-audit-dependency-file) for details. |
+| `auth` | object | no | Optional authentication configuration for this repository. Supports form-based login or header-based injection. See [Authentication (Optional)](#authentication-optional) for details. |
 
 Supported language values for SCA tool selection:
 - `python` → pip-audit
@@ -393,6 +394,213 @@ Supported language values for SCA tool selection:
   ]
 }
 ```
+
+### Authentication (Optional)
+
+When present, the `auth` field configures how Tally authenticates with the target repository or application. Two strategies are supported.
+
+#### Form-based Login
+
+For applications with HTML login forms, set `auth_type` to `"form"`. Tally performs a pre-scan login by POSTing to `login_url`, extracts the session cookie, and injects it into crawlers (Katana) and dynamic analysis tools (sqlmap, DalFox, XSStrike, graphql-cop).
+
+##### Fields
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `auth_type` | string | yes | `"form"` | Set to `"form"` for form-based login. |
+| `login_url` | string | yes | | Full URL of the login form endpoint (e.g. `http://localhost:8080/auth/login`). |
+| `username_field` | string | no | `"username"` | HTML input name attribute for the username field. |
+| `password_field` | string | no | `"password"` | HTML input name attribute for the password field. |
+| `extra_fields` | object | no | `{}` | Additional form fields as key-value pairs (e.g. `{"submit": "Login", "remember": "on"}`). |
+| `credentials_env` | string | no | | Environment variable containing credentials in `user:pass` format. Takes precedence over inline `username` and `password` when set. |
+| `username` | string | no | | Inline username. Used only if `credentials_env` is not set. |
+| `password` | string | no | | Inline password. Used only if `credentials_env` is not set. |
+
+#### Header-based Auth
+
+For APIs and applications using bearer tokens, API keys, or other header-based authentication, set `auth_type` to `"header"`. Tally injects configured headers into all tool requests (Katana, sqlmap, DalFox, XSStrike, graphql-cop).
+
+##### Fields
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `auth_type` | string | yes | | Set to `"header"` for header-based auth. |
+| `auth_headers` | array of object | yes | | List of header entries to inject. See [Auth Headers](#auth-headers) below. |
+
+#### Auth Headers
+
+Each entry in `auth_headers` represents a single HTTP header.
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `header` | string | yes | | HTTP header name (e.g. `"Authorization"`, `"X-API-Key"`). |
+| `value` | string | no | | Inline header value. Encrypted at rest. Leave empty if using `value_env` instead. |
+| `value_env` | string | no | | Environment variable containing the header value. Takes precedence over `value` when set. |
+
+#### Example: Form-based Login with Inline Credentials
+
+```json
+{
+  "repositories": [
+    {
+      "name": "target-app",
+      "type": ["api"],
+      "path": "/path/to/repo",
+      "languages": ["javascript"],
+      "base_urls": ["http://localhost:8080"],
+      "auth": {
+        "auth_type": "form",
+        "login_url": "http://localhost:8080/auth/login",
+        "username_field": "email",
+        "password_field": "password",
+        "username": "testuser",
+        "password": "testpass"
+      }
+    }
+  ]
+}
+```
+
+#### Example: Form-based Login with Environment Variables
+
+```json
+{
+  "repositories": [
+    {
+      "name": "target-app",
+      "type": ["api"],
+      "path": "/path/to/repo",
+      "languages": ["javascript"],
+      "base_urls": ["http://localhost:8080"],
+      "auth": {
+        "auth_type": "form",
+        "login_url": "http://localhost:8080/auth/login",
+        "username_field": "email",
+        "password_field": "password",
+        "credentials_env": "APP_CREDENTIALS"
+      }
+    }
+  ]
+}
+```
+
+Set the environment variable before running Tally: `APP_CREDENTIALS=testuser:testpass`.
+
+#### Example: Bearer Token
+
+```json
+{
+  "repositories": [
+    {
+      "name": "api-service",
+      "type": ["api"],
+      "path": "/path/to/repo",
+      "languages": ["python"],
+      "base_urls": ["http://localhost:5000"],
+      "auth": {
+        "auth_type": "header",
+        "auth_headers": [
+          {
+            "header": "Authorization",
+            "value": "Bearer your-token-here"
+          }
+        ]
+      }
+    }
+  ]
+}
+```
+
+#### Example: API Key Pair
+
+```json
+{
+  "repositories": [
+    {
+      "name": "api-service",
+      "type": ["api"],
+      "path": "/path/to/repo",
+      "languages": ["python"],
+      "base_urls": ["http://localhost:5000"],
+      "auth": {
+        "auth_type": "header",
+        "auth_headers": [
+          {
+            "header": "X-API-Key",
+            "value": "api-key-id"
+          },
+          {
+            "header": "X-API-Secret",
+            "value": "api-secret-value"
+          }
+        ]
+      }
+    }
+  ]
+}
+```
+
+#### Example: Headers with Environment Variables (Recommended)
+
+```json
+{
+  "repositories": [
+    {
+      "name": "api-service",
+      "type": ["api"],
+      "path": "/path/to/repo",
+      "languages": ["python"],
+      "base_urls": ["http://localhost:5000"],
+      "auth": {
+        "auth_type": "header",
+        "auth_headers": [
+          {
+            "header": "Authorization",
+            "value_env": "API_TOKEN"
+          }
+        ]
+      }
+    }
+  ]
+}
+```
+
+Set the environment variable before running Tally: `API_TOKEN=Bearer your-token-here`.
+
+### Encryption and Key Management
+
+When you create a project with `project add`, Tally prompts you to set an encryption passphrase. This passphrase is used to derive a Fernet encryption key that encrypts all stored credentials (form passwords, API keys, bearer tokens).
+
+#### Key Creation
+
+During project creation, Tally derives a key from your passphrase using PBKDF2-HMAC-SHA256 with 600,000 iterations and 16 random salt bytes. The derived key and salt are stored in a key file (default location: `projects/<project-name>/config/.tally_encryption_key`).
+
+Key file permissions are set to `0600` (owner read/write only) to prevent unauthorized access.
+
+#### Key File Location
+
+By default, the key file is stored alongside the project's SQLite database. During project creation, you can choose a custom location (recommended: outside the project directory to prevent accidental commits).
+
+#### Overriding the Key with an Environment Variable
+
+For CI/CD pipelines, headless deployments, or when the key file is inaccessible, set the `TALLY_ENCRYPTION_KEY` environment variable. The variable value should be a Fernet key (base64-encoded string). When set, this overrides the key file:
+
+```bash
+export TALLY_ENCRYPTION_KEY="your-fernet-key-here"
+tally
+```
+
+If `TALLY_ENCRYPTION_KEY` is not set, Tally reads the key from the key file.
+
+#### Managing Keys with REPL Commands
+
+Use the `project key` command to check encryption status, set up encryption for existing projects, or rotate keys:
+
+| Command | Description |
+|---|---|
+| `project key status` | Show encryption status and key file location (resolves symlinks) |
+| `project key setup` | Add encryption to an existing unencrypted project. Prompts for passphrase and key file location. Re-encrypts any existing unencrypted auth data. |
+| `project key change` | Rotate the encryption key. Decrypts all auth data with the old key, prompts for new passphrase, optionally moves the key file to a new location (with symlink), and re-encrypts all auth data with the new key. |
 
 ---
 

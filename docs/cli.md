@@ -239,6 +239,71 @@ Does not require `--project`. Starts the API server and frontend dev server, the
 python3 tally-cli.py --command ui
 ```
 
+### repo-add
+
+Add a repository to a project with optional authentication.
+
+```
+tally --project NAME --command repo-add --name NAME --type TYPE --path PATH
+                                        [--auth-type {form,header}]
+                                        [--auth-header "Name: Value"]
+                                        [--auth-header-env "Name=ENV_VAR"]
+```
+
+| Flag | Description |
+|------|-------------|
+| `--name NAME` | Repository identifier (required) |
+| `--type TYPE` | Repository type: `git`, `svn`, `local` (required) |
+| `--path PATH` | Local or remote path to repository (required) |
+| `--auth-type {form,header}` | Authentication method: `form` for login credentials, `header` for HTTP headers |
+| `--auth-header "Name: Value"` | HTTP header with inline value (repeatable). Only valid with `--auth-type header` |
+| `--auth-header-env "Name=ENV_VAR"` | HTTP header with environment variable value (repeatable). Only valid with `--auth-type header` |
+
+If `--auth-type` is omitted, no authentication is configured. When `--auth-type header` is specified, repeat `--auth-header` and `--auth-header-env` flags to add multiple headers.
+
+```bash
+# Add a repository without auth
+python3 tally-cli.py --project myapp --command repo-add --name backend --type git --path /repos/backend
+
+# Add a repository with header-based auth
+python3 tally-cli.py --project myapp --command repo-add --name api --type local --path /data/api \
+  --auth-type header \
+  --auth-header "Authorization: Bearer abc123def456" \
+  --auth-header-env "X-API-Key=MY_API_KEY"
+```
+
+### repo-edit
+
+Edit an existing repository's settings and authentication.
+
+```
+tally --project NAME --command repo-edit --name NAME
+                                         [--auth-type {form,header}]
+                                         [--auth-header "Name: Value"]
+                                         [--auth-header-env "Name=ENV_VAR"]
+                                         [--clear-auth]
+```
+
+| Flag | Description |
+|------|-------------|
+| `--name NAME` | Repository identifier to edit (required) |
+| `--auth-type {form,header}` | Change authentication method |
+| `--auth-header "Name: Value"` | Add or replace HTTP header with inline value (repeatable) |
+| `--auth-header-env "Name=ENV_VAR"` | Add or replace HTTP header with environment variable value (repeatable) |
+| `--clear-auth` | Remove all authentication settings |
+
+When changing `--auth-type`, previous auth settings are replaced. Use `--clear-auth` to remove all auth without specifying a new type.
+
+```bash
+# Switch from form auth to header auth
+python3 tally-cli.py --project myapp --command repo-edit --name backend \
+  --auth-type header \
+  --auth-header "X-API-Token=secret123"
+
+# Remove all auth from a repository
+python3 tally-cli.py --project myapp --command repo-edit --name api --clear-auth
+```
+
 ---
 
 ## Exit Codes

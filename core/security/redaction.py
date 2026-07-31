@@ -6,7 +6,11 @@ from urllib.parse import parse_qsl, quote, urlsplit, urlunsplit
 
 REDACTED = "***REDACTED***"
 SENSITIVE_KEYS = frozenset({"api_key", "password", "token", "secret", "authorization"})
-SENSITIVE_HEADER_RE = re.compile(r"^(authorization|cookie|x-api-key)$", re.IGNORECASE)
+SENSITIVE_HEADER_RE = re.compile(
+    r"^(authorization|cookie)$"
+    r"|secret|token|key|password|credential",
+    re.IGNORECASE,
+)
 URL_PARAM_BLACKLIST = ("token", "secret", "password", "auth")
 
 
@@ -26,7 +30,7 @@ def redact_config(payload: Any) -> Any:
                 value, dict
             ):
                 out[key] = {
-                    h: (REDACTED if SENSITIVE_HEADER_RE.match(h) else v)
+                    h: (REDACTED if SENSITIVE_HEADER_RE.search(h) else v)
                     for h, v in value.items()
                 }
             else:

@@ -216,14 +216,19 @@ class SqlmapLocalTool(BaseSqlmapTool):
         ts = datetime.now(UTC).strftime("%Y%m%dT%H%M%S")
         scan_output_dir = str(output_dir / f"{repo.name}_{ts}")
 
+        from infrastructure.tools.wrappers.utils.auth_login import (
+            build_tool_headers,
+        )
+
         kwargs: dict[str, Any] = {
             "seeds_file": str(filtered),
             "output_dir": scan_output_dir,
             "level": repo.sqlmap_level,
             "risk": repo.sqlmap_risk,
         }
-        if repo.sqlmap_headers:
-            kwargs["headers"] = dict(repo.sqlmap_headers)
+        headers = build_tool_headers(repo.auth, repo.sqlmap_headers)
+        if headers:
+            kwargs["headers"] = headers
         if repo.sqlmap_tamper:
             kwargs["tamper"] = repo.sqlmap_tamper
 
