@@ -111,6 +111,11 @@
   *::-webkit-scrollbar-thumb:hover {
     background: var(--color-dim);
   }
+
+  button:not(:disabled),
+  [role='button']:not([aria-disabled='true']) {
+    cursor: pointer;
+  }
 }
 
 @layer utilities {

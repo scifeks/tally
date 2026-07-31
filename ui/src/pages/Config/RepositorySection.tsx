@@ -293,7 +293,7 @@ export function RepositorySection({
     !repoName || !localPath || (formServices[0]?.type.length ?? 0) === 0 || isSaving
 
   return (
-    <Panel>
+    <Panel bodyClassName="p-4">
       <SectionHeader icon={Database} title="REPOSITORIES">
         <div className="flex items-center gap-2">
           <div className="relative">
@@ -601,7 +601,7 @@ export function RepositorySection({
             <div className="flex items-center gap-2">
               <button
                 onClick={handleReset}
-                className="flex items-center gap-1 px-3 h-8 text-[10px] uppercase tracking-wider border border-border text-muted-foreground hover:bg-muted/30 transition-colors"
+                className="flex items-center gap-1 px-3 h-8 text-[10px] uppercase tracking-wider border border-border-strong text-muted-foreground hover:border-primary/50 hover:text-foreground transition-colors"
               >
                 <RotateCcw className="h-3 w-3" />
                 Reset
@@ -612,8 +612,8 @@ export function RepositorySection({
                 className={cn(
                   'flex items-center gap-1 px-4 h-8 text-[10px] uppercase tracking-wider transition-colors',
                   !saveDisabled
-                    ? 'bg-accent text-background hover:bg-accent/80'
-                    : 'bg-muted text-dim cursor-not-allowed'
+                    ? 'bg-accent text-background hover:bg-accent/80 hover:shadow-[0_0_8px_rgba(57,255,20,0.15)]'
+                    : 'bg-muted text-dim opacity-40 cursor-not-allowed'
                 )}
               >
                 <Save className="h-3 w-3" />
@@ -826,8 +826,8 @@ export function RepositorySection({
                     (auth.authType === 'form' && auth.loginUrl) ||
                       (auth.authType === 'header' &&
                         auth.authHeaders.filter(h => h.header).length > 0)
-                      ? 'bg-accent text-background hover:bg-accent/80'
-                      : 'bg-muted text-dim cursor-not-allowed'
+                      ? 'bg-accent text-background hover:bg-accent/80 hover:shadow-[0_0_8px_rgba(57,255,20,0.15)]'
+                      : 'bg-muted text-dim opacity-40 cursor-not-allowed'
                   )}
                 >
                   <Save className="h-3 w-3" />

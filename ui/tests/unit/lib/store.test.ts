@@ -15,6 +15,7 @@ const reset = () =>
     triageRunStatus: 'idle',
     reportMutationError: null,
     chatMutationError: null,
+    toast: null,
   })
 
 beforeEach(reset)
@@ -62,6 +63,24 @@ describe('setSelected', () => {
     expect(ids.has(99)).toBe(false)
     expect(ids.has(1)).toBe(true)
     expect(ids.has(2)).toBe(true)
+  })
+})
+
+describe('toast', () => {
+  it('showToast sets message and tone', () => {
+    useUI.getState().showToast('Saved', 'success')
+    expect(useUI.getState().toast).toEqual({ message: 'Saved', tone: 'success' })
+  })
+
+  it('showToast defaults tone to success', () => {
+    useUI.getState().showToast('Done')
+    expect(useUI.getState().toast?.tone).toBe('success')
+  })
+
+  it('dismissToast clears toast', () => {
+    useUI.getState().showToast('Saved')
+    useUI.getState().dismissToast()
+    expect(useUI.getState().toast).toBeNull()
   })
 })
 

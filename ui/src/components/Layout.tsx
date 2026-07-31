@@ -1,5 +1,6 @@
 import { Outlet, useLocation } from 'react-router-dom'
 import { TopBar } from './TopBar'
+import { Toast } from './Toast'
 
 export function Layout() {
   const loc = useLocation()
@@ -28,6 +29,7 @@ export function Layout() {
           </div>
         </div>
       </footer>
+      <Toast />
     </div>
   )
 }

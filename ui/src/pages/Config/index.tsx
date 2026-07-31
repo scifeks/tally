@@ -27,6 +27,7 @@ import { ConfigMutationErrorModal } from '@/components/ConfigMutationErrorModal'
 
 export default function Config() {
   const activeProjectId = useUI(s => s.activeProjectId)
+  const showToast = useUI(s => s.showToast)
   const projectId = activeProjectId ?? 0
 
   const { data: projects = [] } = useProjects()
@@ -78,7 +79,12 @@ export default function Config() {
       <div className="flex-1 min-h-0 overflow-y-auto space-y-4">
         <ProjectInfoSection
           projectInfo={projectInfo ?? null}
-          onSave={updates => updateProjectInfo.mutate({ projectId, updates })}
+          onSave={updates =>
+            updateProjectInfo.mutate(
+              { projectId, updates },
+              { onSuccess: () => showToast('Project info updated') }
+            )
+          }
           isSaving={updateProjectInfo.isPending}
         />
 
@@ -89,11 +95,26 @@ export default function Config() {
             onSave={(repo, isNew, endpointFile, garakConfigFile) =>
               saveRepository.mutate(
                 { projectId, repo, isNew, endpointFile, garakConfigFile },
-                { onSuccess: () => setRepoSaveCompletedAt(Date.now()) }
+                {
+                  onSuccess: () => {
+                    setRepoSaveCompletedAt(Date.now())
+                    showToast(isNew ? 'Repository created' : 'Repository saved')
+                  },
+                }
               )
             }
-            onDelete={repoId => deleteRepository.mutate({ projectId, repoId })}
-            onUpdateAuth={(repoId, auth) => updateRepoAuth.mutate({ projectId, repoId, auth })}
+            onDelete={repoId =>
+              deleteRepository.mutate(
+                { projectId, repoId },
+                { onSuccess: () => showToast('Repository deleted') }
+              )
+            }
+            onUpdateAuth={(repoId, auth) =>
+              updateRepoAuth.mutate(
+                { projectId, repoId, auth },
+                { onSuccess: () => showToast('Auth credentials saved') }
+              )
+            }
             isSaving={saveRepository.isPending}
             isSavingAuth={updateRepoAuth.isPending}
             authSavedAt={updateRepoAuth.isSuccess ? Date.now() : null}
@@ -111,8 +132,14 @@ export default function Config() {
                   override,
                   isNew,
                 })
+                showToast(isNew ? 'Tool override created' : 'Tool override saved')
               }}
-              onDelete={toolId => deleteToolOverride.mutate({ projectId, toolId })}
+              onDelete={toolId =>
+                deleteToolOverride.mutate(
+                  { projectId, toolId },
+                  { onSuccess: () => showToast('Tool override removed') }
+                )
+              }
               isSaving={saveToolOverride.isPending}
             />
           ) : (
