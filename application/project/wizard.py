@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import getpass
 import re
 import shutil
 import time
@@ -126,6 +127,34 @@ def _prompt(message: str, default: str = "") -> str:
     return raw or default
 
 
+def collect_passphrase() -> str:
+    """Prompt for an encryption passphrase with confirmation."""
+    print("\n  Credential encryption setup")
+    print("  Tally encrypts stored auth credentials per project.")
+    while True:
+        p1 = getpass.getpass("  Encryption passphrase: ")
+        if not p1:
+            print("  Passphrase cannot be empty.")
+            continue
+        p2 = getpass.getpass("  Retype passphrase: ")
+        if p1 == p2:
+            return p1
+        print("  Passphrases do not match. Try again.")
+
+
+def collect_key_path(default: Path) -> Path:
+    """Prompt for a key file location."""
+    print(f"\n  Key file location (default: {default})")
+    print(
+        "  Recommended: store outside the project directory "
+        "to avoid accidental commits."
+    )
+    custom = _prompt("  Custom path (Enter for default)", default="")
+    if custom:
+        return Path(custom).expanduser().resolve()
+    return default
+
+
 def _interview_crawl_enabled(base_urls: list[str], has_endpoint_file: bool) -> bool:
     """Return whether live crawling (Katana / Noir) should be enabled."""
     if not base_urls or not has_endpoint_file:
@@ -141,15 +170,30 @@ def _interview_crawl_enabled(base_urls: list[str], has_endpoint_file: bool) -> b
 def _interview_auth(
     current: RepoAuth | None = None,
 ) -> RepoAuth | None:
-    """Prompt for optional pre-crawl login config."""
+    """Prompt for optional auth config (form or header)."""
     current_yn = "y" if current is not None else "N"
     ans = _prompt(
-        "  Does this site require login to crawl? [y/N]",
+        "  Does this repo require authentication? [y/N]",
         default=current_yn,
     ).lower()
     if ans not in ("y", "yes"):
         return None
 
+    current_type = current.auth_type if current else "form"
+    type_choice = _prompt(
+        "  Auth type: (1) Form login, (2) Header-based",
+        default="1" if current_type == "form" else "2",
+    )
+
+    if type_choice == "2":
+        return _interview_header_auth(current)
+    return _interview_form_auth(current)
+
+
+def _interview_form_auth(
+    current: RepoAuth | None = None,
+) -> RepoAuth | None:
+    """Collect form-based login fields."""
     login_url = _prompt(
         "  Login URL",
         default=current.login_url if current else "",
@@ -160,21 +204,22 @@ def _interview_auth(
 
     username_field = _prompt(
         "  Username field name",
-        default=current.username_field if current else "username",
+        default=(current.username_field if current else "username"),
     )
     password_field = _prompt(
         "  Password field name",
-        default=current.password_field if current else "password",
+        default=(current.password_field if current else "password"),
     )
 
     print(
-        "  Credentials: set an env var (e.g. MY_APP_CREDS=user:pass) or enter"
-        " them inline."
+        "  Credentials: set an env var "
+        "(e.g. MY_APP_CREDS=user:pass)"
+        " or enter them inline."
     )
     print("  Env var takes precedence when both are set.")
     credentials_env = _prompt(
         "  Credentials env var name (optional)",
-        default=current.credentials_env if current else "",
+        default=(current.credentials_env if current else ""),
     )
     username = _prompt(
         "  Inline username (optional fallback)",
@@ -186,6 +231,7 @@ def _interview_auth(
     )
 
     return RepoAuth(
+        auth_type="form",
         login_url=login_url,
         username_field=username_field,
         password_field=password_field,
@@ -193,6 +239,43 @@ def _interview_auth(
         username=username,
         password=password,
     )
+
+
+def _interview_header_auth(
+    _current: RepoAuth | None = None,
+) -> RepoAuth | None:
+    """Collect header-based auth entries."""
+    from core.config.schemas.repository import AuthHeader
+
+    print(
+        "  Add auth headers. For each, provide the name "
+        "and either an inline value or an env var name."
+    )
+    headers: list[AuthHeader] = []
+    idx = 0
+    while True:
+        idx += 1
+        header_name = _prompt(
+            f"  Header {idx} name (blank to finish)",
+            default="",
+        )
+        if not header_name:
+            break
+
+        use_env = _prompt("    Use env var? [y/N]", default="N").lower()
+
+        if use_env in ("y", "yes"):
+            env_name = _prompt("    Env var name")
+            headers.append(AuthHeader(header=header_name, value_env=env_name))
+        else:
+            value = _prompt("    Header value")
+            headers.append(AuthHeader(header=header_name, value=value))
+
+    if not headers:
+        print("  No headers provided; skipping auth config.")
+        return None
+
+    return RepoAuth(auth_type="header", auth_headers=headers)
 
 
 def _interview_katana(
@@ -269,13 +352,18 @@ class InteractiveProjectWizard:
             abbreviation = self._interview_abbreviation()
 
             self._manager.create_project_dirs(name)
+            paths = ProjectPaths.from_canonical(self._manager.base_path, name)
+            passphrase = collect_passphrase()
+            key_dest = collect_key_path(paths.credentials_key)
+            self._manager.setup_credentials_key(
+                passphrase, key_dest, paths.credentials_key
+            )
             self._manager.save_project(
                 name, company_name, department_name, abbreviation
             )
             self._manager.registry.register(name, str(self._manager.base_path))
 
             project_id = self._project_id(name)
-            paths = ProjectPaths.from_canonical(self._manager.base_path, name)
             for repo, pending_endpoint_file in interview_results:
                 persisted = self._service.create(project_id, repo)
                 assert persisted.id is not None

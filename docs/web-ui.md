@@ -80,6 +80,25 @@ Both the FastAPI server and the Vite dev server bind to this address so session 
 
 ---
 
+## Projects
+
+The top bar contains a project dropdown for switching between projects. All pages in the UI are scoped to the selected project.
+
+### Creating a project
+
+Click the "+ new project" button in the project dropdown to open the project creation dialog. Fill in:
+
+1. **Project name** (required). Must start with a letter or digit. May contain letters, digits, spaces, and hyphens.
+2. **Company name.** Shown in report headers and the confidentiality blurb.
+3. **Department name** (optional).
+4. **Abbreviation** (optional, max 3 characters). Used as the finding ID prefix in reports (e.g. `ACM-001`). When blank, the global `report_finding_prefix` from `config/global.json` is used.
+
+Click "Create" to initialize the project. Tally creates the project directory structure, initializes the findings database, and switches to the new project automatically.
+
+To set up credential encryption for the new project, use the REPL command `project key setup`. See [docs/configuration.md](configuration.md#encryption-and-key-management) for details.
+
+---
+
 ## Dashboard
 
 The dashboard (`/`) is the entry point when you launch the UI. It displays a summary of the active project and quick-action tiles.
@@ -268,14 +287,24 @@ Upload a YAML configuration file for the Garak LLM vulnerability scanner. The fi
 
 #### Auth credentials
 
-At the bottom of each repository form, an **Auth Credentials** section stores login credentials used by crawlers to authenticate before scanning. Set:
+Configure authentication at the bottom of each repository form. Two strategies are available: form-based login and header-based injection. Select the strategy using the auth type toggle.
+
+**Form-based login.** Tally performs a pre-scan login by POSTing to a login form, extracts the session cookie, and injects it into crawlers and DAST tools. Set:
 
 - **Login URL.** The login form endpoint (e.g. `https://example.com/login`).
 - **Username** and **Password.** Credentials for form-based login.
 
-Credentials are write-only: they are never echoed back from the server after saving. When editing an existing repository, credential fields show "Stored" as a placeholder. Enter new values to replace them, or leave blank to keep the existing credentials.
+**Header-based auth.** Tally injects custom HTTP headers into all crawler and DAST tool requests. Use this for bearer tokens, API keys, or any header-based authentication scheme. Each header entry has:
 
-Click "Save Auth" to persist credentials independently from the main repository save. Credentials are stored per-repository and apply to all services within that repository.
+- **Header name.** The HTTP header (e.g. `Authorization`, `X-API-Key`).
+- **Value.** An inline value, encrypted at rest.
+- **Environment variable.** An environment variable containing the value at runtime. When set, the environment variable takes precedence over the inline value.
+
+Click "+ Add Header" to add entries. Click the remove button on a row to delete it.
+
+**Saving and security.** Click "Save Auth" to persist credentials independently from the main repository save. Credentials are encrypted at rest using the project's encryption key. The server never echoes credential values back: the API returns sentinel placeholders (`********`) for stored header values and "Stored" for form passwords. Enter new values to replace existing credentials, or leave fields unchanged to keep them.
+
+See [docs/configuration.md](configuration.md#authentication-optional) for the JSON field reference and [docs/configuration.md](configuration.md#encryption-and-key-management) for key setup.
 
 #### Advanced mode (multi-service)
 

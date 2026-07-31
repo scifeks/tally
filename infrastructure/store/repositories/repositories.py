@@ -12,11 +12,13 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from application.ports.project_repo_repository import ProjectRepoRepositoryPort
 from core.config.schemas.repo_service import RepoService
 from core.config.schemas.repository import RepoAuth, Repository
+from core.security.credentials import BrokenEncryptionKey
 
 if TYPE_CHECKING:
     import sqlite3
@@ -42,7 +44,22 @@ _ALL_COLUMNS: str = (
 )
 
 
-def _row_to_repository(row: sqlite3.Row) -> Repository:
+def _check_broken_key(key_path: Path, auth_raw: str | None = None) -> None:
+    """Raise if encrypted data exists but the key is unavailable."""
+    if key_path.is_symlink() and not key_path.exists():
+        raise BrokenEncryptionKey(
+            f"Encryption key symlink is broken: {key_path}. "
+            "Run 'project key setup' to create a new key."
+        )
+    if auth_raw is not None and auth_raw.startswith("gAAAAA") and not key_path.exists():
+        raise BrokenEncryptionKey(
+            "Auth data is encrypted but no key file found "
+            f"at {key_path}. "
+            "Run 'project key setup' to create a new key."
+        )
+
+
+def _row_to_repository(row: sqlite3.Row, data_dir: Path | None = None) -> Repository:
     """Hydrate a Repository pydantic model from a ``repositories`` row."""
     services_raw = json.loads(row["services_json"])
     services = [RepoService(**s) for s in services_raw]
@@ -58,6 +75,17 @@ def _row_to_repository(row: sqlite3.Row) -> Repository:
         fields[field] = json.loads(row[f"{field}_json"])
     fields["psalm_stubs"] = json.loads(row["psalm_stubs_json"])
     auth_raw = row["auth_json"]
+    if auth_raw is not None and data_dir is not None:
+        key_path = data_dir / "credentials.key"
+        _check_broken_key(key_path, auth_raw)
+        if key_path.exists():
+            from core.security.credentials import (
+                get_encryption_key,
+                try_decrypt,
+            )
+
+            key = get_encryption_key(key_path)
+            auth_raw = try_decrypt(auth_raw, key)
     fields["auth"] = RepoAuth(**json.loads(auth_raw)) if auth_raw else None
     repo = Repository(**fields)
     return repo.model_copy(
@@ -68,10 +96,24 @@ def _row_to_repository(row: sqlite3.Row) -> Repository:
     )
 
 
-def _repository_to_row(repo: Repository) -> dict[str, Any]:
+def _repository_to_row(
+    repo: Repository, data_dir: Path | None = None
+) -> dict[str, Any]:
     """Serialize a Repository for INSERT / UPDATE."""
     auth_dump = repo.auth.model_dump() if repo.auth is not None else None
     services_dump = [s.model_dump() for s in repo.services]
+    auth_json: str | None = json.dumps(auth_dump) if auth_dump is not None else None
+    if auth_json is not None and data_dir is not None:
+        key_path = data_dir / "credentials.key"
+        _check_broken_key(key_path)
+        if key_path.exists():
+            from core.security.credentials import (
+                encrypt_value,
+                get_encryption_key,
+            )
+
+            key = get_encryption_key(key_path)
+            auth_json = encrypt_value(auth_json, key)
     return {
         "name": repo.name,
         "path": repo.path,
@@ -84,7 +126,7 @@ def _repository_to_row(repo: Repository) -> dict[str, Any]:
         "katana_headers_json": json.dumps(repo.katana_headers),
         "graphql_cop_headers_json": json.dumps(repo.graphql_cop_headers),
         "psalm_stubs_json": json.dumps(repo.psalm_stubs),
-        "auth_json": json.dumps(auth_dump) if auth_dump is not None else None,
+        "auth_json": auth_json,
         "url_seed_file": repo.url_seed_file,
     }
 
@@ -94,6 +136,7 @@ class RepositoryRepository(ProjectRepoRepositoryPort):
 
     def __init__(self, factory: ConnectionFactory) -> None:
         self._factory = factory
+        self._data_dir: Path = factory.db_path.parent
 
     def list_active(self) -> list[Repository]:
         """Return active rows ordered by name (case-insensitive)."""
@@ -102,7 +145,7 @@ class RepositoryRepository(ProjectRepoRepositoryPort):
                 f"SELECT {_ALL_COLUMNS} FROM repositories "
                 "WHERE deleted_at IS NULL ORDER BY name COLLATE NOCASE"
             ).fetchall()
-        return [_row_to_repository(r) for r in rows]
+        return [_row_to_repository(r, self._data_dir) for r in rows]
 
     def list_all(self) -> list[Repository]:
         """Return every row, including soft-deleted ones, ordered by id."""
@@ -110,7 +153,7 @@ class RepositoryRepository(ProjectRepoRepositoryPort):
             rows = conn.execute(
                 f"SELECT {_ALL_COLUMNS} FROM repositories ORDER BY id"
             ).fetchall()
-        return [_row_to_repository(r) for r in rows]
+        return [_row_to_repository(r, self._data_dir) for r in rows]
 
     def get_by_id(self, repo_id: int) -> Repository | None:
         with self._factory.connect() as conn:
@@ -118,7 +161,7 @@ class RepositoryRepository(ProjectRepoRepositoryPort):
                 f"SELECT {_ALL_COLUMNS} FROM repositories WHERE id = ?",
                 (repo_id,),
             ).fetchone()
-        return _row_to_repository(row) if row else None
+        return _row_to_repository(row, self._data_dir) if row else None
 
     def get_active_by_id(self, repo_id: int) -> Repository | None:
         """Return the row only if it is active (not soft-deleted)."""
@@ -142,7 +185,7 @@ class RepositoryRepository(ProjectRepoRepositoryPort):
                 "WHERE name = ? AND deleted_at IS NULL",
                 (name,),
             ).fetchone()
-        return _row_to_repository(row) if row else None
+        return _row_to_repository(row, self._data_dir) if row else None
 
     def find_id_by_name(self, name: str) -> int | None:
         """Return the active row's id for ``name``, else None."""
@@ -164,7 +207,7 @@ class RepositoryRepository(ProjectRepoRepositoryPort):
 
     def insert(self, repo: Repository) -> int:
         """Insert *repo* and return the new integer id."""
-        cols = _repository_to_row(repo)
+        cols = _repository_to_row(repo, self._data_dir)
         cols["created_at"] = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
         column_list = ", ".join(cols.keys())
         placeholders = ", ".join("?" for _ in cols)
@@ -178,7 +221,7 @@ class RepositoryRepository(ProjectRepoRepositoryPort):
 
     def update(self, repo_id: int, repo: Repository) -> None:
         """Replace every column for ``repo_id`` with *repo*'s field values."""
-        cols = _repository_to_row(repo)
+        cols = _repository_to_row(repo, self._data_dir)
         assignments = ", ".join(f"{name} = ?" for name in cols)
         with self._factory.connect() as conn:
             conn.execute(

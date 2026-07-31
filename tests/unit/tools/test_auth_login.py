@@ -4,10 +4,14 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from infrastructure.tools.wrappers.utils.auth_login import (
     _HiddenInputParser,
     _resolve_credentials,
+    build_tool_headers,
     perform_login,
+    resolve_auth_headers,
 )
 
 
@@ -254,3 +258,122 @@ class TestPerformLogin:
             result = perform_login(auth)
 
         assert result == {"Cookie": "a=1; b=2; c=3"}
+
+
+# resolve_auth_headers and build_tool_headers
+
+
+def _make_header_auth(
+    headers: list[dict[str, str]],
+) -> MagicMock:
+    """Build a mock RepoAuth with auth_type='header'."""
+    auth = MagicMock()
+    auth.auth_type = "header"
+    auth.auth_headers = []
+    for h in headers:
+        entry = MagicMock()
+        entry.header = h["header"]
+        entry.value = h.get("value", "")
+        entry.value_env = h.get("value_env", "")
+        auth.auth_headers.append(entry)
+    return auth
+
+
+class TestResolveAuthHeaders:
+    def test_returns_empty_when_auth_is_none(self) -> None:
+        assert resolve_auth_headers(None) == {}
+
+    def test_returns_empty_for_form_auth(self) -> None:
+        auth = MagicMock()
+        auth.auth_type = "form"
+        assert resolve_auth_headers(auth) == {}
+
+    def test_resolves_inline_values(self) -> None:
+        auth = _make_header_auth(
+            [
+                {"header": "Authorization", "value": "Bearer tok123"},
+            ]
+        )
+        result = resolve_auth_headers(auth)
+        assert result == {"Authorization": "Bearer tok123"}
+
+    def test_env_var_takes_precedence(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("MY_TOKEN", "env-value")
+        auth = _make_header_auth(
+            [
+                {
+                    "header": "Authorization",
+                    "value": "inline-fallback",
+                    "value_env": "MY_TOKEN",
+                },
+            ]
+        )
+        result = resolve_auth_headers(auth)
+        assert result == {"Authorization": "env-value"}
+
+    def test_falls_back_to_inline_when_env_unset(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.delenv("MISSING_VAR", raising=False)
+        auth = _make_header_auth(
+            [
+                {
+                    "header": "X-Key",
+                    "value": "fallback",
+                    "value_env": "MISSING_VAR",
+                },
+            ]
+        )
+        result = resolve_auth_headers(auth)
+        assert result == {"X-Key": "fallback"}
+
+    def test_skips_entries_with_no_value(self) -> None:
+        auth = _make_header_auth(
+            [
+                {"header": "X-Empty"},
+            ]
+        )
+        result = resolve_auth_headers(auth)
+        assert result == {}
+
+    def test_multiple_headers(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("SECRET", "s3cr3t")
+        auth = _make_header_auth(
+            [
+                {"header": "Authorization", "value": "Bearer x"},
+                {"header": "X-API-Secret", "value_env": "SECRET"},
+            ]
+        )
+        result = resolve_auth_headers(auth)
+        assert result == {
+            "Authorization": "Bearer x",
+            "X-API-Secret": "s3cr3t",
+        }
+
+
+class TestBuildToolHeaders:
+    def test_no_auth_returns_tool_headers(self) -> None:
+        result = build_tool_headers(None, {"X-Custom": "val"})
+        assert result == {"X-Custom": "val"}
+
+    def test_merges_auth_and_tool_headers(self) -> None:
+        auth = _make_header_auth(
+            [
+                {"header": "Authorization", "value": "Bearer x"},
+            ]
+        )
+        result = build_tool_headers(auth, {"X-Custom": "val"})
+        assert result == {
+            "Authorization": "Bearer x",
+            "X-Custom": "val",
+        }
+
+    def test_tool_headers_win_on_conflict(self) -> None:
+        auth = _make_header_auth(
+            [
+                {"header": "Authorization", "value": "auth-token"},
+            ]
+        )
+        tool = {"Authorization": "tool-override"}
+        result = build_tool_headers(auth, tool)
+        assert result == {"Authorization": "tool-override"}

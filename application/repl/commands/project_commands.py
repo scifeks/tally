@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import shutil
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -154,6 +155,8 @@ class ProjectCommands:
             self.cmd_delete_project(_cmd, args[1:])
         elif sub == "edit":
             self.cmd_edit_project(_cmd, args[1:])
+        elif sub == "key":
+            self.cmd_project_key(_cmd, args[1:])
         else:
             self.repl.console.print(
                 f"[red]Unknown subcommand:[/red] project {sub}\n"
@@ -456,9 +459,19 @@ class ProjectCommands:
 
         created = info.created[:10] if len(info.created) >= 10 else info.created
         repos = self._active_repos(self.repl.active_project)
+        paths = ProjectPaths.from_canonical(
+            self.repl.projects.base_path,
+            self.repl.active_project,
+        )
+        key_path = paths.credentials_key
+        has_key = key_path.exists() or key_path.is_symlink()
+        encryption_str = (
+            "[green]active[/green]" if has_key else "[yellow]not configured[/yellow]"
+        )
         lines = [
             f"Created: {created}",
             f"Repositories: {len(repos)}",
+            f"Encryption: {encryption_str}",
         ]
         if repos:
             lines.append("")
@@ -479,3 +492,217 @@ class ProjectCommands:
                 expand=False,
             )
         )
+
+    def cmd_project_key(self, _cmd: str, args: list[str]) -> None:
+        """project key [status|setup|change]: encryption key management."""
+        if not self.repl.active_project:
+            self.repl.console.print(
+                "[yellow]No active project. Use 'project switch <name>' first.[/yellow]"
+            )
+            return
+        if not args:
+            self.repl.console.print(
+                "Usage: project key <subcommand>\n\n"
+                "  status  Show encryption status and key file location\n"
+                "  setup   Create an encryption key for this project\n"
+                "  change  Rotate passphrase or move key file"
+            )
+            return
+        sub = args[0].lower()
+        if sub == "status":
+            self._key_status()
+        elif sub == "setup":
+            self._key_setup()
+        elif sub == "change":
+            self._key_change()
+        else:
+            self.repl.console.print(
+                f"[red]Unknown subcommand:[/red] project key {sub}\n"
+                "Usage: project key [status|setup|change]"
+            )
+
+    def _key_status(self) -> None:
+        """Show encryption status for the current project."""
+        assert self.repl.active_project is not None
+        paths = ProjectPaths.from_canonical(
+            self.repl.projects.base_path,
+            self.repl.active_project,
+        )
+        key_path = paths.credentials_key
+        if not key_path.exists() and not key_path.is_symlink():
+            self.repl.console.print(
+                "[yellow]Encryption is not configured for this "
+                "project.[/yellow]\n"
+                "Run 'project key setup' to create a key."
+            )
+            return
+        actual = key_path.resolve()
+        is_symlink = key_path.is_symlink()
+        lines = ["[green]Encryption is active.[/green]"]
+        if is_symlink:
+            lines.append(f"Key file: {actual}")
+            lines.append(f"Symlink: {key_path}")
+        else:
+            lines.append(f"Key file: {key_path}")
+        self.repl.console.print("\n".join(lines))
+
+    def _key_setup(self) -> None:
+        """Create an encryption key for a project that lacks one."""
+        assert self.repl.active_project is not None
+        paths = ProjectPaths.from_canonical(
+            self.repl.projects.base_path,
+            self.repl.active_project,
+        )
+        key_path = paths.credentials_key
+        if key_path.exists() or key_path.is_symlink():
+            self.repl.console.print(
+                "[yellow]Encryption is already configured.[/yellow]\n"
+                "Use 'project key change' to rotate the key."
+            )
+            return
+
+        from application.project.wizard import (
+            collect_key_path,
+            collect_passphrase,
+        )
+
+        passphrase = collect_passphrase()
+        key_dest = collect_key_path(key_path)
+        self.repl.projects.setup_credentials_key(passphrase, key_dest, key_path)
+
+        self._reencrypt_repos(paths)
+
+        self.repl.console.print(
+            "[green]Encryption key created.[/green]\n"
+            "Existing auth credentials have been encrypted."
+        )
+
+    def _key_change(self) -> None:
+        """Change passphrase and optionally move the key file.
+
+        Atomic: new key is written to a temp file, all repos
+        are re-encrypted in a single DB transaction, and the
+        key files are swapped only after the transaction commits.
+        If anything fails, old key and data are preserved.
+        """
+        assert self.repl.active_project is not None
+        paths = ProjectPaths.from_canonical(
+            self.repl.projects.base_path,
+            self.repl.active_project,
+        )
+        key_path = paths.credentials_key
+        if not key_path.exists() and not key_path.is_symlink():
+            self.repl.console.print(
+                "[yellow]No encryption key found.[/yellow]\n"
+                "Use 'project key setup' to create one."
+            )
+            return
+
+        import json
+
+        from application.project.wizard import (
+            collect_key_path,
+            collect_passphrase,
+        )
+        from core.security.credentials import (
+            create_key_file,
+            encrypt_value,
+        )
+        from infrastructure.store.connection import (
+            ConnectionFactory,
+        )
+
+        decrypted = self._decrypt_all_repos(paths)
+
+        passphrase = collect_passphrase()
+        old_actual = key_path.resolve()
+        print(f"\n  Current key file: {old_actual}")
+        move = input("  Move key file? [y/N]: ").strip().lower()
+        if move in ("y", "yes"):
+            final_dest = collect_key_path(key_path)
+        else:
+            final_dest = old_actual
+
+        temp_key = final_dest.with_suffix(".key.new")
+        new_key = create_key_file(passphrase, temp_key)
+
+        try:
+            factory = ConnectionFactory(paths.findings_db)
+            with factory.connect() as conn:
+                for repo_id, repo in decrypted:
+                    assert repo.auth is not None
+                    auth_dump = repo.auth.model_dump()
+                    encrypted = encrypt_value(json.dumps(auth_dump), new_key)
+                    conn.execute(
+                        "UPDATE repositories SET auth_json = ? WHERE id = ?",
+                        (encrypted, repo_id),
+                    )
+        except Exception:
+            temp_key.unlink(missing_ok=True)
+            self.repl.console.print(
+                "[red]Re-encryption failed. Old key and data preserved.[/red]"
+            )
+            raise
+
+        # Transaction committed. Swap key files.
+        if key_path.is_symlink():
+            old_target = key_path.resolve()
+            key_path.unlink()
+            if old_target.resolve() != final_dest.resolve() and old_target.exists():
+                old_target.unlink()
+        elif key_path.exists():
+            key_path.unlink()
+
+        if final_dest.resolve() != key_path.resolve():
+            if final_dest.exists():
+                final_dest.unlink()
+            temp_key.rename(final_dest)
+            os.symlink(final_dest, key_path)
+        else:
+            temp_key.rename(key_path)
+
+        self.repl.console.print(
+            "[green]Key changed successfully.[/green]\n"
+            "All auth credentials re-encrypted."
+        )
+
+    def _decrypt_all_repos(self, paths: ProjectPaths) -> list[tuple[int, Repository]]:
+        """Load all repos with their decrypted auth data."""
+        assert self.repl.active_project is not None
+        row = self.repl.project_registry.resolve_by_name(self.repl.active_project)
+        if row is None:
+            return []
+        service = ProjectRepositoriesService(
+            self.repl.project_registry,
+            self.repl.projects.config,
+        )
+        repos = service.list_active(row.id)
+        return [
+            (repo.id, repo)
+            for repo in repos
+            if repo.id is not None and repo.auth is not None
+        ]
+
+    def _reencrypt_repos(self, paths: ProjectPaths) -> None:
+        """Read and re-write all repos to trigger encryption.
+
+        Used by _key_setup for initial encryption of existing
+        plain-text data. Key change uses its own atomic flow.
+        """
+        assert self.repl.active_project is not None
+        row = self.repl.project_registry.resolve_by_name(self.repl.active_project)
+        if row is None:
+            return
+
+        from infrastructure.store.connection import (
+            ConnectionFactory,
+        )
+        from infrastructure.store.repositories.repositories import (
+            RepositoryRepository,
+        )
+
+        factory = ConnectionFactory(paths.findings_db)
+        repo_repo = RepositoryRepository(factory)
+        for repo in repo_repo.list_active():
+            if repo.id is not None and repo.auth is not None:
+                repo_repo.update(repo.id, repo)

@@ -203,12 +203,17 @@ class DalFoxLocalTool(BaseDalFoxTool):
             )
             return []
 
+        from infrastructure.tools.wrappers.utils.auth_login import (
+            build_tool_headers,
+        )
+
         kwargs: dict[str, Any] = {
             "seeds_file": seeds_file,
             "output_file": output_file,
         }
-        if repo.dalfox_headers:
-            kwargs["headers"] = dict(repo.dalfox_headers)
+        headers = build_tool_headers(repo.auth, repo.dalfox_headers)
+        if headers:
+            kwargs["headers"] = headers
         blind_url = context.tool_config.blind_xss_callback_url
         if blind_url:
             kwargs["blind_xss_callback"] = blind_url

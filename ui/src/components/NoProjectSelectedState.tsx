@@ -1,5 +1,7 @@
 import { ArrowRight, FolderOpen } from 'lucide-react'
 import { useUI } from '@/lib/store'
+import { useState } from 'react'
+import { CreateProjectModal } from './CreateProjectModal'
 
 export function NoProjectSelectedState({
   projects,
@@ -7,6 +9,7 @@ export function NoProjectSelectedState({
   projects: Array<{ id: number; code: string; name: string }>
 }) {
   const setActiveProject = useUI(s => s.setActiveProject)
+  const [createModalOpen, setCreateModalOpen] = useState(false)
 
   return (
     <div className="h-full flex items-center justify-center p-6">
@@ -54,10 +57,26 @@ export function NoProjectSelectedState({
           </div>
         ) : (
           <div className="border border-border bg-muted/30 p-6 text-center">
-            <p className="text-sm text-muted-foreground">
-              No projects found. Create a project using the CLI to get started.
+            <p className="text-sm text-muted-foreground mb-4">
+              No projects found. Create one to get started.
             </p>
-            <code className="block mt-3 text-xs text-accent font-mono">$ project add</code>
+            <button
+              onClick={() => setCreateModalOpen(true)}
+              className="px-4 py-2 border border-accent text-accent text-xs uppercase tracking-[0.15em] font-bold hover:bg-[rgba(107,211,107,0.1)]"
+            >
+              + Create Project
+            </button>
+          </div>
+        )}
+
+        {projects.length > 0 && (
+          <div className="mt-4 flex justify-center">
+            <button
+              onClick={() => setCreateModalOpen(true)}
+              className="px-4 py-2 border border-accent text-accent text-xs uppercase tracking-[0.15em] font-bold hover:bg-[rgba(107,211,107,0.1)]"
+            >
+              + Create Project
+            </button>
           </div>
         )}
 
@@ -67,6 +86,12 @@ export function NoProjectSelectedState({
             use the project dropdown in the header to switch projects at any time
           </p>
         </div>
+
+        <CreateProjectModal
+          open={createModalOpen}
+          onClose={() => setCreateModalOpen(false)}
+          onCreated={id => setActiveProject(id)}
+        />
       </div>
     </div>
   )

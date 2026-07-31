@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 from pydantic import (
     AliasChoices,
     BaseModel,
@@ -203,7 +205,7 @@ class ManualFindingCreateRequest(BaseModel):
 
 
 class FindingResponse(BaseModel):
-    """Serialised finding returned by the findings API.
+    """Serialized finding returned by the findings API.
 
     Defined as a permissive model to accommodate the dynamic ``meta``
     JSON blob and per-tool optional fields.
@@ -284,6 +286,31 @@ class ProjectInfoPatchRequest(BaseModel):
     abbreviation: str | None = Field(default=None, max_length=3)
 
 
+_PROJECT_NAME_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9 \-]*$")
+
+
+class ProjectCreateRequest(BaseModel):
+    """Body for POST /api/v1/projects."""
+
+    name: str
+    company_name: str = ""
+    department_name: str = ""
+    abbreviation: str = Field(default="", max_length=3)
+
+    @field_validator("name")
+    @classmethod
+    def _validate_name(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("Project name is required")
+        if not _PROJECT_NAME_RE.match(v):
+            raise ValueError(
+                "Name must start with a letter or digit and "
+                "contain only letters, digits, spaces, or hyphens"
+            )
+        return v
+
+
 class RepositoryItem(BaseModel):
     model_config = ConfigDict(extra="allow")
 
@@ -302,6 +329,7 @@ class RepoAuthPatchRequest(BaseModel):
 
     model_config = ConfigDict(extra="allow")
 
+    auth_type: str | None = None
     login_url: str | None = None
     username_field: str | None = None
     password_field: str | None = None
@@ -309,6 +337,7 @@ class RepoAuthPatchRequest(BaseModel):
     credentials_env: str | None = None
     username: str | None = None
     password: str | None = None
+    auth_headers: list[dict[str, str]] | None = None
 
 
 class RepositoryListResponse(BaseModel):

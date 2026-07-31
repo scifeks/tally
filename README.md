@@ -16,8 +16,11 @@ Tally is a security auditing platform that eliminates the noise and busy work in
 - Project-based isolation: each project has its own configuration, vector store, findings, and reports
 - Automatic tool discovery: skips tools that are not installed
 - Three interfaces: Web UI (recommended), REPL (terminal), and CLI (non-interactive)
+- Project creation from both the web UI and the REPL
 - Human-in-the-loop approval before each tool execution
 - Docker execution support for all tools
+- Header-based authentication for repository access: bearer tokens, API key pairs, and custom HTTP headers with environment variable support (see [docs/configuration.md](docs/configuration.md#authentication-optional))
+- Automatic encryption of repository credentials at rest (see [docs/configuration.md](docs/configuration.md#encryption-and-key-management))
 - DefectDojo integration for exporting findings to vulnerability management
 
 ## Three Interfaces

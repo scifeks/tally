@@ -290,6 +290,8 @@ tally --project NAME --command repo-add --repo-name NAME --repo-path PATH
       [--container-name NAME] [--docker-path PATH] [--dependencies-file PATH]
       [--test-dirs DIRS] [--ignore-dirs DIRS] [--no-crawl]
       [--graphql-paths PATHS] [--psalm-stubs STUBS] [--graphql-cop-headers JSON]
+      [--auth-type {form,header}] [--auth-header "Name: Value"]
+      [--auth-header-env "Name=ENV_VAR"]
 ```
 
 | Flag | Description |
@@ -308,9 +310,19 @@ tally --project NAME --command repo-add --repo-name NAME --repo-path PATH
 | `--graphql-paths PATHS` | Comma-separated GraphQL endpoint paths |
 | `--psalm-stubs STUBS` | Comma-separated Psalm stub packages |
 | `--graphql-cop-headers JSON` | JSON string of HTTP headers for graphql-cop |
+| `--auth-type {form,header}` | Authentication method: `form` for login credentials, `header` for HTTP headers |
+| `--auth-header "Name: Value"` | HTTP header with inline value (repeatable). Only valid with `--auth-type header` |
+| `--auth-header-env "Name=ENV_VAR"` | HTTP header resolved from environment variable (repeatable). Only valid with `--auth-type header` |
 
 ```bash
 python3 tally-cli.py --project myapp --command repo-add --repo-name backend --repo-path /opt/code/backend --languages python --repo-type api --base-urls https://api.example.com
+
+# Add a repository with header-based auth
+python3 tally-cli.py --project myapp --command repo-add --repo-name api --repo-path /opt/code/api \
+  --languages python --repo-type api --base-urls https://api.example.com \
+  --auth-type header \
+  --auth-header "Authorization: Bearer abc123def456" \
+  --auth-header-env "X-API-Key=MY_API_KEY"
 ```
 
 ### repo-list
@@ -335,8 +347,17 @@ tally --project NAME --command repo-edit --repo-name NAME [flags...]
 
 Accepts the same flags as `repo-add`. Only the specified flags are updated; unspecified fields keep their current values.
 
+Additionally, `repo-edit` accepts:
+
+| Flag | Description |
+|------|-------------|
+| `--clear-auth` | Remove all authentication settings |
+
 ```bash
 python3 tally-cli.py --project myapp --command repo-edit --repo-name backend --base-urls https://api.example.com,https://staging.example.com
+
+# Remove all auth from a repository
+python3 tally-cli.py --project myapp --command repo-edit --repo-name api --clear-auth
 ```
 
 ### repo-delete

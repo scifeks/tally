@@ -1,8 +1,8 @@
 """Pre-crawl form login helper.
 
-Performs a GET→POST login sequence against a form-based login page, extracts
-the session cookie from the response, and returns a ``Cookie:`` header dict
-ready to be merged into Katana's ``-H`` arguments.
+Performs a GET then POST login sequence against a form-based login page,
+extracts the session cookie from the response, and returns a ``Cookie:``
+header dict ready to be merged into Katana's ``-H`` arguments.
 
 Credential resolution order
 ---------------------------
@@ -18,6 +18,8 @@ import logging
 import os
 from html.parser import HTMLParser
 from typing import TYPE_CHECKING
+
+from core.config.schemas.repository import AuthHeader
 
 if TYPE_CHECKING:
     from core.config.schemas.repository import RepoAuth
@@ -128,3 +130,50 @@ def perform_login(auth: RepoAuth) -> dict[str, str]:
             exc,
         )
         return {}
+
+
+def resolve_auth_headers(
+    auth: RepoAuth | None,
+) -> dict[str, str]:
+    """Resolve header-based auth into a header dict.
+
+    Returns an empty dict for None or form auth.
+    """
+    if auth is None or auth.auth_type != "header":
+        return {}
+    headers: dict[str, str] = {}
+    for entry in auth.auth_headers:
+        value = _resolve_header_value(entry)
+        if value:
+            headers[entry.header] = value
+    return headers
+
+
+def _resolve_header_value(entry: AuthHeader) -> str:
+    """Resolve a single auth header entry's value."""
+    if entry.value_env:
+        raw = os.environ.get(entry.value_env, "")
+        if raw:
+            return raw
+        logger.warning(
+            "Auth header %r references env var %r "
+            "which is not set; falling back to inline value",
+            entry.header,
+            entry.value_env,
+        )
+    return entry.value
+
+
+def build_tool_headers(
+    auth: RepoAuth | None,
+    tool_headers: dict[str, str] | None,
+) -> dict[str, str]:
+    """Merge resolved auth headers with tool-specific headers.
+
+    Tool-specific headers take precedence on key conflicts.
+    """
+    safe = tool_headers or {}
+    resolved = resolve_auth_headers(auth)
+    if not resolved:
+        return dict(safe)
+    return {**resolved, **safe}

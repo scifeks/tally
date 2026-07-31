@@ -23,6 +23,7 @@ from application.project.repositories_service import (
 )
 from core.config import Repository
 from core.config.schemas.repo_service import RepoService
+from core.config.schemas.repository import AuthHeader, RepoAuth
 
 if TYPE_CHECKING:
     from argparse import Namespace
@@ -104,6 +105,30 @@ def _parse_graphql_cop_headers(
             file=sys.stderr,
         )
         raise
+
+
+def _build_auth_from_args(
+    args: Namespace,
+) -> RepoAuth | None:
+    """Build RepoAuth from CLI arguments."""
+    auth_type = getattr(args, "auth_type", None)
+    if auth_type is None:
+        return None
+    if auth_type == "header":
+        headers: list[AuthHeader] = []
+        for raw in getattr(args, "auth_header", None) or []:
+            name, _, value = raw.partition(": ")
+            headers.append(AuthHeader(header=name, value=value))
+        for raw in getattr(args, "auth_header_env", None) or []:
+            name, _, env_var = raw.partition("=")
+            headers.append(AuthHeader(header=name, value_env=env_var))
+        if not headers:
+            raise SystemExit(
+                "Error: --auth-type header requires at least one "
+                "--auth-header or --auth-header-env"
+            )
+        return RepoAuth(auth_type="header", auth_headers=headers)
+    return None
 
 
 def cmd_repo_add(

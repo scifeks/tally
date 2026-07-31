@@ -319,6 +319,32 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="JSON",
         help=("JSON string of HTTP headers for graphql-cop (repo-add, repo-edit)"),
     )
+    parser.add_argument(
+        "--auth-type",
+        choices=["form", "header"],
+        default=None,
+        help=("Auth type: form (login URL) or header (injected headers)"),
+    )
+    parser.add_argument(
+        "--auth-header",
+        action="append",
+        default=None,
+        metavar='"Name: Value"',
+        help=(
+            "Auth header as 'Name: Value' (repeatable). Use with --auth-type header."
+        ),
+    )
+    parser.add_argument(
+        "--auth-header-env",
+        action="append",
+        default=None,
+        metavar='"Name=ENV_VAR"',
+        help=(
+            "Auth header from env var as "
+            "'Name=ENV_VAR_NAME' (repeatable). "
+            "Use with --auth-type header."
+        ),
+    )
 
     parser.add_argument(
         "args",

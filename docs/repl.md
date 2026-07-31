@@ -793,6 +793,38 @@ To clear the abbreviation (reverting to the global prefix), enter `--clear` at t
 
 ---
 
+## Managing Encryption Keys
+
+Tally encrypts stored credentials (form passwords, API keys, bearer tokens) using a per-project Fernet key. Use the `project key` commands to manage encryption.
+
+```
+[acme-security-audit]> project key status
+```
+
+Shows whether encryption is configured, the key file location (resolves symlinks), and whether the `TALLY_ENCRYPTION_KEY` environment variable is set.
+
+### Setting up encryption
+
+For projects created without encryption, run:
+
+```
+[acme-security-audit]> project key setup
+```
+
+Tally prompts for a passphrase, derives a key using PBKDF2-HMAC-SHA256 (600,000 iterations), and saves the key file. You can choose a custom location for the key file (recommended: outside the project directory to prevent accidental commits). Any existing unencrypted auth data is re-encrypted with the new key.
+
+### Rotating keys
+
+```
+[acme-security-audit]> project key change
+```
+
+Decrypts all auth data with the current key, prompts for a new passphrase, optionally moves the key file to a new location (with a symlink at the old path), and re-encrypts all auth data.
+
+For CI/CD or headless deployments, set the `TALLY_ENCRYPTION_KEY` environment variable to a Fernet key. When set, it overrides the key file. See [docs/configuration.md](configuration.md#encryption-and-key-management) for details.
+
+---
+
 ## Syncing Findings
 
 Tally can sync findings to external vulnerability management platforms. Currently supported: DefectDojo.

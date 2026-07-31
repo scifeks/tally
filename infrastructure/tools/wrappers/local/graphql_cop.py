@@ -123,13 +123,18 @@ class GraphqlCopLocalTool(BaseGraphqlCopTool):
             )
             return []
 
+        from infrastructure.tools.wrappers.utils.auth_login import (
+            build_tool_headers,
+        )
+
         passes: list[ExecutionPass] = []
         for url in sorted(target_urls):
             ep_kwargs: dict[str, Any] = {
                 "target_url": url,
             }
-            if repo.graphql_cop_headers:
-                ep_kwargs["headers"] = dict(repo.graphql_cop_headers)
+            headers = build_tool_headers(repo.auth, repo.graphql_cop_headers)
+            if headers:
+                ep_kwargs["headers"] = headers
 
             passes.append(
                 ExecutionPass(

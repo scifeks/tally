@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils'
 import { useRef, useState, useEffect, useMemo } from 'react'
 import { ScansRunningModal } from './ScansRunningModal'
 import { ProjectSwitchModal } from './ProjectSwitchModal'
+import { CreateProjectModal } from './CreateProjectModal'
 
 interface NavItem {
   to: string
@@ -49,6 +50,7 @@ export function TopBar() {
   const [projectOpen, setProjectOpen] = useState(false)
   const [scansModalOpen, setScansModalOpen] = useState(false)
   const [pendingProjectId, setPendingProjectId] = useState<number | null>(null)
+  const [createModalOpen, setCreateModalOpen] = useState(false)
 
   const projectRef = useRef<HTMLDivElement>(null)
 
@@ -176,19 +178,25 @@ export function TopBar() {
                     </button>
                   )
                 })}
-                <div className="px-3 py-1.5 text-[10px] text-dim border-t border-border">
-                  <span className="text-dim">{'//'}</span> switching clears selections
-                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setProjectOpen(false)
+                    setCreateModalOpen(true)
+                  }}
+                  className="w-full px-3 py-2 text-[11px] uppercase tracking-[0.15em] text-accent border-t border-border hover:bg-muted text-left font-bold"
+                >
+                  + new project
+                </button>
               </div>
             )}
           </div>
         </div>
 
         {/* Row 2: primary nav tabs.
-            NOTE: no overflow-* here - an overflow ancestor clips
-            absolutely-positioned descendants (e.g. the CONFIG dropdown panel),
-            which was rendering the panel as a sliver peeking from the clipped
-            edge. Dropdown content must be allowed to escape this row. */}
+            Avoid overflow-* here; overflow ancestors clip absolutely-positioned
+            descendants (e.g. the CONFIG dropdown panel), rendering it as a sliver.
+            Dropdown content must escape this row. */}
         <nav className="flex items-stretch">
           {primaryNav.map(item => (
             <NavLink
@@ -257,6 +265,13 @@ export function TopBar() {
         triageRunning={triageRunning}
         onConfirm={confirmSwitch}
         onCancel={() => setPendingProjectId(null)}
+      />
+      <CreateProjectModal
+        open={createModalOpen}
+        onClose={() => setCreateModalOpen(false)}
+        onCreated={id => {
+          setActiveProject(id)
+        }}
       />
     </header>
   )

@@ -323,10 +323,9 @@ export interface TriageBatch {
 /**
  * A triage run summary or detail. The summary endpoint returns no `batches`;
  * the detail endpoint and SSE `snapshot` event include them. Mirrors
- * `TriageRunSummary` / `TriageDetailResponse` in `web/api/schemas.py`.
- *
- * Note: a triage run is keyed by its `scan_run_id` (the scan it triages),
- * not by a separate primary key.
+ * `TriageRunSummary` / `TriageDetailResponse` in `web/api/schemas.py`. A triage
+ * run is keyed by its `scan_run_id` (the scan it triages), not by a separate
+ * primary key.
  */
 export interface TriageRun {
   scanRunId: number
@@ -644,7 +643,7 @@ export interface ChatSendMessageResponse {
 
 /**
  * 202 response from `POST .../sessions/:sid/cancel`. `cancelledMessageId` is
- * always null in v1 - the assistant id is only assigned at stream_end.
+ * always null in v1; the assistant id is only assigned at stream_end.
  */
 export interface ChatCancelResponse {
   sessionId: number
@@ -723,6 +722,9 @@ export interface RepositoryConfig {
   endpointFileFormat?: 'openapi3' | 'swagger2' | 'postman' | 'har' | 'katana-jsonl'
   garakConfigFile?: string
   authConfigured?: boolean
+  authType?: 'form' | 'header'
+  authHeadersMeta?: AuthHeaderEntry[]
+  authLoginUrl?: string
   alsoRunCrawlers: boolean
   katana: {
     headless: boolean
@@ -804,11 +806,21 @@ export interface ProjectInfoUpdate {
 }
 
 /**
+ * A single header entry for header-based authentication.
+ */
+export interface AuthHeaderEntry {
+  header: string
+  value: string
+  valueEnv: string
+}
+
+/**
  * PATCH body for `useUpdateRepoAuth`. Mirrors the backend
  * `RepoAuthPatchRequest`. All fields optional; provided values
  * overwrite the auth block. Never echoed by GET.
  */
 export interface RepositoryAuthUpdate {
+  authType?: 'form' | 'header'
   loginUrl?: string
   usernameField?: string
   passwordField?: string
@@ -816,6 +828,11 @@ export interface RepositoryAuthUpdate {
   credentialsEnv?: string
   username?: string
   password?: string
+  authHeaders?: Array<{
+    header: string
+    value: string
+    value_env: string
+  }>
 }
 
 // ─── Saved Scans & Tool Argument Profiles ────────────────────────────────────
