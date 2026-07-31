@@ -36,12 +36,14 @@ from domain.projects.entry import ProjectRow
 from factories.persistence import (
     create_findings_service,
     create_url_list_service,
+    init_project_schema,
 )
 from infrastructure.endpoints.converters.base import ConverterError
-from web.api._errors import NotFound
+from web.api._errors import Conflict, NotFound
 from web.api._errors import ValidationError as ApiValidationError
 from web.api._project_resolver import _resolve_project
 from web.api.schemas import (
+    ProjectCreateRequest,
     ProjectInfoPatchRequest,
     ProjectInfoResponse,
     ProjectListItem,
@@ -124,6 +126,45 @@ async def list_projects(
         total=total,
         offset=offset,
         limit=limit,
+    )
+
+
+@v1_router.post("", status_code=201, response_model=ProjectListItem)
+async def create_project(
+    request: Request,
+    body: ProjectCreateRequest,
+) -> ProjectListItem:
+    base_path: str = request.app.state.base_path
+    registry = request.app.state.project_registry
+    name = body.name
+
+    existing = registry.resolve_by_name(name)
+    if existing is not None and existing.archived_at is None:
+        raise Conflict(f"Project '{name}' already exists")
+
+    manager = ProjectManager(base_path, registry=registry)
+    await asyncio.to_thread(manager.create_project_dirs, name)
+    await asyncio.to_thread(
+        manager.save_project,
+        name,
+        company_name=body.company_name,
+        department_name=body.department_name,
+        abbreviation=body.abbreviation,
+    )
+
+    paths = ProjectPaths.from_canonical(base_path, name)
+    await asyncio.to_thread(init_project_schema, paths.findings_db)
+
+    row = registry.resolve_by_name(name)
+    if row is None:
+        raise NotFound("Failed to resolve newly created project")
+
+    config = manager.get_project_info(name)
+    return ProjectListItem(
+        id=row.id,
+        name=config.project_name if config else name,
+        code=config.abbreviation if config else "",
+        created_at=config.created if config else "",
     )
 
 

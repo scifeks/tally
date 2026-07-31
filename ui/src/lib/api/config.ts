@@ -70,6 +70,8 @@ export const REST_ENDPOINTS = {
   project: (id: string) => `${API_BASE_URL}/projects/${id}`,
   /** GET: project metadata (repo count, url list count, enabled tools) */
   projectMeta: (id: string) => `${API_BASE_URL}/projects/${id}/meta`,
+  /** POST: create a new project */
+  createProject: `${API_BASE_URL}/projects`,
 
   // ─── Findings ───────────────────────────────────────────────────────────────
   /**

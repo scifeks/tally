@@ -4,6 +4,8 @@ export { API_BASE_URL, SSE_ENDPOINTS, REST_ENDPOINTS } from './config'
 // Project hooks
 export { useProjects } from './useProjects'
 export { useProjectMeta } from './useProjectMeta'
+export { useCreateProject } from './useCreateProject'
+export type { CreateProjectInput } from './useCreateProject'
 
 // Finding hooks
 export { useFindings, mapFinding } from './useFindings'
