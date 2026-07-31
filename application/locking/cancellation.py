@@ -6,8 +6,8 @@ HTTP cancel endpoint sets the token; the scan thread observes it and
 unwinds gracefully, emitting ``run_canceled`` and persisting
 ``status='canceled'`` before exiting.
 
-The REPL passes a ``no_op_token()`` since the REPL has no UX to cancel
-mid-scan; only the API surface needs cooperative cancellation.
+The REPL sets all active tokens on exit so in-flight scans
+wind down before the process terminates.
 """
 
 from __future__ import annotations
@@ -46,7 +46,7 @@ _NO_OP: CancellationToken | None = None
 
 
 def no_op_token() -> CancellationToken:
-    """Return a shared, never-cancelled token for REPL / test paths.
+    """Return a shared, never-canceled token for REPL / test paths.
 
     The token is process-singleton: cheap to share across calls, and
     nothing ever sets it.
