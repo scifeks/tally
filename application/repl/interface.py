@@ -332,7 +332,21 @@ class REPL:
             except EOFError:
                 break
 
+        self._cancel_active_scans()
         self.console.print("Goodbye!")
+
+    def _cancel_active_scans(self) -> None:
+        from application.tools.scan_run_registry import (
+            get_scan_run_registry,
+        )
+
+        handles = get_scan_run_registry().list_all()
+        for handle in handles:
+            handle.cancel_token.set()
+        if handles:
+            self.console.print(
+                f"[dim]Cancelling {len(handles)} active scan(s)...[/dim]"
+            )
 
     def _run_harness(self) -> None:
         """Plain-stdin REPL loop (prints sentinel before each prompt)."""

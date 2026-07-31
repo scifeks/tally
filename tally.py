@@ -156,4 +156,9 @@ if __name__ == "__main__":
             tool_registry=tool_registry,
         ).run()
     except KeyboardInterrupt:
-        pass
+        from application.tools.scan_run_registry import (
+            get_scan_run_registry,
+        )
+
+        for h in get_scan_run_registry().list_all():
+            h.cancel_token.set()
