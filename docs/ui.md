@@ -285,7 +285,9 @@ Add or edit source repositories that will be scanned:
 
 1. Click "Add repository" to create a new entry.
 2. Fill in the repository name, type, local path, languages, and base URLs for DAST scanning.
-3. If the repository has authentication requirements for crawling, configure the auth credentials.
+3. Configure authentication if required. Select an authentication type from the "Authentication Type" dropdown:
+   - **Form Login.** Supplies username and password credentials for login-based auth. Enter the login URL, username, and password fields.
+   - **Header-Based.** Supplies HTTP headers for each request. Add headers one at a time using the row interface: enter the header name, then choose between an inline value (masked in the UI) or an environment variable reference. Toggle the button next to each value input to switch between inline and env var mode. Remove headers with the delete button on each row. Add additional headers with the "Add Header" button.
 4. Click Save. The repository is added to the project.
 
 To edit an existing repository, click the pencil icon. To remove, click the trash icon.

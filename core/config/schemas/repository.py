@@ -1,6 +1,7 @@
 """Repository schema."""
 
 import warnings
+from typing import Literal
 
 from pydantic import (
     BaseModel,
@@ -14,14 +15,40 @@ from .repo_service import RepoService
 _VALID_REPO_TYPES: frozenset[str] = frozenset({"library", "api", "ui"})
 
 
-class RepoAuth(BaseModel):
-    """Optional auth config for repos that require login before crawling.
+class AuthHeader(BaseModel):
+    """A single HTTP header entry for header-based auth."""
 
-    Credential resolution order: ``credentials_env`` env var (format
-    ``user:pass``) takes precedence over inline ``username`` / ``password``.
+    header: str = Field(..., description="HTTP header name")
+    value: str = Field(
+        default="",
+        description="Inline header value (encrypted at rest)",
+    )
+    value_env: str = Field(
+        default="",
+        description="Env var name containing the header value",
+    )
+
+
+class RepoAuth(BaseModel):
+    """Optional auth config for repos.
+
+    Supports two strategies: form-based login (POST to login_url) or
+    header-based injection (bearer tokens, API keys). Credential resolution
+    order for form auth: ``credentials_env`` env var (format ``user:pass``)
+    takes precedence over inline ``username`` / ``password``.
     """
 
-    login_url: str = Field(..., description="Full URL of the login form endpoint")
+    auth_type: Literal["form", "header"] = Field(
+        default="form",
+        description=(
+            "Auth strategy: 'form' for form-based login or 'header' for "
+            "header injection"
+        ),
+    )
+    login_url: str = Field(
+        default="",
+        description="Full URL of the login form endpoint",
+    )
     username_field: str = Field(
         default="username", description="Name attribute of the username input"
     )
@@ -41,6 +68,19 @@ class RepoAuth(BaseModel):
     )
     username: str = Field(default="", description="Inline username (fallback)")
     password: str = Field(default="", description="Inline password (fallback)")
+    auth_headers: list[AuthHeader] = Field(
+        default_factory=list,
+        description="Header entries for header-based auth",
+    )
+
+    @model_validator(mode="after")
+    def validate_auth_type(self) -> "RepoAuth":
+        """Verify auth_type-specific fields are populated."""
+        if self.auth_type == "form" and not self.login_url:
+            raise ValueError("auth_type='form' requires login_url to be set")
+        if self.auth_type == "header" and not self.auth_headers:
+            raise ValueError("auth_type='header' requires auth_headers to be set")
+        return self
 
 
 class Repository(BaseModel):

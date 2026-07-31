@@ -20,6 +20,10 @@ class ProjectPaths:
         return self.root / "sqlite"
 
     @property
+    def credentials_key(self) -> Path:
+        return self.sqlite_dir / "credentials.key"
+
+    @property
     def findings_db(self) -> Path:
         return self.sqlite_dir / "findings.db"
 

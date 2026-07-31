@@ -68,6 +68,13 @@ interface RepositoryApi {
   katana_depth: number
   katana_headers: Record<string, string>
   auth_configured?: boolean
+  auth_type?: 'form' | 'header'
+  auth_headers_meta?: Array<{
+    header: string
+    value: string
+    value_env: string
+  }>
+  auth_login_url?: string
   endpoint_file: string | null
   garak_config_file: string | null
   // Flat fields kept for backward-compat with pre-migration responses
@@ -198,6 +205,15 @@ function mapRepository(api: RepositoryApi, projectId: number): RepositoryConfig 
     },
   }
   if (api.auth_configured) result.authConfigured = true
+  if (api.auth_type) result.authType = api.auth_type
+  if (api.auth_headers_meta) {
+    result.authHeadersMeta = api.auth_headers_meta.map(h => ({
+      header: h.header,
+      value: h.value,
+      valueEnv: h.value_env,
+    }))
+  }
+  if (api.auth_login_url) result.authLoginUrl = api.auth_login_url
   if (api.endpoint_file) result.endpointFile = api.endpoint_file
   if (api.garak_config_file) {
     result.garakConfigFile = api.garak_config_file
@@ -277,6 +293,7 @@ function toToolOverrideRequest(o: ToolOverrideConfig): Record<string, unknown> {
 
 function toRepoAuthPayload(auth: RepositoryAuthUpdate): Record<string, unknown> {
   const payload: Record<string, unknown> = {}
+  if (auth.authType !== undefined) payload.auth_type = auth.authType
   if (auth.loginUrl !== undefined) payload.login_url = auth.loginUrl
   if (auth.usernameField !== undefined) payload.username_field = auth.usernameField
   if (auth.passwordField !== undefined) payload.password_field = auth.passwordField
@@ -284,6 +301,13 @@ function toRepoAuthPayload(auth: RepositoryAuthUpdate): Record<string, unknown> 
   if (auth.credentialsEnv !== undefined) payload.credentials_env = auth.credentialsEnv
   if (auth.username !== undefined) payload.username = auth.username
   if (auth.password !== undefined) payload.password = auth.password
+  if (auth.authHeaders !== undefined) {
+    payload.auth_headers = auth.authHeaders.map(h => ({
+      header: h.header,
+      value: h.value,
+      value_env: h.value_env,
+    }))
+  }
   return payload
 }
 

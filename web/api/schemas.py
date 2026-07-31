@@ -302,6 +302,7 @@ class RepoAuthPatchRequest(BaseModel):
 
     model_config = ConfigDict(extra="allow")
 
+    auth_type: str | None = None
     login_url: str | None = None
     username_field: str | None = None
     password_field: str | None = None
@@ -309,6 +310,7 @@ class RepoAuthPatchRequest(BaseModel):
     credentials_env: str | None = None
     username: str | None = None
     password: str | None = None
+    auth_headers: list[dict[str, str]] | None = None
 
 
 class RepositoryListResponse(BaseModel):

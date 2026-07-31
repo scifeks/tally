@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -30,6 +31,7 @@ from application.url_inventory.url_list_service import (
 from core.config.manager import ConfigManager
 from core.config.schemas import Repository
 from core.project_paths import ProjectPaths
+from core.security.credentials import BrokenEncryptionKey
 from domain.projects.entry import ProjectRow
 from factories.persistence import (
     create_findings_service,
@@ -52,6 +54,8 @@ from web.api.schemas import (
 
 # v1 router
 v1_router = APIRouter()
+
+_AUTH_SENTINEL = "********"
 
 
 def _findings_service(request: Request, project_id: int) -> FindingsService:
@@ -273,8 +277,24 @@ def _serialize_repo(
 ) -> dict:
     """Convert Repository to JSON, excluding auth credentials."""
     data = repo.model_dump()
-    has_auth = repo.auth is not None and bool(repo.auth.login_url)
-    data["auth_configured"] = has_auth
+    if repo.auth is not None:
+        auth = repo.auth
+        has_auth = bool(auth.login_url) or bool(auth.auth_headers)
+        data["auth_configured"] = has_auth
+        data["auth_type"] = auth.auth_type
+        if auth.auth_type == "header" and auth.auth_headers:
+            data["auth_headers_meta"] = [
+                {
+                    "header": h.header,
+                    "value": _AUTH_SENTINEL if h.value else "",
+                    "value_env": h.value_env,
+                }
+                for h in auth.auth_headers
+            ]
+        elif auth.auth_type == "form" and auth.login_url:
+            data["auth_login_url"] = auth.login_url
+    else:
+        data["auth_configured"] = False
     data.pop("auth", None)
     data["id"] = repo_id
     data["endpoint_file"] = _existing_endpoint_file(repo)
@@ -299,7 +319,13 @@ async def list_repositories(
     row = _resolve_project(request, project_id)
     paths = ProjectPaths(Path(row.path))
     service = _service_from_request(request)
-    repos = service.list_active(project_id)
+    try:
+        repos = service.list_active(project_id)
+    except BrokenEncryptionKey as exc:
+        return JSONResponse(
+            status_code=503,
+            content={"detail": str(exc)},
+        )
     total = len(repos)
     page = repos[offset : offset + limit]
     items = [_serialize_repo(repo, repo.id, paths) for repo in page]
@@ -448,6 +474,42 @@ async def delete_repository(
     return Response(status_code=204)
 
 
+_SENTINEL_RE = re.compile(r"^\*+$")
+
+
+def _strip_auth_sentinels(
+    auth_patch: dict[str, Any],
+    service: ProjectRepositoriesService,
+    project_id: int,
+    repo_id: int,
+) -> dict[str, Any]:
+    """Replace sentinel-masked values with stored values.
+
+    API-port concern only; the service receives clean data.
+    """
+    if "auth_headers" not in auth_patch:
+        return auth_patch
+    existing = service.get(project_id, repo_id)
+    stored: dict[str, Any] = {}
+    if existing.auth and existing.auth.auth_headers:
+        stored = {h.header: h for h in existing.auth.auth_headers}
+    cleaned = []
+    for entry in auth_patch["auth_headers"]:
+        name = entry.get("header", "")
+        val = entry.get("value", "")
+        if _SENTINEL_RE.match(val) and name in stored:
+            cleaned.append(
+                {
+                    "header": name,
+                    "value": stored[name].value,
+                    "value_env": entry.get("value_env", stored[name].value_env),
+                }
+            )
+        else:
+            cleaned.append(entry)
+    return {**auth_patch, "auth_headers": cleaned}
+
+
 @v1_router.patch(
     "/{project_id}/repositories/{repo_id}/auth",
     status_code=204,
@@ -462,12 +524,18 @@ async def patch_repository_auth(
     _resolve_project(request, project_id)
     service = _service_from_request(request)
     auth_patch = body.model_dump(exclude_none=True)
+    auth_patch = _strip_auth_sentinels(auth_patch, service, project_id, repo_id)
     try:
         service.update_auth(project_id, repo_id, auth_patch)
     except RepositoryNotFound as exc:
         raise NotFound(str(exc)) from exc
     except ValidationError as exc:
         raise ApiValidationError(str(exc)) from exc
+    except BrokenEncryptionKey as exc:
+        return JSONResponse(
+            status_code=503,
+            content={"detail": str(exc)},
+        )
     return Response(status_code=204)
 
 

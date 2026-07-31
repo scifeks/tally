@@ -112,6 +112,7 @@ describe('RepositorySection', () => {
     await user.click(screen.getByRole('button', { name: /save auth/i }))
     expect(onUpdateAuth).toHaveBeenCalledTimes(1)
     expect(onUpdateAuth).toHaveBeenCalledWith(101, {
+      authType: 'form',
       loginUrl: 'https://x.test/login',
       username: 'alice',
       password: 'secret',

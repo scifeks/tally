@@ -215,7 +215,7 @@ class KatanaLocalTool(BaseKatanaTool):
 
             parsed = parse_katana_jsonl(jsonl_path)
 
-            # Convert JSONL → OAS3 so downstream DAST tools can consume it.
+            # Convert JSONL output to OAS3 so downstream DAST tools can consume it.
             katana_dir = jsonl_path.parent
             try:
                 tmp_oas3 = self._endpoint_converter.convert(jsonl_path, katana_dir)
@@ -285,15 +285,17 @@ class KatanaLocalTool(BaseKatanaTool):
         jsonl_file = str(output_dir / f"{repo.name}_{ts}.jsonl")
         oas3_file = str(output_dir / f"{repo.name}_{ts}_oas3.json")
 
-        headers: dict[str, str] = dict(repo.katana_headers)
+        from infrastructure.tools.wrappers.utils.auth_login import (
+            build_tool_headers,
+            perform_login,
+        )
 
-        if repo.auth is not None:
-            from infrastructure.tools.wrappers.utils.auth_login import perform_login
+        headers = build_tool_headers(repo.auth, repo.katana_headers)
 
-            auth_headers = perform_login(repo.auth)
-            if auth_headers:
-                # Merge: auth-derived cookie wins if key already present.
-                headers = {**headers, **auth_headers}
+        if repo.auth is not None and repo.auth.auth_type == "form":
+            login_headers = perform_login(repo.auth)
+            if login_headers:
+                headers = {**headers, **login_headers}
 
         kwargs: dict[str, Any] = {
             "base_url": base_url,

@@ -12,7 +12,13 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Panel } from '@/components/tty'
-import type { ConfigMode, RepositoryAuthUpdate, RepositoryConfig, ServiceConfig } from '@/lib/types'
+import type {
+  AuthHeaderEntry,
+  ConfigMode,
+  RepositoryAuthUpdate,
+  RepositoryConfig,
+  ServiceConfig,
+} from '@/lib/types'
 import { deriveConfigMode, emptyService } from '@/lib/types'
 import { SectionHeader } from './shared'
 import { ServiceDetailForm } from './ServiceDetailForm'
@@ -21,15 +27,19 @@ import { ServiceListPanel } from './ServiceListPanel'
 const NEW_REPO_ID = -1 as const
 
 interface AuthFormState {
+  authType: 'form' | 'header'
   loginUrl: string
   username: string
   password: string
+  authHeaders: AuthHeaderEntry[]
 }
 
 const EMPTY_AUTH: AuthFormState = {
+  authType: 'form',
   loginUrl: '',
   username: '',
   password: '',
+  authHeaders: [],
 }
 
 export function RepositorySection({
@@ -107,7 +117,25 @@ export function RepositorySection({
         setGarakConfigUpload(null)
         setExistingEndpointFile(repo.endpointFile)
         setExistingGarakFile(repo.garakConfigFile)
-        setAuth(EMPTY_AUTH)
+        if (repo.authType === 'header' && repo.authHeadersMeta?.length) {
+          setAuth({
+            authType: 'header',
+            loginUrl: '',
+            username: '',
+            password: '',
+            authHeaders: repo.authHeadersMeta,
+          })
+        } else if (repo.authConfigured && repo.authLoginUrl) {
+          setAuth({
+            authType: 'form',
+            loginUrl: repo.authLoginUrl,
+            username: '',
+            password: '',
+            authHeaders: [],
+          })
+        } else {
+          setAuth(EMPTY_AUTH)
+        }
         setIsDirty(false)
       }
     }
@@ -227,13 +255,28 @@ export function RepositorySection({
 
   const handleSaveAuth = () => {
     if (selectedId === null || isNewRepo) return
-    if (!auth.loginUrl) return
-    const payload: RepositoryAuthUpdate = {
-      loginUrl: auth.loginUrl,
+    if (auth.authType === 'form') {
+      if (!auth.loginUrl) return
+      const payload: RepositoryAuthUpdate = {
+        authType: 'form',
+        loginUrl: auth.loginUrl,
+      }
+      if (auth.username) payload.username = auth.username
+      if (auth.password) payload.password = auth.password
+      onUpdateAuth(selectedId, payload)
+    } else {
+      const validHeaders = auth.authHeaders.filter(h => h.header)
+      if (validHeaders.length === 0) return
+      const payload: RepositoryAuthUpdate = {
+        authType: 'header',
+        authHeaders: validHeaders.map(h => ({
+          header: h.header,
+          value: h.value,
+          value_env: h.valueEnv,
+        })),
+      }
+      onUpdateAuth(selectedId, payload)
     }
-    if (auth.username) payload.username = auth.username
-    if (auth.password) payload.password = auth.password
-    onUpdateAuth(selectedId, payload)
   }
 
   const selectedRepo = repositories.find(r => r.id === selectedId)
@@ -591,87 +634,179 @@ export function RepositorySection({
               Optional login credentials for crawlers.
               {!isNewRepo && ' Values are never echoed back from the server.'}
             </div>
-            <div className="grid grid-cols-3 gap-3">
-              <div>
-                <label
-                  htmlFor="repo-auth-login-url"
-                  className="block text-[10px] uppercase tracking-wider text-muted-foreground mb-1"
-                >
-                  Login URL
-                </label>
-                <input
-                  id="repo-auth-login-url"
-                  type="text"
-                  value={auth.loginUrl}
-                  onChange={e =>
-                    setAuth(a => ({
-                      ...a,
-                      loginUrl: e.target.value,
-                    }))
-                  }
-                  placeholder={
-                    !isNewRepo && selectedRepo?.authConfigured
-                      ? 'Stored — enter new value to override'
-                      : 'https://example.com/login'
-                  }
-                  className="w-full h-8 px-2 bg-background border border-border text-xs text-foreground font-mono focus:border-accent focus:outline-none"
-                />
-              </div>
-              <div>
-                <label
-                  htmlFor="repo-auth-username"
-                  className="block text-[10px] uppercase tracking-wider text-muted-foreground mb-1"
-                >
-                  Username
-                </label>
-                <input
-                  id="repo-auth-username"
-                  type="text"
-                  autoComplete="off"
-                  value={auth.username}
-                  onChange={e =>
-                    setAuth(a => ({
-                      ...a,
-                      username: e.target.value,
-                    }))
-                  }
-                  placeholder={
-                    !isNewRepo && selectedRepo?.authConfigured
-                      ? 'Stored — enter new value to override'
-                      : undefined
-                  }
-                  className="w-full h-8 px-2 bg-background border border-border text-xs text-foreground focus:border-accent focus:outline-none"
-                />
-              </div>
-              <div>
-                <label
-                  htmlFor="repo-auth-password"
-                  className="block text-[10px] uppercase tracking-wider text-muted-foreground mb-1"
-                >
-                  Password
-                </label>
-                <input
-                  id="repo-auth-password"
-                  type="password"
-                  autoComplete="new-password"
-                  value={auth.password}
-                  onChange={e =>
-                    setAuth(a => ({
-                      ...a,
-                      password: e.target.value,
-                    }))
-                  }
-                  placeholder={
-                    !isNewRepo && selectedRepo?.authConfigured
-                      ? 'Stored — enter new value to override'
-                      : undefined
-                  }
-                  className="w-full h-8 px-2 bg-background border border-border text-xs text-foreground focus:border-accent focus:outline-none"
-                />
-              </div>
+
+            {/* Auth Type Selector */}
+            <div className="mb-4">
+              <label
+                htmlFor="repo-auth-type"
+                className="block text-[10px] uppercase tracking-wider text-muted-foreground mb-2"
+              >
+                Authentication Type
+              </label>
+              <select
+                id="repo-auth-type"
+                value={auth.authType}
+                onChange={e =>
+                  setAuth(prev => ({
+                    ...prev,
+                    authType: e.target.value as 'form' | 'header',
+                  }))
+                }
+                className="w-48 h-8 px-2 bg-background border border-border text-xs text-foreground focus:border-accent focus:outline-none"
+              >
+                <option value="form">Form Login</option>
+                <option value="header">Header-Based</option>
+              </select>
             </div>
+
+            {/* Form-based auth fields */}
+            {auth.authType === 'form' && (
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label
+                    htmlFor="repo-auth-login-url"
+                    className="block text-[10px] uppercase tracking-wider text-muted-foreground mb-1"
+                  >
+                    Login URL
+                  </label>
+                  <input
+                    id="repo-auth-login-url"
+                    type="text"
+                    value={auth.loginUrl}
+                    onChange={e =>
+                      setAuth(a => ({
+                        ...a,
+                        loginUrl: e.target.value,
+                      }))
+                    }
+                    placeholder={
+                      !isNewRepo && selectedRepo?.authConfigured
+                        ? 'Stored — enter new value to override'
+                        : 'https://example.com/login'
+                    }
+                    className="w-full h-8 px-2 bg-background border border-border text-xs text-foreground font-mono focus:border-accent focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label
+                    htmlFor="repo-auth-username"
+                    className="block text-[10px] uppercase tracking-wider text-muted-foreground mb-1"
+                  >
+                    Username
+                  </label>
+                  <input
+                    id="repo-auth-username"
+                    type="text"
+                    autoComplete="off"
+                    value={auth.username}
+                    onChange={e =>
+                      setAuth(a => ({
+                        ...a,
+                        username: e.target.value,
+                      }))
+                    }
+                    placeholder={
+                      !isNewRepo && selectedRepo?.authConfigured
+                        ? 'Stored — enter new value to override'
+                        : undefined
+                    }
+                    className="w-full h-8 px-2 bg-background border border-border text-xs text-foreground focus:border-accent focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label
+                    htmlFor="repo-auth-password"
+                    className="block text-[10px] uppercase tracking-wider text-muted-foreground mb-1"
+                  >
+                    Password
+                  </label>
+                  <input
+                    id="repo-auth-password"
+                    type="password"
+                    autoComplete="new-password"
+                    value={auth.password}
+                    onChange={e =>
+                      setAuth(a => ({
+                        ...a,
+                        password: e.target.value,
+                      }))
+                    }
+                    placeholder={
+                      !isNewRepo && selectedRepo?.authConfigured
+                        ? 'Stored — enter new value to override'
+                        : undefined
+                    }
+                    className="w-full h-8 px-2 bg-background border border-border text-xs text-foreground focus:border-accent focus:outline-none"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Header-based auth fields */}
+            {auth.authType === 'header' && (
+              <div>
+                {auth.authHeaders.map((entry, idx) => (
+                  <div key={idx} className="flex gap-2 mb-2">
+                    <input
+                      placeholder="Header name (e.g., Authorization)"
+                      value={entry.header}
+                      onChange={e => {
+                        const updated = [...auth.authHeaders]
+                        updated[idx] = { ...entry, header: e.target.value }
+                        setAuth(prev => ({ ...prev, authHeaders: updated }))
+                      }}
+                      className="flex-1 h-8 px-2 bg-background border border-border text-xs text-foreground focus:border-accent focus:outline-none"
+                    />
+                    <input
+                      placeholder="Value"
+                      type="text"
+                      value={entry.value}
+                      onChange={e => {
+                        const updated = [...auth.authHeaders]
+                        updated[idx] = { ...entry, value: e.target.value }
+                        setAuth(prev => ({ ...prev, authHeaders: updated }))
+                      }}
+                      className="flex-1 h-8 px-2 bg-background border border-border text-xs text-foreground focus:border-accent focus:outline-none"
+                    />
+                    <input
+                      placeholder="Env var (optional)"
+                      type="text"
+                      value={entry.valueEnv}
+                      onChange={e => {
+                        const updated = [...auth.authHeaders]
+                        updated[idx] = { ...entry, valueEnv: e.target.value }
+                        setAuth(prev => ({ ...prev, authHeaders: updated }))
+                      }}
+                      className="w-36 h-8 px-2 bg-background border border-border text-xs text-foreground focus:border-accent focus:outline-none"
+                    />
+                    <button
+                      onClick={() => {
+                        const updated = auth.authHeaders.filter((_, i) => i !== idx)
+                        setAuth(prev => ({ ...prev, authHeaders: updated }))
+                      }}
+                      className="px-2 h-8 border border-crit text-crit hover:bg-crit/10 text-[10px] uppercase tracking-wider transition-colors"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))}
+                <button
+                  onClick={() => {
+                    setAuth(prev => ({
+                      ...prev,
+                      authHeaders: [...prev.authHeaders, { header: '', value: '', valueEnv: '' }],
+                    }))
+                  }}
+                  className="flex items-center gap-1 px-3 h-8 text-[10px] uppercase tracking-wider border border-border text-muted-foreground hover:bg-muted/30 transition-colors"
+                >
+                  <Plus className="h-3 w-3" />
+                  Add Header
+                </button>
+              </div>
+            )}
+
             {!isNewRepo && (
-              <div className="flex items-center justify-end gap-2 mt-3">
+              <div className="flex items-center justify-end gap-2 mt-4">
                 {authJustSaved && (
                   <span className="text-[10px] text-accent flex items-center gap-1">
                     <Check className="h-3 w-3" />
@@ -680,10 +815,17 @@ export function RepositorySection({
                 )}
                 <button
                   onClick={handleSaveAuth}
-                  disabled={isSavingAuth || !auth.loginUrl}
+                  disabled={
+                    isSavingAuth ||
+                    (auth.authType === 'form' && !auth.loginUrl) ||
+                    (auth.authType === 'header' &&
+                      auth.authHeaders.filter(h => h.header).length === 0)
+                  }
                   className={cn(
                     'flex items-center gap-1 px-3 h-8 text-[10px] uppercase tracking-wider transition-colors',
-                    auth.loginUrl
+                    (auth.authType === 'form' && auth.loginUrl) ||
+                      (auth.authType === 'header' &&
+                        auth.authHeaders.filter(h => h.header).length > 0)
                       ? 'bg-accent text-background hover:bg-accent/80'
                       : 'bg-muted text-dim cursor-not-allowed'
                   )}

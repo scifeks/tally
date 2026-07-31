@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime
+import os
 import shutil
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -135,6 +136,22 @@ class ProjectManager:
         )
         self.config.save_project_config(name, project_cfg)
         self.registry.register(name, str(self.base_path))
+
+    def setup_credentials_key(
+        self,
+        passphrase: str,
+        actual_path: Path,
+        normalized_path: Path,
+    ) -> None:
+        """Derive a Fernet key and write it, symlinking if needed."""
+        from core.security.credentials import create_key_file
+
+        create_key_file(passphrase, actual_path)
+        if actual_path.resolve() != normalized_path.resolve():
+            normalized_path.parent.mkdir(parents=True, exist_ok=True)
+            if normalized_path.exists() or normalized_path.is_symlink():
+                normalized_path.unlink()
+            os.symlink(actual_path, normalized_path)
 
 
 def _build_default_registry(

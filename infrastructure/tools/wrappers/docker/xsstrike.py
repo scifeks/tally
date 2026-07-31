@@ -167,12 +167,17 @@ class XSSTrikeDockerTool(BaseXSStrikeTool):
             )
             return []
 
+        from infrastructure.tools.wrappers.utils.auth_login import (
+            build_tool_headers,
+        )
+
         kwargs: dict[str, Any] = {
             "seeds_file": seeds_file,
             "crawl_level": repo.xsstrike_crawl_level,
         }
-        if repo.xsstrike_headers:
-            kwargs["headers"] = dict(repo.xsstrike_headers)
+        headers = build_tool_headers(repo.auth, repo.xsstrike_headers)
+        if headers:
+            kwargs["headers"] = headers
         if context.tool_config.blind_xss_callback_url:
             kwargs["blind"] = True
 
