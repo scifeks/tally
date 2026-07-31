@@ -323,40 +323,88 @@ class EnrichmentPipeline:
         completed = 0
         n_work = len(work_items)
 
+        self._reporter.report(f"    Enriching findings... 0/{n_work}")
+        self._event_sink.emit(
+            se.EnrichmentProgress(
+                run_id=self._run_id or 0,
+                project_id=self._project_id,
+                message=f"Enriching findings... 0/{n_work}",
+                enriched_count=0,
+                total_to_enrich=n_work,
+            )
+        )
+
         # Pre-resolve LLM provider once before spawning threads
         _ = self._provider
 
         cancelled = False
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            future_to_row = {
-                executor.submit(
-                    self._call_llm_worker, text, meta, legacy_fields, specs
-                ): row
-                for row, text, meta, legacy_fields, specs in work_items
-            }
-            for future in as_completed(future_to_row):
-                row = future_to_row[future]
-                completed += 1
-                self._reporter.report(f"    Enriching findings... {completed}/{n_work}")
-                self._event_sink.emit(
-                    se.EnrichmentProgress(
-                        run_id=self._run_id or 0,
-                        project_id=self._project_id,
-                        message=f"Enriching findings... {completed}/{n_work}",
-                        enriched_count=completed,
-                        total_to_enrich=n_work,
+            # Submit one future per field so progress updates arrive
+            # after each LLM call, not after all fields for a finding.
+            future_to_key: dict[Any, tuple[int, FieldEnrichmentSpec | None]] = {}
+            fields_expected: dict[int, int] = {}
+            fields_done: dict[int, int] = {}
+            merged: dict[int, dict[str, Any]] = {}
+            row_by_id: dict[int, dict[str, Any]] = {}
+
+            for row, text, meta, lf, specs in work_items:
+                fid = row["id"]
+                row_by_id[fid] = row
+                fields_done[fid] = 0
+                merged[fid] = {}
+                if specs is not None:
+                    fields_expected[fid] = len(specs)
+                    for spec in specs:
+                        f = executor.submit(
+                            self._enrich_single_field,
+                            meta,
+                            spec,
+                        )
+                        future_to_key[f] = (fid, spec)
+                else:
+                    fields_expected[fid] = 1
+                    f = executor.submit(
+                        self._call_llm_worker,
+                        text,
+                        meta,
+                        lf,
+                        specs,
                     )
-                )
+                    future_to_key[f] = (fid, None)
+
+            for future in as_completed(future_to_key):
+                fid, spec = future_to_key[future]
                 try:
-                    validated = future.result()
-                    updates.append((row, validated))
+                    result = future.result()
+                    if spec is not None and result is not None:
+                        merged[fid][spec.field_name] = result
+                    elif spec is None:
+                        merged[fid] = result or {}
                 except Exception as exc:
-                    logger.error("Enrichment failed for id %s: %s", row.get("id"), exc)
+                    logger.error(
+                        "Enrichment failed for id %s: %s",
+                        fid,
+                        exc,
+                    )
                     self._had_errors = True
+                fields_done[fid] += 1
+                if fields_done[fid] >= fields_expected[fid]:
+                    if merged[fid]:
+                        updates.append((row_by_id[fid], merged[fid]))
+                    completed += 1
+                    self._reporter.report(
+                        f"    Enriching findings... {completed}/{n_work}"
+                    )
+                    self._event_sink.emit(
+                        se.EnrichmentProgress(
+                            run_id=self._run_id or 0,
+                            project_id=self._project_id,
+                            message=(f"Enriching findings... {completed}/{n_work}"),
+                            enriched_count=completed,
+                            total_to_enrich=n_work,
+                        )
+                    )
                 if self._cancel_token is not None and self._cancel_token.is_set():
-                    # Stop launching new Ollama calls and let in-flight
-                    # workers wind down. Findings collected up to this
-                    # point are persisted in Phase 3 below.
                     executor.shutdown(wait=False, cancel_futures=True)
                     cancelled = True
                     break
@@ -403,6 +451,15 @@ class EnrichmentPipeline:
         assert legacy_fields is not None
         raw = self._call_llm(doc_text, metadata, legacy_fields)
         return self._validate_response(raw, legacy_fields)
+
+    def _enrich_single_field(
+        self,
+        metadata: dict[str, Any],
+        spec: FieldEnrichmentSpec,
+    ) -> str | None:
+        """Thread-safe worker for one enrichment field."""
+        result = self._call_per_field(metadata, [spec])
+        return result.get(spec.field_name)
 
     # Per-field enrichment path
 

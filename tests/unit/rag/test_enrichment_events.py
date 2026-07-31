@@ -1,9 +1,8 @@
 """Unit tests for EnrichmentPipeline event emission.
 
-EnrichmentPipeline emits one ``EnrichmentProgress`` per future-completion
-in Phase 2 (LLM concurrency loop) and one ``EnrichmentComplete`` after
-Phase 3 (SQLite writes). Both events carry ``project_id`` and ``run_id``
-threaded in at construction time.
+EnrichmentPipeline emits an initial ``EnrichmentProgress`` at count 0
+before Phase 2, one ``EnrichmentProgress`` per future-completion during
+Phase 2, and one ``EnrichmentComplete`` after Phase 3.
 """
 
 from __future__ import annotations
@@ -13,6 +12,7 @@ from unittest.mock import MagicMock
 from application.ports.scan_event_sink import NullScanEventSink
 from application.rag.enrichment import EnrichmentPipeline
 from domain.pipeline import scan_events as se
+from domain.tools.enrichment import FieldEnrichmentSpec, PromptStrategy
 
 
 class _RecordingSink(NullScanEventSink):
@@ -103,11 +103,66 @@ def test_emission_carries_project_and_run_ids() -> None:
 
     pipeline.enrich([1])
 
-    # We expect at least EnrichmentComplete; EnrichmentProgress fires only
-    # when there are work items reaching Phase 2.
     types = [type(e) for e in sink.events]
     assert se.EnrichmentComplete in types
 
     complete = next(e for e in sink.events if isinstance(e, se.EnrichmentComplete))
     assert complete.run_id == 99
     assert complete.project_id == 7
+
+
+def test_initial_progress_emitted_before_enrichment() -> None:
+    """First event must be EnrichmentProgress with count 0."""
+    sink = _RecordingSink()
+    repo = _make_finding_repo([{"id": 1, "enriched": 0}])
+    pipeline = EnrichmentPipeline(
+        finding_repo=repo,
+        run_id=5,
+        project_id=10,
+        event_sink=sink,
+    )
+    pipeline._get_enrichment_plan = lambda row: (["title"], None)  # type: ignore[method-assign]
+    pipeline._call_llm_worker = lambda *a, **kw: {"title": "x"}  # type: ignore[method-assign]
+    pipeline._llm_provider = MagicMock()
+
+    pipeline.enrich([1])
+
+    progress_events = [e for e in sink.events if isinstance(e, se.EnrichmentProgress)]
+    assert len(progress_events) >= 2
+    assert progress_events[0].enriched_count == 0
+    assert progress_events[0].total_to_enrich == 1
+    assert progress_events[0].run_id == 5
+    assert progress_events[0].project_id == 10
+    assert progress_events[1].enriched_count == 1
+
+
+def test_per_field_progress_increments_per_finding() -> None:
+    """With per-field enrichment, the counter increments once
+    per finding (after all its fields complete), not per field."""
+    sink = _RecordingSink()
+    repo = _make_finding_repo(
+        [
+            {"id": 1, "enriched": 0},
+            {"id": 2, "enriched": 0},
+        ]
+    )
+    pipeline = EnrichmentPipeline(
+        finding_repo=repo,
+        run_id=1,
+        project_id=1,
+        event_sink=sink,
+        max_workers=1,
+    )
+    specs = [
+        FieldEnrichmentSpec("title", ("description",), PromptStrategy.GENERIC),
+        FieldEnrichmentSpec("risk_type", ("description",), PromptStrategy.GENERIC),
+    ]
+    pipeline._get_enrichment_plan = lambda row: (None, list(specs))  # type: ignore[method-assign]
+    pipeline._enrich_single_field = lambda meta, spec: "x"  # type: ignore[method-assign]
+    pipeline._llm_provider = MagicMock()
+
+    pipeline.enrich([1, 2])
+
+    progress = [e for e in sink.events if isinstance(e, se.EnrichmentProgress)]
+    counts = [e.enriched_count for e in progress]
+    assert counts == [0, 1, 2]
