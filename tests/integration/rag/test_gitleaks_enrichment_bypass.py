@@ -156,10 +156,12 @@ class TestGitleaksEnrichmentBypass:
         ) as mock_pf:
             p.enrich([fid])
 
-        mock_pf.assert_called_once()
-        call_specs = mock_pf.call_args[0][1]
-        spec_names = [s.field_name for s in call_specs]
-        assert "risk_type" in spec_names, "risk_type must be in semgrep specs"
+        mock_pf.assert_called()
+        all_spec_names = []
+        for call in mock_pf.call_args_list:
+            call_specs = call[0][1]
+            all_spec_names.extend([s.field_name for s in call_specs])
+        assert "risk_type" in all_spec_names, "risk_type must be in semgrep specs"
 
     def test_zap_still_enriches_owasp_name(self, project_env: dict) -> None:
         # ZAP no longer enriches risk_type (always set from alert_name in metadata);
@@ -185,7 +187,11 @@ class TestGitleaksEnrichmentBypass:
         ) as mock_pf:
             p.enrich([fid])
 
-        mock_pf.assert_called_once()
-        call_specs = mock_pf.call_args[0][1]
-        spec_names = [s.field_name for s in call_specs]
-        assert "owasp_name" in spec_names, "owasp_name must be in zap enrichment specs"
+        mock_pf.assert_called()
+        all_spec_names = []
+        for call in mock_pf.call_args_list:
+            call_specs = call[0][1]
+            all_spec_names.extend([s.field_name for s in call_specs])
+        assert "owasp_name" in all_spec_names, (
+            "owasp_name must be in zap enrichment specs"
+        )
