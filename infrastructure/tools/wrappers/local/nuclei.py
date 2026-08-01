@@ -2,16 +2,21 @@
 
 from __future__ import annotations
 
+import logging
 import shutil
+import subprocess
 from pathlib import Path
 from typing import Any
 
+from domain.tools.interface import ExecutionContext, ExecutionPass
 from infrastructure.tools.parsers.nuclei import (
     parse_nuclei_json,
     parse_nuclei_json_string,
 )
 from infrastructure.tools.version import get_tool_version
 from infrastructure.tools.wrappers.base.nuclei import BaseNucleiTool
+
+logger = logging.getLogger(__name__)
 
 
 class NucleiLocalTool(BaseNucleiTool):
@@ -20,6 +25,24 @@ class NucleiLocalTool(BaseNucleiTool):
     def __init__(self, config=None) -> None:
         self._nuclei_path: str = config.path if config is not None else "nuclei"
         self._last_output_path: Path | None = None
+
+    def build_execution_passes(self, context: ExecutionContext) -> list[ExecutionPass]:
+        self._ensure_templates()
+        return super().build_execution_passes(context)
+
+    def _ensure_templates(self) -> None:
+        templates_dir = self._resolve_default_templates_dir()
+        if templates_dir.is_dir():
+            return
+        logger.info(
+            "Nuclei templates not found at %s; downloading...",
+            templates_dir,
+        )
+        subprocess.run(
+            [self._nuclei_path, "-update-templates"],
+            check=True,
+            capture_output=True,
+        )
 
     @property
     def command(self) -> str:
@@ -38,6 +61,9 @@ class NucleiLocalTool(BaseNucleiTool):
         urls_file: str | None = str(raw["urls_file"]) if "urls_file" in raw else None
         custom_template_dir: str | None = (
             str(raw["custom_template_dir"]) if "custom_template_dir" in raw else None
+        )
+        default_template_dir: str | None = (
+            str(raw["default_template_dir"]) if "default_template_dir" in raw else None
         )
         pass_type: str | None = str(raw["pass_type"]) if "pass_type" in raw else None
         output_file: str | None = (
@@ -71,7 +97,9 @@ class NucleiLocalTool(BaseNucleiTool):
 
         cmd.extend(["-json-export", str(output_file)])
 
-        if custom_template_dir:
+        if custom_template_dir and default_template_dir:
+            cmd.extend(["-t", f"{default_template_dir},{custom_template_dir}"])
+        elif custom_template_dir:
             cmd.extend(["-t", str(custom_template_dir)])
 
         return cmd

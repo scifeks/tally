@@ -31,6 +31,38 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+_CODE_FENCE_RE = re.compile(r"^```(?:json)?\s*\n?(.*?)\n?```\s*$", re.DOTALL)
+
+
+def _extract_json_object(text: str) -> dict[str, Any]:
+    """Parse a JSON object from LLM output, tolerating code fences."""
+    s = text.strip()
+    m = _CODE_FENCE_RE.match(s)
+    if m:
+        s = m.group(1).strip()
+
+    try:
+        obj = json.loads(s)
+        if isinstance(obj, dict):
+            return obj
+    except json.JSONDecodeError:
+        pass
+
+    decoder = json.JSONDecoder()
+    pos = 0
+    while True:
+        brace = s.find("{", pos)
+        if brace == -1:
+            raise json.JSONDecodeError("no JSON object found", s, 0)
+        try:
+            obj, _ = decoder.raw_decode(s, brace)
+            if isinstance(obj, dict):
+                return obj
+        except json.JSONDecodeError:
+            pass
+        pos = brace + 1
+
+
 # Legacy batch-path prompt (used when builder has no enrichment_fields).
 # Sends full document text and requests all missing fields at once.
 
@@ -598,7 +630,7 @@ class EnrichmentPipeline:
                 source_values,
             )
             return None
-        raw = json.loads(content)
+        raw = _extract_json_object(content)
         validated = self._validate_response(raw, [spec.field_name])
         return validated.get(spec.field_name)
 
@@ -622,7 +654,7 @@ class EnrichmentPipeline:
                 source_values,
             )
             return None
-        raw = json.loads(content)
+        raw = _extract_json_object(content)
         validated = self._validate_response(raw, [spec.field_name])
         return validated.get(spec.field_name)
 

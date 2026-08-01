@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -124,6 +125,8 @@ class BaseNucleiTool(ToolInterface):
         custom_template_dir = Path(repo_path) / ".nuclei"
         if custom_template_dir.is_dir():
             shared_kwargs["custom_template_dir"] = str(custom_template_dir)
+            default_dir = self._resolve_default_templates_dir()
+            shared_kwargs["default_template_dir"] = str(default_dir)
 
         return [
             ExecutionPass(
@@ -196,6 +199,13 @@ class BaseNucleiTool(ToolInterface):
     def count_findings(self, parsed_data: dict[str, Any]) -> int:
         summary = parsed_data.get("summary", {})
         return summary.get("total_findings", len(parsed_data.get("findings", [])))
+
+    @staticmethod
+    def _resolve_default_templates_dir() -> Path:
+        custom = os.environ.get("NUCLEI_TEMPLATES_DIR")
+        if custom:
+            return Path(custom)
+        return Path.home() / "nuclei-templates"
 
     @staticmethod
     def _fingerprint_finding(finding: dict[str, Any]) -> str:
