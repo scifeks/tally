@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import logging
 import shutil
+import subprocess
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
+from domain.tools.interface import ExecutionContext, ExecutionPass
 from infrastructure.tools.parsers.nuclei import (
     parse_nuclei_json,
     parse_nuclei_json_string,
@@ -14,10 +16,7 @@ from infrastructure.tools.parsers.nuclei import (
 from infrastructure.tools.version import get_tool_version
 from infrastructure.tools.wrappers.base.nuclei import BaseNucleiTool
 
-if TYPE_CHECKING:
-    from domain.tools.interface import ExecutionContext, ExecutionPass
-
-_log = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)
 
 
 class NucleiLocalTool(BaseNucleiTool):
@@ -27,32 +26,23 @@ class NucleiLocalTool(BaseNucleiTool):
         self._nuclei_path: str = config.path if config is not None else "nuclei"
         self._last_output_path: Path | None = None
 
+    def build_execution_passes(self, context: ExecutionContext) -> list[ExecutionPass]:
+        self._ensure_templates()
+        return super().build_execution_passes(context)
+
     def _ensure_templates(self) -> None:
-        """Ensure nuclei templates are downloaded.
-
-        Checks if templates directory exists. If not, runs
-        nuclei -update-templates to download them from GitHub.
-        """
-        import subprocess
-
         templates_dir = self._resolve_default_templates_dir()
         if templates_dir.is_dir():
             return
-
-        _log.info("Templates directory not found at %s, downloading...", templates_dir)
+        logger.info(
+            "Nuclei templates not found at %s; downloading...",
+            templates_dir,
+        )
         subprocess.run(
             [self._nuclei_path, "-update-templates"],
             check=True,
             capture_output=True,
         )
-
-    def build_execution_passes(
-        self,
-        context: ExecutionContext,
-    ) -> list[ExecutionPass]:
-        """Override to ensure templates are downloaded before building passes."""
-        self._ensure_templates()
-        return super().build_execution_passes(context)
 
     @property
     def command(self) -> str:

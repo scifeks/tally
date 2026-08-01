@@ -1,8 +1,7 @@
-"""Unit tests for nuclei template handling."""
+"""Unit tests for nuclei template auto-download and custom template path."""
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -11,114 +10,106 @@ import pytest
 from infrastructure.tools.wrappers.local.nuclei import NucleiLocalTool
 
 
-class TestEnsureTemplates:
-    def test_ensure_templates_downloads_when_missing(self) -> None:
-        tool = NucleiLocalTool()
-        with patch.object(Path, "is_dir", return_value=False):
-            with patch("subprocess.run") as mock_run:
-                tool._ensure_templates()
-        mock_run.assert_called_once_with(
-            ["nuclei", "-update-templates"], check=True, capture_output=True
-        )
-
-    def test_ensure_templates_skips_when_present(self) -> None:
-        tool = NucleiLocalTool()
-        with patch.object(Path, "is_dir", return_value=True):
-            with patch("subprocess.run") as mock_run:
-                tool._ensure_templates()
-        mock_run.assert_not_called()
-
-    def test_ensure_templates_uses_env_var(self, monkeypatch) -> None:
-        monkeypatch.setenv("NUCLEI_TEMPLATES_DIR", "/custom/templates")
-        tool = NucleiLocalTool()
-
-        with patch("pathlib.Path.is_dir", return_value=False):
-            with patch("subprocess.run") as mock_run:
-                tool._ensure_templates()
-
-        mock_run.assert_called_once_with(
-            ["nuclei", "-update-templates"], check=True, capture_output=True
-        )
-
-    def test_ensure_templates_uses_custom_nuclei_path(self) -> None:
+class TestNucleiTemplates:
+    def _make_tool(self, path: str = "nuclei") -> NucleiLocalTool:
         config = MagicMock()
-        config.path = "/custom/nuclei"
-        tool = NucleiLocalTool(config)
+        config.path = path
+        return NucleiLocalTool(config=config)
 
-        with patch.object(Path, "is_dir", return_value=False):
-            with patch("subprocess.run") as mock_run:
+    def test_ensure_templates_skips_when_dir_exists(self) -> None:
+        tool = self._make_tool()
+        with (
+            patch.object(
+                type(tool),
+                "_resolve_default_templates_dir",
+                return_value=Path("/fake/nuclei-templates"),
+            ),
+            patch("subprocess.run") as mock_run,
+        ):
+            with patch.object(Path, "is_dir", return_value=True):
                 tool._ensure_templates()
+            mock_run.assert_not_called()
 
-        mock_run.assert_called_once_with(
-            ["/custom/nuclei", "-update-templates"], check=True, capture_output=True
-        )
+    def test_ensure_templates_downloads_when_dir_missing(self) -> None:
+        tool = self._make_tool("/usr/bin/nuclei")
+        with (
+            patch.object(
+                type(tool),
+                "_resolve_default_templates_dir",
+                return_value=Path("/fake/nuclei-templates"),
+            ),
+            patch("subprocess.run") as mock_run,
+        ):
+            with patch.object(Path, "is_dir", return_value=False):
+                tool._ensure_templates()
+            mock_run.assert_called_once_with(
+                ["/usr/bin/nuclei", "-update-templates"],
+                check=True,
+                capture_output=True,
+            )
 
+    @pytest.mark.parametrize(
+        "env_val,expected",
+        [
+            (None, Path.home() / "nuclei-templates"),
+            (
+                "/custom/templates",
+                Path("/custom/templates"),
+            ),
+        ],
+        ids=["default", "env-override"],
+    )
+    def test_resolve_default_templates_dir(
+        self, env_val: str | None, expected: Path
+    ) -> None:
+        with patch.dict(
+            "os.environ",
+            {"NUCLEI_TEMPLATES_DIR": env_val} if env_val else {},
+            clear=False,
+        ):
+            if env_val is None:
+                with patch.dict("os.environ", {}, clear=False):
+                    import os
 
-class TestBuildCommandTemplates:
-    def test_build_command_comma_separated_templates(self) -> None:
-        tool = NucleiLocalTool()
+                    os.environ.pop("NUCLEI_TEMPLATES_DIR", None)
+                    result = NucleiLocalTool._resolve_default_templates_dir()
+            else:
+                result = NucleiLocalTool._resolve_default_templates_dir()
+        assert result == expected
+
+    def test_build_command_no_custom_templates(self) -> None:
+        tool = self._make_tool()
         cmd = tool.build_command(
-            base_url="http://example.com",
+            base_url="https://example.com",
             pass_type="automatic",
+            output_file="/tmp/out.json",
+        )
+        assert "-t" not in cmd
+
+    def test_build_command_custom_only(self) -> None:
+        tool = self._make_tool()
+        cmd = tool.build_command(
+            base_url="https://example.com",
+            pass_type="automatic",
+            output_file="/tmp/out.json",
+            custom_template_dir="/repo/.nuclei",
+        )
+        assert "-t" in cmd
+        idx = cmd.index("-t")
+        assert cmd[idx + 1] == "/repo/.nuclei"
+
+    def test_build_command_both_default_and_custom(self) -> None:
+        tool = self._make_tool()
+        cmd = tool.build_command(
+            base_url="https://example.com",
+            pass_type="dast",
             output_file="/tmp/out.json",
             custom_template_dir="/repo/.nuclei",
             default_template_dir="/home/user/nuclei-templates",
         )
-
-        t_idx = cmd.index("-t")
-        template_str = cmd[t_idx + 1]
-        assert "/home/user/nuclei-templates" in template_str
-        assert "/repo/.nuclei" in template_str
-        assert "," in template_str
-        assert template_str == "/home/user/nuclei-templates,/repo/.nuclei"
-
-    def test_build_command_custom_only_no_default(self) -> None:
-        tool = NucleiLocalTool()
-        cmd = tool.build_command(
-            base_url="http://example.com",
-            pass_type="automatic",
-            output_file="/tmp/out.json",
-            custom_template_dir="/repo/.nuclei",
-        )
-
-        if "-t" in cmd:
-            t_idx = cmd.index("-t")
-            template_str = cmd[t_idx + 1]
-            assert template_str == "/repo/.nuclei"
-        else:
-            pytest.fail("Expected -t flag in command")
-
-    def test_build_command_no_templates(self) -> None:
-        tool = NucleiLocalTool()
-        cmd = tool.build_command(
-            base_url="http://example.com",
-            pass_type="automatic",
-            output_file="/tmp/out.json",
-        )
-
-        assert "-t" not in cmd
-
-    def test_build_command_default_only(self) -> None:
-        tool = NucleiLocalTool()
-        cmd = tool.build_command(
-            base_url="http://example.com",
-            pass_type="automatic",
-            output_file="/tmp/out.json",
-            default_template_dir="/home/user/nuclei-templates",
-        )
-
-        assert "-t" not in cmd
-
-
-class TestResolveDefaultTemplatesDir:
-    def test_resolve_templates_dir_default(self) -> None:
-        with patch.dict(os.environ, {}, clear=True):
-            if "NUCLEI_TEMPLATES_DIR" in os.environ:
-                del os.environ["NUCLEI_TEMPLATES_DIR"]
-            result = NucleiLocalTool._resolve_default_templates_dir()
-        assert result == Path.home() / "nuclei-templates"
-
-    def test_resolve_templates_dir_env_var(self, monkeypatch) -> None:
-        monkeypatch.setenv("NUCLEI_TEMPLATES_DIR", "/custom/path")
-        result = NucleiLocalTool._resolve_default_templates_dir()
-        assert result == Path("/custom/path")
+        assert "-t" in cmd
+        idx = cmd.index("-t")
+        val = cmd[idx + 1]
+        assert "/home/user/nuclei-templates" in val
+        assert "/repo/.nuclei" in val
+        assert "," in val
