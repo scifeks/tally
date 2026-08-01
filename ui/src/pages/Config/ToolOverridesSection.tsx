@@ -221,7 +221,7 @@ export function ToolOverridesSection({
                 onChange={e => {
                   if (e.target.value) setSelectedToolId(e.target.value)
                 }}
-                className="h-7 pl-2 pr-6 bg-background border border-accent/50 text-xs text-accent appearance-none cursor-pointer focus:border-accent focus:outline-none"
+                className="h-7 pl-2 pr-6 bg-background border border-accent/50 text-xs text-accent appearance-none cursor-pointer hover:border-accent hover:shadow-[0_0_8px_rgba(57,255,20,0.2)] focus:border-accent focus:outline-none transition-all"
               >
                 <option value="">+ Add Override</option>
                 {availableForAdd.map(t => (
@@ -530,7 +530,7 @@ export function ToolOverridesSection({
                   argsMode === 'custom' ||
                     (form.location === 'local' && form.path) ||
                     (form.location === 'docker' && form.container?.name && form.container?.toolPath)
-                    ? 'bg-accent text-background hover:bg-accent/80 hover:shadow-[0_0_8px_rgba(57,255,20,0.15)]'
+                    ? 'bg-accent text-background hover:bg-accent/70'
                     : 'bg-muted text-dim opacity-40 cursor-not-allowed'
                 )}
               >

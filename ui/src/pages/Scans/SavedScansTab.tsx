@@ -594,7 +594,7 @@ export function SavedScansTab({
                     className={cn(
                       'flex items-center gap-1 px-4 h-8 text-[10px] uppercase tracking-wider transition-colors',
                       form.name?.trim()
-                        ? 'bg-accent text-background hover:bg-accent/80'
+                        ? 'bg-accent text-background hover:bg-accent/70'
                         : 'bg-muted text-dim cursor-not-allowed'
                     )}
                   >

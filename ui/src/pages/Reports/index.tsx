@@ -395,7 +395,7 @@ export default function Reports() {
                   className={cn(
                     'flex items-center gap-2 px-4 py-2 text-sm font-bold uppercase tracking-wider transition-colors',
                     canGenerate || format !== 'pdf'
-                      ? 'bg-accent text-background hover:bg-accent/90'
+                      ? 'bg-accent text-background hover:bg-accent/70'
                       : 'bg-muted text-dim cursor-not-allowed'
                   )}
                 >

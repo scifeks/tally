@@ -266,14 +266,15 @@ export function RepositorySection({
       onUpdateAuth(selectedId, payload)
     } else {
       const validHeaders = auth.authHeaders.filter(h => h.header)
-      if (validHeaders.length === 0) return
       const payload: RepositoryAuthUpdate = {
-        authType: 'header',
         authHeaders: validHeaders.map(h => ({
           header: h.header,
           value: h.value,
           value_env: h.valueEnv,
         })),
+      }
+      if (validHeaders.length > 0) {
+        payload.authType = 'header'
       }
       onUpdateAuth(selectedId, payload)
     }
@@ -313,7 +314,7 @@ export function RepositorySection({
           </div>
           <button
             onClick={() => setSelectedId(NEW_REPO_ID)}
-            className="flex items-center gap-1 px-2 h-7 text-[10px] uppercase tracking-wider border border-border text-muted-foreground hover:bg-muted/30 transition-colors"
+            className="flex items-center gap-1 px-2 h-7 text-[10px] uppercase tracking-wider border border-border text-muted-foreground hover:border-accent/60 hover:text-accent transition-colors"
           >
             <Plus className="h-3 w-3" />
             New
@@ -450,7 +451,7 @@ export function RepositorySection({
                     setEndpointFileUpload(file)
                     setIsDirty(true)
                   }}
-                  className="w-full h-8 px-2 bg-background border border-border text-xs text-foreground font-mono focus:border-accent focus:outline-none file:mr-2 file:py-1 file:px-2 file:bg-muted file:border-0 file:text-[10px] file:uppercase file:text-muted-foreground"
+                  className="w-full h-8 px-2 pt-1.5 bg-background border border-border text-xs text-foreground font-mono focus:border-accent focus:outline-none file:mr-2 file:py-0.5 file:px-2 file:bg-muted file:border-0 file:text-[10px] file:uppercase file:text-muted-foreground"
                 />
                 {existingEndpointFile && !endpointFileUpload && (
                   <div className="text-[9px] text-accent mt-1">
@@ -478,7 +479,7 @@ export function RepositorySection({
                     setGarakConfigUpload(file)
                     setIsDirty(true)
                   }}
-                  className="w-full h-8 px-2 bg-background border border-border text-xs text-foreground font-mono focus:border-accent focus:outline-none file:mr-2 file:py-1 file:px-2 file:bg-muted file:border-0 file:text-[10px] file:uppercase file:text-muted-foreground"
+                  className="w-full h-8 px-2 pt-1.5 bg-background border border-border text-xs text-foreground font-mono focus:border-accent focus:outline-none file:mr-2 file:py-0.5 file:px-2 file:bg-muted file:border-0 file:text-[10px] file:uppercase file:text-muted-foreground"
                 />
                 {existingGarakFile && !garakConfigUpload && (
                   <div className="text-[9px] text-accent mt-1">
@@ -612,7 +613,7 @@ export function RepositorySection({
                 className={cn(
                   'flex items-center gap-1 px-4 h-8 text-[10px] uppercase tracking-wider transition-colors',
                   !saveDisabled
-                    ? 'bg-accent text-background hover:bg-accent/80 hover:shadow-[0_0_8px_rgba(57,255,20,0.15)]'
+                    ? 'bg-accent text-background hover:bg-accent/70'
                     : 'bg-muted text-dim opacity-40 cursor-not-allowed'
                 )}
               >
@@ -797,7 +798,7 @@ export function RepositorySection({
                       authHeaders: [...prev.authHeaders, { header: '', value: '', valueEnv: '' }],
                     }))
                   }}
-                  className="flex items-center gap-1 px-3 h-8 text-[10px] uppercase tracking-wider border border-border text-muted-foreground hover:bg-muted/30 transition-colors"
+                  className="flex items-center gap-1 px-3 h-8 text-[10px] uppercase tracking-wider border border-border text-muted-foreground hover:border-accent/60 hover:text-accent transition-colors"
                 >
                   <Plus className="h-3 w-3" />
                   Add Header
@@ -815,18 +816,11 @@ export function RepositorySection({
                 )}
                 <button
                   onClick={handleSaveAuth}
-                  disabled={
-                    isSavingAuth ||
-                    (auth.authType === 'form' && !auth.loginUrl) ||
-                    (auth.authType === 'header' &&
-                      auth.authHeaders.filter(h => h.header).length === 0)
-                  }
+                  disabled={isSavingAuth || (auth.authType === 'form' && !auth.loginUrl)}
                   className={cn(
-                    'flex items-center gap-1 px-3 h-8 text-[10px] uppercase tracking-wider transition-colors',
-                    (auth.authType === 'form' && auth.loginUrl) ||
-                      (auth.authType === 'header' &&
-                        auth.authHeaders.filter(h => h.header).length > 0)
-                      ? 'bg-accent text-background hover:bg-accent/80 hover:shadow-[0_0_8px_rgba(57,255,20,0.15)]'
+                    'flex items-center gap-1 px-3 h-8 text-[10px] uppercase tracking-wider transition-all',
+                    !isSavingAuth && (auth.authType === 'header' || auth.loginUrl)
+                      ? 'bg-accent text-background hover:bg-accent/70'
                       : 'bg-muted text-dim opacity-40 cursor-not-allowed'
                   )}
                 >

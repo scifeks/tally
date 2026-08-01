@@ -225,7 +225,7 @@ export function FindingDetailPanel({
               'text-[11px] uppercase tracking-wider py-1.5 border transition-colors',
               triageDisabled
                 ? 'border-border text-dim opacity-40 cursor-not-allowed'
-                : 'border-accent text-accent hover:bg-accent/10 hover:shadow-[0_0_6px_rgba(57,255,20,0.1)]'
+                : 'border-accent text-accent hover:bg-accent/15 hover:shadow-[0_0_10px_rgba(57,255,20,0.25)]'
             )}
           >
             &gt; triage

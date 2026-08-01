@@ -534,7 +534,7 @@ export default function Scans() {
               <div ref={scanDropdownRef} className="relative flex">
                 <button
                   onClick={startScan}
-                  className="flex items-center gap-2 px-4 h-9 bg-accent text-background font-bold text-xs uppercase tracking-wider hover:bg-accent/80 transition-colors"
+                  className="flex items-center gap-2 px-4 h-9 bg-accent text-background font-bold text-xs uppercase tracking-wider hover:bg-accent/70 transition-all"
                 >
                   <Play className="h-4 w-4" />
                   Start Scan
@@ -543,7 +543,7 @@ export default function Scans() {
                   <button
                     onClick={() => setShowScanDropdown(s => !s)}
                     aria-label="pick a saved scan"
-                    className="flex items-center px-2 h-9 bg-accent text-background border-l border-background/30 hover:bg-accent/80 transition-colors"
+                    className="flex items-center px-2 h-9 bg-accent text-background border-l border-background/30 hover:bg-accent/70 transition-all"
                   >
                     <ChevronDown className="h-4 w-4" />
                   </button>
@@ -584,8 +584,8 @@ export default function Scans() {
                 className={cn(
                   'flex items-center gap-2 px-3 h-9 border font-bold text-xs uppercase tracking-wider transition-colors',
                   showAdvanced || hasAdvancedOptions
-                    ? 'border-accent text-accent hover:bg-accent/10'
-                    : 'border-border text-muted-foreground hover:bg-muted/30'
+                    ? 'border-accent text-accent hover:bg-accent/10 hover:shadow-[0_0_10px_rgba(57,255,20,0.2)]'
+                    : 'border-border text-muted-foreground hover:border-accent/60 hover:text-accent'
                 )}
                 title="Advanced scan options"
               >
@@ -597,7 +597,7 @@ export default function Scans() {
               <button
                 onClick={stopScan}
                 disabled={runStatus === 'cancelling'}
-                className="flex items-center gap-2 px-4 h-9 border border-crit text-crit font-bold text-xs uppercase tracking-wider hover:bg-crit/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex items-center gap-2 px-4 h-9 border border-crit text-crit font-bold text-xs uppercase tracking-wider hover:bg-crit/15 hover:shadow-[0_0_10px_rgba(255,77,77,0.2)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Square className="h-4 w-4" />
                 Stop
@@ -606,7 +606,7 @@ export default function Scans() {
             {(runStatus === 'completed' || runStatus === 'cancelled' || runStatus === 'failed') && (
               <button
                 onClick={resetScan}
-                className="flex items-center gap-2 px-4 h-9 border border-border text-muted-foreground font-bold text-xs uppercase tracking-wider hover:bg-muted/30 transition-colors"
+                className="flex items-center gap-2 px-4 h-9 border border-border text-muted-foreground font-bold text-xs uppercase tracking-wider hover:border-primary/50 hover:text-foreground transition-colors"
               >
                 <RotateCcw className="h-4 w-4" />
                 Reset

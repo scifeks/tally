@@ -76,6 +76,19 @@ def _clean_auth_type_switch(
     return merged
 
 
+def _is_auth_cleared(
+    merged: dict[str, Any],
+    patch: dict[str, Any],
+) -> bool:
+    """Detect when the patch empties all credentials for the current auth type."""
+    auth_type = merged.get("auth_type", "form")
+    if auth_type == "header" and "auth_headers" in patch:
+        return not merged.get("auth_headers")
+    if auth_type == "form" and "login_url" in patch:
+        return not merged.get("login_url")
+    return False
+
+
 class ProjectRepositoriesService:
     """CRUD facade for the active repositories of a project."""
 
@@ -185,8 +198,12 @@ class ProjectRepositoriesService:
             raise RepositoryNotFound(f"Repository {repo_id} not found")
         existing_auth = existing.auth.model_dump() if existing.auth is not None else {}
         merged_auth = {**existing_auth, **auth_patch}
-        merged_auth = _clean_auth_type_switch(merged_auth, existing_auth)
-        new_auth = RepoAuth(**merged_auth)
+        if existing_auth:
+            merged_auth = _clean_auth_type_switch(merged_auth, existing_auth)
+        if _is_auth_cleared(merged_auth, auth_patch):
+            new_auth = None
+        else:
+            new_auth = RepoAuth(**merged_auth)
         updated = existing.model_copy(update={"auth": new_auth})
         repo_repo.update(repo_id, updated)
         return updated
