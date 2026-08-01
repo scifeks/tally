@@ -67,7 +67,7 @@ export function PreflightChecklist({
               </span>
               <button
                 onClick={onConfirm}
-                className="px-4 py-2 bg-accent text-background text-sm font-bold uppercase tracking-wider hover:bg-accent/90 transition-colors"
+                className="px-4 py-2 bg-accent text-background text-sm font-bold uppercase tracking-wider hover:bg-accent/70 transition-colors"
               >
                 Generate PDF
               </button>

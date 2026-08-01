@@ -98,7 +98,7 @@ export function ProjectInfoSection({
             className={cn(
               'flex items-center gap-1 px-3 h-7 text-[10px] uppercase tracking-wider transition-colors',
               isDirty && !isSaving
-                ? 'bg-accent text-background hover:bg-accent/80 hover:shadow-[0_0_8px_rgba(57,255,20,0.15)]'
+                ? 'bg-accent text-background hover:bg-accent/70'
                 : 'bg-muted text-dim opacity-40 cursor-not-allowed'
             )}
           >

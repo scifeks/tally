@@ -124,6 +124,9 @@ class BaseNucleiTool(ToolInterface):
         custom_template_dir = Path(repo_path) / ".nuclei"
         if custom_template_dir.is_dir():
             shared_kwargs["custom_template_dir"] = str(custom_template_dir)
+            shared_kwargs["default_template_dir"] = str(
+                self._resolve_default_templates_dir()
+            )
 
         return [
             ExecutionPass(
@@ -203,3 +206,17 @@ class BaseNucleiTool(ToolInterface):
         template_id = str(finding.get("template_id", ""))
         matched_at = str(finding.get("matched_at", ""))
         return f"nuclei|{template_id}|{matched_at}"
+
+    @staticmethod
+    def _resolve_default_templates_dir() -> Path:
+        """Resolve the default nuclei templates directory.
+
+        Returns NUCLEI_TEMPLATES_DIR env var if set, otherwise
+        ~/nuclei-templates.
+        """
+        import os
+
+        env_path = os.getenv("NUCLEI_TEMPLATES_DIR")
+        if env_path:
+            return Path(env_path)
+        return Path.home() / "nuclei-templates"

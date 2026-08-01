@@ -91,7 +91,7 @@ export default function Triage() {
   const { mutate: cancelTriageMutation, isPending: isCancelPending } = useCancelTriage()
   const { mutate: resumeTriageMutation, isPending: isResumePending } = useResumeTriage()
 
-  // Phase 6.9 gate: disable Start when Claude binary is missing.
+  // Disable Start when Claude binary is missing.
   const { data: runtimeDeps } = useRuntimeDependencies()
   const claudeDep = runtimeDeps?.dependencies.find(d => d.name === 'claude')
   const claudeMissing = claudeDep !== undefined && !claudeDep.installed
@@ -174,9 +174,9 @@ export default function Triage() {
   }, [])
 
   const handleEvent = useCallback((event: TriageLogEvent) => {
-    // batch_progress is high-frequency - never appended to the log array
-    // (latest-value-wins per the §12.7 mandate). The summary endpoint
-    // already exposes the run-level processed/total fields the page reads.
+    // batch_progress is high-frequency; only the latest value matters so
+    // it never goes into the log array. The summary endpoint already
+    // exposes the run-level processed/total fields the page reads.
     if (event.type === 'batch_progress') return
 
     setLogs(prev => [...prev, event])
@@ -446,7 +446,7 @@ export default function Triage() {
                   'flex items-center gap-2 px-4 h-9 font-bold text-xs uppercase tracking-wider transition-colors',
                   startDisabled
                     ? 'bg-muted text-dim cursor-not-allowed'
-                    : 'bg-high text-background hover:bg-high/80'
+                    : 'bg-high text-background hover:bg-high/70'
                 )}
               >
                 <Brain className="h-4 w-4" />
@@ -462,7 +462,7 @@ export default function Triage() {
                   'flex items-center gap-2 px-4 h-9 font-bold text-xs uppercase tracking-wider transition-colors',
                   startDisabled
                     ? 'bg-muted text-dim cursor-not-allowed'
-                    : 'bg-accent text-background hover:bg-accent/80'
+                    : 'bg-accent text-background hover:bg-accent/70'
                 )}
               >
                 <Brain className="h-4 w-4" />
@@ -474,7 +474,7 @@ export default function Triage() {
                 onClick={handleStop}
                 disabled={stopDisabled}
                 data-testid="triage-stop-button"
-                className="flex items-center gap-2 px-4 h-9 border border-crit text-crit font-bold text-xs uppercase tracking-wider hover:bg-crit/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex items-center gap-2 px-4 h-9 border border-crit text-crit font-bold text-xs uppercase tracking-wider hover:bg-crit/15 hover:shadow-[0_0_10px_rgba(255,77,77,0.2)] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Square className="h-4 w-4" />
                 Stop
@@ -483,7 +483,7 @@ export default function Triage() {
             {showResetButton && (
               <button
                 onClick={handleReset}
-                className="flex items-center gap-2 px-4 h-9 border border-border text-muted-foreground font-bold text-xs uppercase tracking-wider hover:bg-muted/30 transition-colors"
+                className="flex items-center gap-2 px-4 h-9 border border-border text-muted-foreground font-bold text-xs uppercase tracking-wider hover:border-primary/50 hover:text-foreground transition-colors"
               >
                 <RotateCcw className="h-4 w-4" />
                 Reset
