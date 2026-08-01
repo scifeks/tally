@@ -30,6 +30,8 @@ def _make_repo(path: str, test_dirs: list[str]) -> Repository:
 
 
 def _make_context(repo: Repository) -> ExecutionContext:
+    from core.config.schemas import build_excluded_dirs
+
     registry = MagicMock()
     registry.get_repo_path.return_value = repo.path or "/repo"
     service = (
@@ -37,6 +39,7 @@ def _make_context(repo: Repository) -> ExecutionContext:
         if repo.services
         else RepoService.model_construct(name="default")
     )
+    excluded_dirs = build_excluded_dirs(service) if service else []
     return ExecutionContext(
         project_name="test",
         base_path="/tmp",
@@ -45,6 +48,7 @@ def _make_context(repo: Repository) -> ExecutionContext:
         tool_config=ToolExecutionConfig(noir_provider=None),
         registry=registry,
         is_docker=False,
+        excluded_dirs=excluded_dirs,
     )
 
 
@@ -57,7 +61,11 @@ class TestSemgrepBuildExecutionPasses:
         tool = SemgrepLocalTool(config=None)
         passes = tool.build_execution_passes(ctx)
         assert len(passes) == 2
-        assert passes[0].kwargs["exclude"] == ["tests", "spec"]
+        exclude = passes[0].kwargs.get("exclude", [])
+        assert "tests" in exclude
+        assert "Tests" in exclude
+        assert "spec" in exclude
+        assert "Spec" in exclude
 
     def test_no_exclude_when_empty_and_no_auto_detect(self, tmp_path: Path) -> None:
         repo_dir = tmp_path / "repo"

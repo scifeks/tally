@@ -4,7 +4,6 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from core.config.schemas import build_excluded_dirs
 from domain.tools.base import ToolResult
 from domain.tools.interface import (
     ExecutionContext,
@@ -106,10 +105,14 @@ class BaseSemgrepTool(ToolInterface):
             context.service,
             context.repo.path,
         )
-        exclude = build_excluded_dirs(context.service)
         kwargs: dict[str, object] = {"repo_path": repo_path}
-        if exclude:
-            kwargs["exclude"] = exclude
+        if context.excluded_dirs:
+            variants: list[str] = []
+            for d in context.excluded_dirs:
+                for v in (d, d.lower(), d.title()):
+                    if v not in variants:
+                        variants.append(v)
+            kwargs["exclude"] = variants
         return [
             ExecutionPass(
                 label_suffix=context.repo.name,

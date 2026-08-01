@@ -288,3 +288,34 @@ class TestBuildPsalmXml:
         xml_str = tool._build_psalm_xml(["src"], [], str(tmp_path))
 
         assert 'xmlns="https://getpsalm.org/schema/config"' in xml_str
+
+    def test_includes_ignore_files_when_dirs_provided(self, tmp_path: Path) -> None:
+        tool = BasePsalmTool.__new__(BasePsalmTool)
+        xml_str = tool._build_psalm_xml(
+            ["src"], [], str(tmp_path), ignored_dirs=["tests", "vendor"]
+        )
+
+        root = ET.fromstring(xml_str)
+        ns = "https://getpsalm.org/schema/config"
+        pf = root.find(f"{{{ns}}}projectFiles")
+        assert pf is not None
+
+        ignore = pf.find(f"{{{ns}}}ignoreFiles")
+        assert ignore is not None
+        assert ignore.get("allowMissing") == "true"
+
+        dirs = ignore.findall(f"{{{ns}}}directory")
+        names = [d.get("name") for d in dirs]
+        assert names == ["tests", "vendor"]
+
+    def test_omits_ignore_files_when_no_dirs(self, tmp_path: Path) -> None:
+        tool = BasePsalmTool.__new__(BasePsalmTool)
+        xml_str = tool._build_psalm_xml(["src"], [], str(tmp_path))
+
+        root = ET.fromstring(xml_str)
+        ns = "https://getpsalm.org/schema/config"
+        pf = root.find(f"{{{ns}}}projectFiles")
+        assert pf is not None
+
+        ignore = pf.find(f"{{{ns}}}ignoreFiles")
+        assert ignore is None

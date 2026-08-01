@@ -121,6 +121,7 @@ class BasePsalmTool(ToolInterface):
             self._temp_dir,
             context.repo,
             context.service,
+            context.excluded_dirs or None,
         )
         self._sarif_path = Path(self._temp_dir) / "results.sarif"
 
@@ -155,10 +156,13 @@ class BasePsalmTool(ToolInterface):
         temp_dir: str,
         repo: Repository,
         _service: RepoService,
+        excluded_dirs: list[str] | None = None,
     ) -> Path:
         source_dirs = self._find_source_dirs(repo.path)
         stubs_paths = self._resolve_stubs(repo.psalm_stubs)
-        xml_str = self._build_psalm_xml(source_dirs, stubs_paths, repo.path)
+        xml_str = self._build_psalm_xml(
+            source_dirs, stubs_paths, repo.path, excluded_dirs
+        )
 
         config_path = Path(temp_dir) / "psalm.xml"
         config_path.write_text(xml_str)
@@ -248,6 +252,7 @@ class BasePsalmTool(ToolInterface):
         source_dirs: list[str],
         stubs_paths: list[str],
         repo_path: str,
+        ignored_dirs: list[str] | None = None,
     ) -> str:
         lines = [
             '<?xml version="1.0"?>',
@@ -261,6 +266,12 @@ class BasePsalmTool(ToolInterface):
 
         for dir_name in source_dirs:
             lines.append(f'        <directory name="{dir_name}" />')
+
+        if ignored_dirs:
+            lines.append('        <ignoreFiles allowMissing="true">')
+            for dir_name in ignored_dirs:
+                lines.append(f'            <directory name="{dir_name}" />')
+            lines.append("        </ignoreFiles>")
 
         lines.append("    </projectFiles>")
 

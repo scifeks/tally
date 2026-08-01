@@ -54,6 +54,7 @@ class PsalmDockerTool(BasePsalmTool):
         config_path = self._generate_docker_config(
             self._temp_dir,
             context.repo,
+            context.excluded_dirs or None,
         )
         self._sarif_path = Path(self._temp_dir) / "results.sarif"
 
@@ -76,6 +77,7 @@ class PsalmDockerTool(BasePsalmTool):
         self,
         host_temp_dir: str,
         repo: Repository,
+        excluded_dirs: list[str] | None = None,
     ) -> Path:
         """Generate psalm.xml with container-relative paths."""
         source_dirs = self._find_source_dirs(repo.path)
@@ -92,6 +94,7 @@ class PsalmDockerTool(BasePsalmTool):
         # Psalm resolves paths relative to the config file.
         # The config sits one level below the repo root.
         relative_src_dirs = [f"../{d}" for d in source_dirs]
+        relative_ignored = [f"../{d}" for d in excluded_dirs] if excluded_dirs else []
         autoloader = (
             "../vendor/autoload.php"
             if (Path(repo.path) / "vendor" / "autoload.php").exists()
@@ -99,7 +102,10 @@ class PsalmDockerTool(BasePsalmTool):
         )
 
         xml_str = self._build_docker_xml(
-            relative_src_dirs, relative_stub_paths, autoloader
+            relative_src_dirs,
+            relative_stub_paths,
+            autoloader,
+            relative_ignored or None,
         )
         config_path = Path(host_temp_dir) / "psalm.xml"
         config_path.write_text(xml_str)
@@ -110,6 +116,7 @@ class PsalmDockerTool(BasePsalmTool):
         source_dirs: list[str],
         stub_paths: list[str],
         autoloader: str | None,
+        ignored_dirs: list[str] | None = None,
     ) -> str:
         lines = [
             '<?xml version="1.0"?>',
@@ -125,6 +132,12 @@ class PsalmDockerTool(BasePsalmTool):
 
         for dir_name in source_dirs:
             lines.append(f'        <directory name="{dir_name}" />')
+
+        if ignored_dirs:
+            lines.append('        <ignoreFiles allowMissing="true">')
+            for dir_name in ignored_dirs:
+                lines.append(f'            <directory name="{dir_name}" />')
+            lines.append("        </ignoreFiles>")
 
         lines.append("    </projectFiles>")
 
