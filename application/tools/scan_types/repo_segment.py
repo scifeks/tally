@@ -360,17 +360,6 @@ class RepoSegmentScan(ScanType):
                         )
                         if result.success:
                             total_run += 1
-                            total_ingested += dispatch_and_count_ingested(
-                                resources.event_bus,
-                                ToolCompleted(
-                                    result,
-                                    repo.name,
-                                    config.run_id,
-                                    config.project_name,
-                                    config.base_path,
-                                    repo=repo.name,
-                                ),
-                            )
                             resources.display.print_tool_line(
                                 ToolDisplayRow(
                                     f"{tool_name}/{repo.name}",
@@ -402,8 +391,6 @@ class RepoSegmentScan(ScanType):
                                     "    [dim]ZAP will fall back to spider-only "
                                     "mode for this repository.[/dim]"
                                 )
-                        else:
-                            total_failed += 1
                             total_ingested += dispatch_and_count_ingested(
                                 resources.event_bus,
                                 ToolCompleted(
@@ -415,6 +402,8 @@ class RepoSegmentScan(ScanType):
                                     repo=repo.name,
                                 ),
                             )
+                        else:
+                            total_failed += 1
                             resources.display.print_tool_line(
                                 ToolDisplayRow(
                                     f"{tool_name}/{repo.name}",
@@ -435,6 +424,17 @@ class RepoSegmentScan(ScanType):
                                     exit_code=1,
                                     duration=result.duration_seconds,
                                 )
+                            )
+                            total_ingested += dispatch_and_count_ingested(
+                                resources.event_bus,
+                                ToolCompleted(
+                                    result,
+                                    repo.name,
+                                    config.run_id,
+                                    config.project_name,
+                                    config.base_path,
+                                    repo=repo.name,
+                                ),
                             )
 
                 all_results.extend(repo_results)

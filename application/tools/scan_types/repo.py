@@ -244,6 +244,38 @@ class RepoScan(ScanType):
                     results.append(result)
                     if result.success:
                         total_run += 1
+                        findings = tool.count_findings(result.parsed_data or {})
+                        resources.display.print_tool_line(
+                            ToolDisplayRow(
+                                tool_name,
+                                True,
+                                False,
+                                findings,
+                                result.duration_seconds,
+                            )
+                        )
+                        resources.event_sink.emit(
+                            se.ToolCompleted(
+                                run_id=config.run_id or 0,
+                                project_id=config.project_id,
+                                segment=seg,
+                                repo=repo.name,
+                                tool=tool_name,
+                                message=(f"{tool_name} on {repo.name} complete"),
+                                findings_count=findings,
+                                duration=result.duration_seconds,
+                                exit_code=0,
+                            )
+                        )
+                        if tool_name == "noir" and findings == 0:
+                            resources.display.print_status(
+                                "    [yellow]⚠ noir found 0 endpoints. "
+                                "The framework may not be supported by noir.[/yellow]"
+                            )
+                            resources.display.print_status(
+                                "    [dim]ZAP will fall back to spider-only "
+                                "mode for this repository.[/dim]"
+                            )
                         ingested = dispatch_and_count_ingested(
                             resources.event_bus,
                             ToolCompleted(
@@ -259,50 +291,8 @@ class RepoScan(ScanType):
                         findings_by_tool[result.tool_name] = (
                             findings_by_tool.get(result.tool_name, 0) + ingested
                         )
-                        resources.display.print_tool_line(
-                            ToolDisplayRow(
-                                tool_name,
-                                True,
-                                False,
-                                ingested,
-                                result.duration_seconds,
-                            )
-                        )
-                        resources.event_sink.emit(
-                            se.ToolCompleted(
-                                run_id=config.run_id or 0,
-                                project_id=config.project_id,
-                                segment=seg,
-                                repo=repo.name,
-                                tool=tool_name,
-                                message=(f"{tool_name} on {repo.name} complete"),
-                                findings_count=ingested,
-                                duration=result.duration_seconds,
-                                exit_code=0,
-                            )
-                        )
-                        if tool_name == "noir" and ingested == 0:
-                            resources.display.print_status(
-                                "    [yellow]⚠ noir found 0 endpoints. "
-                                "The framework may not be supported by noir.[/yellow]"
-                            )
-                            resources.display.print_status(
-                                "    [dim]ZAP will fall back to spider-only "
-                                "mode for this repository.[/dim]"
-                            )
                     else:
                         total_failed += 1
-                        total_ingested += dispatch_and_count_ingested(
-                            resources.event_bus,
-                            ToolCompleted(
-                                result,
-                                repo.name,
-                                config.run_id,
-                                config.project_name,
-                                config.base_path,
-                                repo=repo.name,
-                            ),
-                        )
                         resources.display.print_tool_line(
                             ToolDisplayRow(
                                 tool_name, False, False, 0, result.duration_seconds
@@ -319,6 +309,17 @@ class RepoScan(ScanType):
                                 exit_code=1,
                                 duration=result.duration_seconds,
                             )
+                        )
+                        total_ingested += dispatch_and_count_ingested(
+                            resources.event_bus,
+                            ToolCompleted(
+                                result,
+                                repo.name,
+                                config.run_id,
+                                config.project_name,
+                                config.base_path,
+                                repo=repo.name,
+                            ),
                         )
 
             all_services_results.extend(results)
