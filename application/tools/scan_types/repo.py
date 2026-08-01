@@ -242,13 +242,9 @@ class RepoScan(ScanType):
                     result = normalize_success(result, tool)
                     result.repo = self.repo_name
                     results.append(result)
-                    findings = tool.count_findings(result.parsed_data or {})
-                    findings_by_tool[result.tool_name] = (
-                        findings_by_tool.get(result.tool_name, 0) + findings
-                    )
                     if result.success:
                         total_run += 1
-                        total_ingested += dispatch_and_count_ingested(
+                        ingested = dispatch_and_count_ingested(
                             resources.event_bus,
                             ToolCompleted(
                                 result,
@@ -259,12 +255,16 @@ class RepoScan(ScanType):
                                 repo=repo.name,
                             ),
                         )
+                        total_ingested += ingested
+                        findings_by_tool[result.tool_name] = (
+                            findings_by_tool.get(result.tool_name, 0) + ingested
+                        )
                         resources.display.print_tool_line(
                             ToolDisplayRow(
                                 tool_name,
                                 True,
                                 False,
-                                findings,
+                                ingested,
                                 result.duration_seconds,
                             )
                         )
@@ -275,13 +275,13 @@ class RepoScan(ScanType):
                                 segment=seg,
                                 repo=repo.name,
                                 tool=tool_name,
-                                message=f"{tool_name} on {repo.name} complete",
-                                findings_count=findings,
+                                message=(f"{tool_name} on {repo.name} complete"),
+                                findings_count=ingested,
                                 duration=result.duration_seconds,
                                 exit_code=0,
                             )
                         )
-                        if tool_name == "noir" and findings == 0:
+                        if tool_name == "noir" and ingested == 0:
                             resources.display.print_status(
                                 "    [yellow]⚠ noir found 0 endpoints. "
                                 "The framework may not be supported by noir.[/yellow]"

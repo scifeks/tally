@@ -42,23 +42,11 @@ class FindingRepository(FindingRepositoryPort):
         self._factory = factory
 
     def insert_findings(self, run_id: int, findings: list[NormalizedFinding]) -> None:
-        """Insert or deduplicate finding rows from a scan.
-
-        When a fingerprint already exists, updates run_id, last_seen,
-        and increments seen_count. New fingerprints get a fresh row.
-        """
+        """Append finding rows from a scan."""
         if not findings:
             return
 
         from datetime import UTC, datetime
-
-        seen_fingerprints: set[str] = set()
-        deduped: list[NormalizedFinding] = []
-        for finding in findings:
-            if finding.fingerprint not in seen_fingerprints:
-                seen_fingerprints.add(finding.fingerprint)
-                deduped.append(finding)
-        findings = deduped
 
         now = datetime.now(UTC).isoformat()
 
@@ -77,34 +65,12 @@ class FindingRepository(FindingRepositoryPort):
                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
             )
         """
-        update_sql = """
-            UPDATE findings
-            SET run_id = ?, last_seen = ?, seen_count = seen_count + 1
-            WHERE id = ?
-        """
 
         with self._factory.connect() as conn:
             for finding in findings:
                 columns = finding.columns
                 meta = finding.meta
                 fingerprint = finding.fingerprint
-
-                existing = conn.execute(
-                    "SELECT id FROM findings WHERE fingerprint = ? LIMIT 1",
-                    (fingerprint,),
-                ).fetchone()
-
-                if existing is not None:
-                    existing_run_id = conn.execute(
-                        "SELECT run_id FROM findings WHERE id = ?",
-                        (existing["id"],),
-                    ).fetchone()["run_id"]
-                    if existing_run_id != run_id:
-                        conn.execute(
-                            update_sql,
-                            (run_id, now, existing["id"]),
-                        )
-                    continue
 
                 repo_id_raw = columns.get("repo_id")
                 repo_id_val: int | None

@@ -52,13 +52,17 @@ class OllamaAdapter(LLMProvider):
 
     def chat(self, messages: list[dict[str, str]], **kwargs: Any) -> str:
         """Call ollama.Client.chat and return the response content string."""
+        think = kwargs.pop("think", None)
         client = ollama.Client(host=self._base_url)
         options = self._build_options(kwargs)
-        response = client.chat(
+        chat_kwargs: dict[str, Any] = dict(
             model=self._model,
             messages=messages,
             options=options,
         )
+        if think is not None:
+            chat_kwargs["think"] = think
+        response = client.chat(**chat_kwargs)
         msg = response.message if hasattr(response, "message") else response["message"]
         content = msg.content if hasattr(msg, "content") else msg["content"]
         return content or ""
@@ -73,15 +77,19 @@ class OllamaAdapter(LLMProvider):
         **kwargs: Any,
     ) -> AsyncIterator[str]:
         """Stream the Ollama chat response as text chunks."""
+        think = kwargs.pop("think", None)
         async_client = ollama.AsyncClient(host=self._base_url)
         options = self._build_options(kwargs)
+        chat_kwargs: dict[str, Any] = dict(
+            model=self._model,
+            messages=messages,
+            stream=True,
+            options=options,
+        )
+        if think is not None:
+            chat_kwargs["think"] = think
         try:
-            response = await async_client.chat(
-                model=self._model,
-                messages=messages,
-                stream=True,
-                options=options,
-            )
+            response = await async_client.chat(**chat_kwargs)
             async for chunk in response:
                 msg = chunk.message if hasattr(chunk, "message") else chunk["message"]
                 content = msg.content if hasattr(msg, "content") else msg["content"]
