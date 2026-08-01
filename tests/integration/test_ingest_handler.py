@@ -184,11 +184,7 @@ class TestIngestHandlerPhase2:
     def test_second_ingest_adds_new_rows(
         self, project_env: dict, gitleaks_result: ToolResult
     ) -> None:
-        """Dispatching the same ToolCompleted twice produces separate rows.
-
-        Scans are INSERT-only; each dispatch creates a new set of rows
-        Duplicate fingerprints within the same run are deduplicated.
-        """
+        """Dispatching the same ToolCompleted twice appends a second set of rows."""
         bus = EventBus()
         _, finding_repo, _, _ = make_store(
             str(project_env["base_path"]),
@@ -217,7 +213,7 @@ class TestIngestHandlerPhase2:
 
         handler.handle(event)
         count_after_second = len(finding_repo.get_all_findings())
-        assert count_after_second == count_after_first
+        assert count_after_second == count_after_first * 2
 
     def test_ingest_completed_ids_are_sqlite_primary_keys(
         self, project_env: dict, gitleaks_result: ToolResult

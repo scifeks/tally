@@ -43,11 +43,17 @@ def _parse_composer_audit_data(data: dict[str, Any]) -> dict[str, Any]:
     raw_advisories = data.get("advisories", {})
     if not isinstance(raw_advisories, dict):
         raw_advisories = {}
+    seen: set[tuple[str, str]] = set()
     for pkg_name, advisories in raw_advisories.items():
         for advisory in advisories:
             cve = advisory.get("cve", "")
             advisory_id = advisory.get("advisoryId", "")
             vuln_id = cve or advisory_id
+
+            key = (pkg_name, vuln_id)
+            if key in seen:
+                continue
+            seen.add(key)
 
             vulnerabilities.append(
                 {

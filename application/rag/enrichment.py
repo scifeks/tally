@@ -277,13 +277,7 @@ class EnrichmentPipeline:
             return self._max_workers
 
     def enrich(self, ids: list[int]) -> None:
-        """Enrich a list of SQLite finding IDs in place.
-
-        Phase 1 (sequential): Fetch rows from SQLite, build work list.
-        Phase 2 (concurrent): Run LLM calls in a thread pool.
-        Phase 3 (sequential): Write validated fields back to SQLite.
-        Failures on individual findings are logged but do not stop the pipeline.
-        """
+        """Enrich finding IDs in place; individual failures are logged and skipped."""
         from domain.pipeline import scan_events as se
 
         if not ids:
@@ -339,8 +333,8 @@ class EnrichmentPipeline:
 
         cancelled = False
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            # Submit one future per field so progress updates arrive
-            # after each LLM call, not after all fields for a finding.
+            # One future per field; progress emits per finding once
+            # all its fields complete.
             future_to_key: dict[Any, tuple[int, FieldEnrichmentSpec | None]] = {}
             fields_expected: dict[int, int] = {}
             fields_done: dict[int, int] = {}
@@ -594,7 +588,7 @@ class EnrichmentPipeline:
             field_definition=field_def,
             context=context,
         )
-        content = self._provider.complete(prompt, temperature=0.1, num_predict=500)
+        content = self._provider.complete(prompt, temperature=0.1, think=False)
         if not content:
             logger.warning(
                 "LLM returned empty response for field %r; "
@@ -618,7 +612,7 @@ class EnrichmentPipeline:
         Returns the validated field value, or None if the response is invalid.
         """
         prompt = get_dedicated_prompt(spec.field_name, source_values)
-        content = self._provider.complete(prompt, temperature=0.1, num_predict=500)
+        content = self._provider.complete(prompt, temperature=0.1, think=False)
         if not content:
             logger.warning(
                 "LLM returned empty response for field %r; "
@@ -633,14 +627,7 @@ class EnrichmentPipeline:
         return validated.get(spec.field_name)
 
     def _get_fields_to_enrich(self, metadata: dict[str, Any]) -> list[str]:
-        """Return enrichment field names that still need values.
-
-        Compatibility shim over ``_get_enrichment_plan``: for tools using the
-        per-field path returns the field names from each active spec; for tools
-        using the legacy batch path returns the field list directly.
-        Used by tests and external callers; production enrichment uses
-        ``_get_enrichment_plan`` directly.
-        """
+        """Return enrichment field names that still need values."""
         legacy_fields, specs = self._get_enrichment_plan(metadata)
         if specs is not None:
             return [s.field_name for s in specs]
@@ -659,7 +646,7 @@ class EnrichmentPipeline:
             document_text=doc_text,
             fields_to_enrich=", ".join(fields),
         )
-        content = self._provider.complete(prompt, temperature=0.1, num_predict=500)
+        content = self._provider.complete(prompt, temperature=0.1, think=False)
         return json.loads(content or "")
 
     def _validate_response(

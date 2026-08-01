@@ -89,8 +89,7 @@ _GITLEAKS_FINDINGS = [
 
 
 class TestFingerprint:
-    def test_same_finding_two_runs_deduplicates(self, tmp_path: Path) -> None:
-        """Same finding across runs updates seen_count, not row count."""
+    def test_same_finding_two_runs_creates_separate_rows(self, tmp_path: Path) -> None:
         store = _make_store(tmp_path)
 
         run_id1 = store.create_run({"args": []})
@@ -107,10 +106,12 @@ class TestFingerprint:
 
         conn = store._connect()
         count = conn.execute("SELECT COUNT(*) FROM findings").fetchone()[0]
-        row = conn.execute("SELECT run_id, seen_count FROM findings LIMIT 1").fetchone()
-        assert count == 1
-        assert row["run_id"] == run_id2
-        assert row["seen_count"] == 2
+        assert count == 2
+        run_ids = [
+            r["run_id"]
+            for r in conn.execute("SELECT run_id FROM findings ORDER BY id").fetchall()
+        ]
+        assert run_ids == [run_id1, run_id2]
 
     def test_fingerprint_uniqueness(self, tmp_path: Path) -> None:
         """Two different findings produce different fingerprints."""

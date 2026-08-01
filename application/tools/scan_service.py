@@ -209,7 +209,11 @@ class ScanService:
         git_diff: GitDiffPort | None = None,
     ) -> None:
         from application.pipeline.factory import PipelineFactory
+        from infrastructure.tools.wrappers.utils.scan_state import (
+            reset_scan_scoped_state,
+        )
 
+        reset_scan_scoped_state()
         setup_ok = False
         pipeline_bus = None
         try:

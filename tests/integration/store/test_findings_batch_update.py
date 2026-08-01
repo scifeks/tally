@@ -42,13 +42,7 @@ class TestUpsertShouldReportDefault:
             row = conn.execute("SELECT should_report FROM findings LIMIT 1").fetchone()
         assert row["should_report"] == 0
 
-    def test_rescan_dedup_preserves_prior_approval(self, tmp_path: Path) -> None:
-        """A rescan deduplicates by fingerprint, preserving approval.
-
-        When the same finding appears in a later run, the existing row
-        is updated (run_id, last_seen, seen_count) but should_report
-        and other triage fields are not touched.
-        """
+    def test_rescan_appends_without_touching_prior_rows(self, tmp_path: Path) -> None:
         factory = ConnectionFactory(tmp_path / "findings.db")
         factory.init_schema()
         run_repo = RunRepository(factory)
@@ -67,13 +61,14 @@ class TestUpsertShouldReportDefault:
 
         with factory.connect() as conn:
             rows = conn.execute(
-                "SELECT run_id, should_report, seen_count FROM findings"
+                "SELECT run_id, should_report FROM findings ORDER BY id"
             ).fetchall()
 
-        assert len(rows) == 1
-        assert rows[0]["run_id"] == run_id2
+        assert len(rows) == 2
+        assert rows[0]["run_id"] == run_id1
         assert rows[0]["should_report"] == 1
-        assert rows[0]["seen_count"] == 2
+        assert rows[1]["run_id"] == run_id2
+        assert rows[1]["should_report"] == 0
 
 
 class TestBatchUpdateAnalystFields:

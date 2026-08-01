@@ -109,7 +109,7 @@ class BaseGitleaksTool(ToolInterface):
         # and would crawl .git/objects/pack (potentially GBs of binary).
         all_excludes = [".git"] + exclude
         toml_content = _build_gitleaks_toml(all_excludes, extend_path=None)
-        if context.service.docker_path and context.repo.path:
+        if context.is_docker:
             config_file = Path(context.repo.path) / ".tally_gitleaks.toml"
             config_file.write_text(toml_content)
             container_cfg = f"{context.service.docker_path}/.tally_gitleaks.toml"
