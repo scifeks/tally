@@ -139,6 +139,14 @@ class BaseHandler:
                     chromadb_doc_id(row.get("fingerprint", ""), profile)
                     for row in group_rows
                 ]
+                seen: dict[str, int] = {}
+                for i, doc_id in enumerate(doc_ids):
+                    seen[doc_id] = i
+                if len(seen) < len(doc_ids):
+                    unique = sorted(seen.values())
+                    doc_ids = [doc_ids[i] for i in unique]
+                    texts = [texts[i] for i in unique]
+                    metadatas = [metadatas[i] for i in unique]
                 kb.add_findings(
                     documents=texts,
                     metadatas=metadatas,
