@@ -100,6 +100,9 @@ def make_context(
     service: Any,
     command_config: Any,
 ) -> ExecutionContext:
+    from core.config.schemas import build_excluded_dirs
+
+    excluded = build_excluded_dirs(service) if service else []
     return ExecutionContext(
         project_name=project_name,
         base_path=base_path,
@@ -109,6 +112,7 @@ def make_context(
         registry=registry,
         is_docker=(command_config.location == "docker" if command_config else False),
         execution_mode="scan",
+        excluded_dirs=excluded,
     )
 
 
