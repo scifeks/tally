@@ -7,6 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from application.ports.subprocess_runner import SubprocessRunnerPort
 from application.tools.scan_service import ScanService
 from domain.tools.scan_types import ScanSummary
 
@@ -48,7 +49,11 @@ def _call_worker(
         mock_pf.create.return_value = MagicMock()
         mock_orch_cls.return_value = mock_orchestrator
 
-        svc = ScanService()
+        svc = ScanService(
+            subprocess_runner=MagicMock(
+                spec=SubprocessRunnerPort,
+            ),
+        )
         svc._run_worker(
             future=future,
             holder_token="test",

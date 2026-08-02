@@ -17,7 +17,6 @@ from application.cli.project import ProjectResolutionError, resolve_project
 from application.locking.exceptions import JobBusy
 from application.project.repositories_service import ProjectRepositoriesService
 from application.tools.orchestrator import ScanCancelled
-from application.tools.scan_service import get_scan_service
 from core.config.manager import ConfigManager
 from core.project_paths import ProjectPaths
 from factories.persistence import (
@@ -27,8 +26,7 @@ from factories.persistence import (
     create_scan_repos,
     create_url_finding_repo,
 )
-from infrastructure.tools.runner import SubprocessRunner
-from infrastructure.vcs.git_diff_adapter import GitDiffAdapter
+from factories.scanning import create_git_diff, get_scan_service
 
 if TYPE_CHECKING:
     from argparse import Namespace
@@ -192,7 +190,7 @@ def _cmd_scan_inner(
             skip_tool_ids=tuple(skip_tools),
             skip_enrichment=skip_enrichment,
             since_commit=since_commit,
-            git_diff=(GitDiffAdapter(SubprocessRunner()) if since_commit else None),
+            git_diff=create_git_diff() if since_commit else None,
             prompt=CliPromptAdapter(),
             reporter=CliProgressReporter(),
             display=CliDisplay(),

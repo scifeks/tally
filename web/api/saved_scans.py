@@ -16,7 +16,6 @@ from application.saved_scans.service import (
     SavedScanValidationError,
 )
 from application.tools.registry import discover_tools
-from application.tools.scan_service import get_scan_service
 from core.project_paths import ProjectPaths
 from domain.saved_scans.entry import (
     SavedScanArgProfileRef,
@@ -38,6 +37,7 @@ from factories.persistence import (
     create_scan_repos,
     create_url_finding_repo,
 )
+from factories.scanning import get_scan_service
 from web.adapters.event_bus_scan_sink import EventBusScanSink
 from web.adapters.no_approval_prompt import NoApprovalPromptAdapter
 from web.api._errors import Conflict, JobBusyError, NotFound, StaleSavedScan

@@ -15,7 +15,6 @@ from application.repl.commands.scan_result_presenter import ScanResultPresenter
 from application.tools.dast_prerequisites import DastPrerequisiteService
 from application.tools.executor import DEFAULT_TIMEOUT, ToolExecutor
 from application.tools.orchestrator import ScanCancelled
-from application.tools.scan_service import get_scan_service
 from application.url_inventory.url_list_service import (
     ProjectNotFound as UrlProjectNotFound,
 )
@@ -28,8 +27,11 @@ from factories.persistence import (
     create_url_finding_repo,
     create_url_list_service,
 )
-from infrastructure.tools.runner import SubprocessRunner
-from infrastructure.vcs.git_diff_adapter import GitDiffAdapter
+from factories.scanning import (
+    create_git_diff,
+    create_subprocess_runner,
+    get_scan_service,
+)
 
 if TYPE_CHECKING:
     from application.repl.interface import REPL
@@ -200,8 +202,6 @@ class ScanCommands:
             self.repl.base_path, self.repl.active_project
         )
 
-        # The DAST-without-discovery prompt asks the user a question
-        # and may rewrite effective_tools before dispatch.
         if effective_tools is not None:
             effective_tools = self._maybe_warn_dast_without_discovery(
                 effective_tools,
@@ -235,9 +235,7 @@ class ScanCommands:
                 skip_tool_ids=tuple(skip_tools),
                 skip_enrichment=skip_enrichment,
                 since_commit=since_commit_val,
-                git_diff=(
-                    GitDiffAdapter(SubprocessRunner()) if since_commit_val else None
-                ),
+                git_diff=(create_git_diff() if since_commit_val else None),
                 prompt=RichConsolePromptAdapter(auto_approve=auto_approve),
                 reporter=StdoutProgressReporter(),
                 display=OrchestratorDisplay(self.repl.console),
@@ -328,7 +326,7 @@ class ScanCommands:
             project_name=self.repl.active_project,
             base_path=Path(self.repl.base_path),
             prompt=RichConsolePromptAdapter(),
-            subprocess_runner=SubprocessRunner(),
+            subprocess_runner=create_subprocess_runner(),
             reporter=StdoutProgressReporter(),
         )
         result = executor.execute(
@@ -350,13 +348,7 @@ class ScanCommands:
         languages: list[str],
         base_urls: list[str] | None = None,
     ) -> list[str]:
-        """Return tool names for a full repository scan.
-
-        osv-scanner is always included as a baseline multi-ecosystem scanner.
-        gitleaks is always included for secrets detection.
-        Language-specific tools are added based on detected languages.
-        zap is included when the repository has base_urls configured.
-        """
+        """Return tool names for a full repository scan."""
         tools = ["osv-scanner"]
         lowered = {lang.lower() for lang in languages}
         if "python" in lowered:
@@ -419,18 +411,7 @@ class ScanCommands:
         auto_approve: bool,
         project_id: int,
     ) -> list[str] | None:
-        """Warn when DAST tools are requested but no discovery output exists.
-
-        DAST tools (zap, xsstrike, dalfox) work best when an endpoint
-        discovery tool (katana, noir) has already produced OAS3 output.
-        Checks whether that output exists for the target repos and, when
-        it does not, prompts the user to prepend discovery tools.
-
-        Returns the (possibly expanded) effective tool list to execute, or
-        ``None`` to indicate that the scan was canceled by the user.
-
-        When ``auto_approve`` is True the warning is suppressed.
-        """
+        """Prompt when DAST tools run without prior discovery output."""
         if auto_approve:
             return tools
 
