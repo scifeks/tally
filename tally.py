@@ -26,6 +26,7 @@ from application.startup.checker import DependencyChecker
 from application.tools.registry import ToolRegistry
 from infrastructure.store.project_registry import ProjectRegistryRepository
 from infrastructure.web_ui.runner import WebUiRunner
+from web.server import create_web_app
 
 _BASE_PATH = "."
 
@@ -152,7 +153,7 @@ if __name__ == "__main__":
             base_path=_BASE_PATH,
             runtime_service=runtime_service,
             project_registry=project_registry,
-            web_ui_runner=WebUiRunner(),
+            web_ui_runner=WebUiRunner(create_web_app),
             tool_registry=tool_registry,
         ).run()
     except KeyboardInterrupt:

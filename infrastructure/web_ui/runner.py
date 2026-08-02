@@ -1,9 +1,9 @@
 """WebUiRunner: concrete WebUiRunnerPort that launches the embedded dev UI.
 
-Composes the FastAPI app factory from `web.server`, spawns the Vite dev
-server, opens the browser, and runs uvicorn until the user hits Ctrl+C.
-The REPL holds this adapter behind `WebUiRunnerPort` and never imports
-fastapi, uvicorn, or web/ directly.
+Receives the FastAPI app factory via constructor injection, spawns the
+Vite dev server, opens the browser, and runs uvicorn until the user
+hits Ctrl+C. The REPL holds this adapter behind ``WebUiRunnerPort``
+and never imports fastapi, uvicorn, or web/ directly.
 """
 
 from __future__ import annotations
@@ -16,13 +16,13 @@ import subprocess
 import threading
 import time
 import webbrowser
+from collections.abc import Callable
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import uvicorn
 
 from application.ports.web_ui_runner import WebUiRunnerPort
-from web.server import create_web_app
 
 if TYPE_CHECKING:
     from application.project.registry_service import ProjectRegistryService
@@ -34,7 +34,8 @@ _BANNED_HOSTS = {"0.0.0.0", "::", ""}
 class WebUiRunner(WebUiRunnerPort):
     """Drive the embedded FastAPI + Vite dev environment for `ui serve`."""
 
-    def __init__(self) -> None:
+    def __init__(self, app_factory: Callable[..., Any]) -> None:
+        self._app_factory = app_factory
         self._vite_proc: subprocess.Popen[bytes] | None = None
 
     def serve(
@@ -63,7 +64,7 @@ class WebUiRunner(WebUiRunnerPort):
         self._write_env_local(ui_dir, host, api_port, vite_port)
 
         token = secrets.token_hex(16)
-        app = create_web_app(
+        app = self._app_factory(
             base_path,
             api_port,
             token,

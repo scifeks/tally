@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 from application.cli.exit_codes import SUCCESS
 from core.config.manager import ConfigManager
 from infrastructure.web_ui.runner import WebUiRunner
+from web.server import create_web_app
 
 if TYPE_CHECKING:
     from argparse import Namespace
@@ -25,7 +26,7 @@ def cmd_ui(
     """Launch the web UI server."""
     del args
     cfg = ConfigManager(str(base_path)).global_config
-    WebUiRunner().serve(
+    WebUiRunner(create_web_app).serve(
         base_path=str(base_path),
         host=cfg.web_ui_host,
         api_port=cfg.web_ui_port,
