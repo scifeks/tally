@@ -80,6 +80,8 @@ export interface Finding {
   isLocked: boolean
   /** Identifier of the job currently holding the lock, when locked. */
   lockHolder: string | null
+  /** Whether this finding is included in generated reports. */
+  shouldReport: boolean
 }
 
 /**

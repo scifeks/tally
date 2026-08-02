@@ -20,6 +20,8 @@ export interface UpdateFindingPatch {
   notes?: string
   description?: string
   triagedBy?: 'claude-code' | 'analyst_web'
+  shouldReport?: boolean
+  triaged?: boolean
 }
 
 interface UpdateFindingVariables {
@@ -90,6 +92,8 @@ export function useUpdateFinding() {
       if (patch.title !== undefined) body.title = patch.title
       if (patch.notes !== undefined) body.notes = patch.notes
       if (patch.description !== undefined) body.description = patch.description
+      if (patch.shouldReport !== undefined) body.should_report = patch.shouldReport
+      if (patch.triaged !== undefined) body.triaged = patch.triaged
       const data = await apiFetch<FindingApiResponse>(REST_ENDPOINTS.updateFinding(projectId, id), {
         method: 'PATCH',
         body,
@@ -99,10 +103,18 @@ export function useUpdateFinding() {
     onMutate: async ({ projectId, id, patch }) => {
       await queryClient.cancelQueries({ queryKey: ['findings', projectId] })
       let previous: Finding | undefined
+      const applied: Partial<Finding> = { ...patch }
+      if (patch.triaged === true) {
+        applied.triagedBy = 'analyst_web'
+        applied.triagedAt = new Date().toISOString()
+      } else if (patch.triaged === false) {
+        applied.triagedBy = undefined
+        applied.triagedAt = undefined
+      }
       const snapshot = patchEveryFindingsCache(queryClient, projectId, item => {
         if (item.id !== id) return item
         if (!previous) previous = item
-        return { ...item, ...patch }
+        return { ...item, ...applied }
       })
       return { snapshot, previous }
     },

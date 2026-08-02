@@ -51,7 +51,7 @@ export function FindingDetailPanel({
   onDelete,
 }: {
   finding: Finding | null
-  onUpdate: (patch: Partial<Finding>) => void
+  onUpdate: (patch: Partial<Finding> & { triaged?: boolean }) => void
   projectId: number | null
   onDelete?: () => void
 }) {
@@ -198,17 +198,19 @@ export function FindingDetailPanel({
           />
         </div>
 
+        {/* Editable description */}
         <div>
-          <div className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground mb-2">
-            description
+          <div className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground mb-1 flex items-center gap-2">
+            <span>description</span>
+            <span className="text-dim normal-case tracking-normal">{'// click to edit'}</span>
           </div>
-          <div className="border border-border p-3 text-foreground leading-relaxed bg-muted/30 whitespace-pre-wrap">
-            {finding.description ? (
-              finding.description
-            ) : (
-              <span className="text-dim">{'// no description provided'}</span>
-            )}
-          </div>
+          <EditableText
+            value={finding.description ?? ''}
+            onChange={next => onUpdate({ description: next })}
+            multiline
+            placeholder="// add description..."
+            ariaLabel="Edit finding description"
+          />
         </div>
 
         <TriagePromptInjectionWarningModal
@@ -248,7 +250,36 @@ export function FindingDetailPanel({
           >
             wontfix
           </button>
+          <button
+            onClick={() => onUpdate({ shouldReport: !finding.shouldReport })}
+            className={cn(
+              'text-[11px] uppercase tracking-wider py-1.5 border transition-colors',
+              finding.shouldReport
+                ? 'border-accent text-accent hover:bg-accent/15 hover:shadow-[0_0_10px_rgba(57,255,20,0.25)]'
+                : 'border-border text-muted-foreground hover:border-primary/50 hover:text-foreground'
+            )}
+          >
+            reportable
+          </button>
+          <button
+            onClick={() => onUpdate({ triaged: !finding.triagedBy })}
+            className={cn(
+              'text-[11px] uppercase tracking-wider py-1.5 border transition-colors',
+              finding.triagedBy
+                ? 'border-accent text-accent hover:bg-accent/15 hover:shadow-[0_0_10px_rgba(57,255,20,0.25)]'
+                : 'border-border text-muted-foreground hover:border-primary/50 hover:text-foreground'
+            )}
+          >
+            triaged
+          </button>
         </div>
+
+        {finding.triagedBy && (
+          <div className="text-[10px] text-muted-foreground">
+            triaged by {finding.triagedBy}{' '}
+            {finding.triagedAt ? formatRelative(finding.triagedAt) : ''}
+          </div>
+        )}
 
         {finding.tool === 'manual' && (
           <div className="border-t border-border pt-3 mt-1">

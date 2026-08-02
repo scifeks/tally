@@ -56,9 +56,9 @@ class TestDraftQueryService(unittest.TestCase):
         result = self.svc.get_findings_for_report()
         self.assertEqual(result, sentinel)
 
-    def test_get_findings_for_report_skip_triage_uses_marked_query(self) -> None:
+    def test_get_findings_for_report_skip_triage_uses_all_findings(self) -> None:
         sentinel = [_make_finding(id=2)]
-        self.repo.get_findings_marked_for_report.return_value = sentinel
+        self.repo.get_all_findings.return_value = sentinel
         result = self.svc.get_findings_for_report(skip_triage=True)
         self.assertEqual(result, sentinel)
 

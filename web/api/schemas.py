@@ -28,10 +28,12 @@ class FindingPatchRequest(BaseModel):
     Locked fields (url, id, fingerprint, tool, etc.) are silently
     ignored if sent by the client (``extra="ignore"``).
     ``triaged_at`` and ``triaged_by`` are set automatically by the
-    server on every successful PATCH.
+    server on every successful PATCH. Pass ``triaged: false`` to clear them.
     """
 
     model_config = ConfigDict(extra="ignore")
+
+    triaged: bool | None = None
 
     # Editable named columns
     severity: str | None = None

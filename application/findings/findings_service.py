@@ -160,7 +160,13 @@ class FindingsService:
         except Exception:
             return
 
-    def patch_finding(self, finding_id: int, fields: dict[str, Any]) -> Finding | None:
+    def patch_finding(
+        self,
+        finding_id: int,
+        fields: dict[str, Any],
+        *,
+        clear_triage: bool = False,
+    ) -> Finding | None:
         """Apply analyst-writable updates to a single finding.
 
         Acquires the per-finding lock under a service-built holder, writes
@@ -170,7 +176,12 @@ class FindingsService:
         ``FindingsBusy`` if the finding is held by another holder.
         """
         holder = f"analyst-patch:{uuid.uuid4().hex[:8]}"
-        updated = self._analyst.update_fields(finding_id, fields, holder_token=holder)
+        updated = self._analyst.update_fields(
+            finding_id,
+            fields,
+            holder_token=holder,
+            clear_triage=clear_triage,
+        )
         if not updated:
             return None
         finding = self._analyst.get_finding(finding_id)

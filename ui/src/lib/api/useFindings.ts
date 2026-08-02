@@ -59,6 +59,7 @@ interface FindingApi {
   triaged_by?: 'claude-code' | 'analyst_web' | null
   is_locked: boolean
   lock_holder: string | null
+  should_report: number
 }
 
 interface FindingsListPageApi {
@@ -105,6 +106,7 @@ export function mapFinding(api: FindingApi): Finding {
     triagedBy: api.triaged_by ?? undefined,
     isLocked: api.is_locked,
     lockHolder: api.lock_holder,
+    shouldReport: Boolean(api.should_report),
   }
 }
 

@@ -37,7 +37,7 @@ def mock_engine() -> MagicMock:
 def mock_finding_repo() -> MagicMock:
     repo = MagicMock()
     repo.get_reportable_findings_deserialized.return_value = []
-    repo.get_findings_marked_for_report_deserialized.return_value = []
+    repo.get_all_findings_deserialized.return_value = []
     return repo
 
 
@@ -171,9 +171,7 @@ class TestReportGenerator:
         self, mock_engine: MagicMock, mock_finding_repo: MagicMock
     ) -> None:
         test_finding = _finding(tool="gitleaks", severity="high")
-        mock_finding_repo.get_findings_marked_for_report_deserialized.return_value = [
-            test_finding
-        ]
+        mock_finding_repo.get_all_findings_deserialized.return_value = [test_finding]
         generator = ReportGenerator(
             mock_engine,
             project="test-project",
@@ -181,7 +179,7 @@ class TestReportGenerator:
             skip_triage=True,
         )
         result = generator._aggregate_findings()
-        mock_finding_repo.get_findings_marked_for_report_deserialized.assert_called_once()
+        mock_finding_repo.get_all_findings_deserialized.assert_called_once()
         assert result["summary"]["total_findings"] == 1
 
     def test_skip_triage_false_uses_reportable(

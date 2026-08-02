@@ -70,9 +70,7 @@ class ReportGenerator:
 
         try:
             if self._skip_triage:
-                findings_list = (
-                    self._finding_repo.get_findings_marked_for_report_deserialized()
-                )
+                findings_list = self._finding_repo.get_all_findings_deserialized()
             else:
                 findings_list = (
                     self._finding_repo.get_reportable_findings_deserialized()

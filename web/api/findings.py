@@ -425,11 +425,17 @@ async def patch_finding(
     after the write.
     """
     service = _service(request, project_id)
-    raw = body.model_dump(exclude_none=True)
+    clear_triage = body.triaged is False
+    raw = body.model_dump(exclude_none=True, exclude={"triaged"})
     fields = _translate_patch_fields(raw)
 
     try:
-        finding = await asyncio.to_thread(service.patch_finding, finding_id, fields)
+        finding = await asyncio.to_thread(
+            service.patch_finding,
+            finding_id,
+            fields,
+            clear_triage=clear_triage,
+        )
     except FindingsBusy as exc:
         raise FindingsLocked(exc.conflicting_ids, exc.holders) from exc
 
