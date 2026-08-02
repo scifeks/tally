@@ -21,7 +21,7 @@ def _make_global_config(
     cfg.effective_allowed_origins = (
         allowed_origins
         if allowed_origins is not None
-        else [f"http://{host}:{vite_port}"]
+        else [f"https://{host}:{vite_port}"]
     )
     return cfg
 
@@ -46,7 +46,7 @@ class TestServeCommand:
             host="127.0.0.1",
             api_port=8080,
             vite_port=3000,
-            allowed_origins=["http://127.0.0.1:3000"],
+            allowed_origins=["https://127.0.0.1:3000"],
             project_registry=repl.project_registry,
             tool_registry=repl.tool_registry,
         )
@@ -64,10 +64,8 @@ class TestServeCommand:
         UiCommands(_make_repl_mock(), web_ui_runner=MagicMock())._show_help()
         assert "--stop" not in capsys.readouterr().out
 
-    def test_cmd_serve_help_includes_ctrl_c_message(self) -> None:
-        assert "Press Ctrl+C to stop the server." in (
-            UiCommands.cmd_serve.__doc__ or ""
-        )
+    def test_cmd_serve_docstring_mentions_https(self) -> None:
+        assert "HTTPS" in (UiCommands.cmd_serve.__doc__ or "")
 
 
 class TestUiDispatch:

@@ -11,11 +11,15 @@ from web.api._errors import error_response
 
 
 class HostHeaderMiddleware(BaseHTTPMiddleware):
-    """Reject requests whose Host is not localhost or 127.0.0.1 on our port."""
+    """Reject requests whose Host is not in the allowlist for our port."""
 
-    def __init__(self, app: ASGIApp, port: int) -> None:
+    def __init__(self, app: ASGIApp, port: int, *, host: str = "127.0.0.1") -> None:
         super().__init__(app)
-        self._allowed = {f"localhost:{port}", f"127.0.0.1:{port}"}
+        self._allowed = {
+            f"localhost:{port}",
+            f"127.0.0.1:{port}",
+            f"{host}:{port}",
+        }
 
     async def dispatch(
         self, request: Request, call_next: RequestResponseEndpoint

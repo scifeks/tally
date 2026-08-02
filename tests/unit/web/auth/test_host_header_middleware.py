@@ -59,6 +59,24 @@ async def test_wrong_port_rejected() -> None:
     assert resp.json()["error"]["code"] == "INVALID_HOST"
 
 
+async def test_configured_host_allowed() -> None:
+    """The configured web_ui_host is accepted on the API port."""
+    app = FastAPI()
+    app.add_middleware(HostHeaderMiddleware, port=_PORT, host="10.1.20.101")
+
+    @app.get("/ping")
+    async def ping() -> dict[str, bool]:
+        return {"ok": True}
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(
+        transport=transport,
+        base_url=f"http://10.1.20.101:{_PORT}",
+    ) as c:
+        resp = await c.get("/ping")
+    assert resp.status_code == 200
+
+
 async def test_empty_host_rejected() -> None:
     transport = httpx.ASGITransport(app=_app())
     async with httpx.AsyncClient(

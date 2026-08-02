@@ -103,5 +103,15 @@ else
 fi
 
 echo ""
+echo "Generating self-signed TLS certificate for the web UI..."
+.venv/bin/python3 -c "
+from infrastructure.web_ui.tls import ensure_tls_cert
+cert, key = ensure_tls_cert('.', '127.0.0.1')
+print(f'  v Certificate: {cert}')
+print(f'  v Private key: {key}')
+"
+echo "  To regenerate for a different host, run: ui ssl regenerate"
+
+echo ""
 echo "Setup complete."
 echo "Run tally with: .venv/bin/python3 tally.py"

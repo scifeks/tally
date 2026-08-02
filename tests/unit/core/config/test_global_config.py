@@ -51,7 +51,7 @@ class TestEffectiveAllowedOrigins:
             web_ui_host="127.0.0.1",
             web_ui_vite_port=3000,
         )
-        assert cfg.effective_allowed_origins == ["http://127.0.0.1:3000"]
+        assert cfg.effective_allowed_origins == ["https://127.0.0.1:3000"]
 
     def test_explicit_list_returned_when_set(self) -> None:
         origins = ["http://127.0.0.1:3000", "http://localhost:3000"]
@@ -60,7 +60,7 @@ class TestEffectiveAllowedOrigins:
 
     def test_derived_uses_configured_host_and_port(self) -> None:
         cfg = GlobalConfig(web_ui_host="localhost", web_ui_vite_port=5173)
-        assert cfg.effective_allowed_origins == ["http://localhost:5173"]
+        assert cfg.effective_allowed_origins == ["https://localhost:5173"]
 
     def test_empty_explicit_list_falls_back_to_derived(self) -> None:
         cfg = GlobalConfig(
@@ -68,7 +68,7 @@ class TestEffectiveAllowedOrigins:
             web_ui_vite_port=3000,
             web_ui_allowed_origins=[],
         )
-        assert cfg.effective_allowed_origins == ["http://127.0.0.1:3000"]
+        assert cfg.effective_allowed_origins == ["https://127.0.0.1:3000"]
 
 
 class TestExtraFieldsIgnored:

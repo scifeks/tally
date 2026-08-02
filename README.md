@@ -135,7 +135,7 @@ The REPL provides the same capabilities as the web UI in a terminal interface. A
 | Command | Description |
 |---|---|
 | `ui serve` | Start the FastAPI + Vite dev server and open the web UI |
-| `ui serve --stop` | Stop the running web servers |
+| `ui ssl regenerate` | Regenerate the TLS certificate for the configured web_ui_host |
 
 ### Triage
 
