@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 import shutil
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -561,16 +560,19 @@ class ProjectCommands:
             )
             return
 
+        from application.credentials.service import CredentialsService
         from application.project.wizard import (
             collect_key_path,
             collect_passphrase,
         )
+        from factories.persistence import create_repo_repo
 
         passphrase = collect_passphrase()
         key_dest = collect_key_path(key_path)
         self.repl.projects.setup_credentials_key(passphrase, key_dest, key_path)
 
-        self._reencrypt_repos(paths)
+        service = CredentialsService(create_repo_repo(paths.findings_db))
+        service.reencrypt_repos()
 
         self.repl.console.print(
             "[green]Encryption key created.[/green]\n"
@@ -578,13 +580,7 @@ class ProjectCommands:
         )
 
     def _key_change(self) -> None:
-        """Change passphrase and optionally move the key file.
-
-        Atomic: new key is written to a temp file, all repos
-        are re-encrypted in a single DB transaction, and the
-        key files are swapped only after the transaction commits.
-        If anything fails, old key and data are preserved.
-        """
+        """Change passphrase and optionally move the key file."""
         assert self.repl.active_project is not None
         paths = ProjectPaths.from_canonical(
             self.repl.projects.base_path,
@@ -598,21 +594,12 @@ class ProjectCommands:
             )
             return
 
-        import json
-
+        from application.credentials.service import CredentialsService
         from application.project.wizard import (
             collect_key_path,
             collect_passphrase,
         )
-        from core.security.credentials import (
-            create_key_file,
-            encrypt_value,
-        )
-        from infrastructure.store.connection import (
-            ConnectionFactory,
-        )
-
-        decrypted = self._decrypt_all_repos(paths)
+        from factories.persistence import create_repo_repo
 
         passphrase = collect_passphrase()
         old_actual = key_path.resolve()
@@ -623,86 +610,16 @@ class ProjectCommands:
         else:
             final_dest = old_actual
 
-        temp_key = final_dest.with_suffix(".key.new")
-        new_key = create_key_file(passphrase, temp_key)
-
+        service = CredentialsService(create_repo_repo(paths.findings_db))
         try:
-            factory = ConnectionFactory(paths.findings_db)
-            with factory.connect() as conn:
-                for repo_id, repo in decrypted:
-                    assert repo.auth is not None
-                    auth_dump = repo.auth.model_dump()
-                    encrypted = encrypt_value(json.dumps(auth_dump), new_key)
-                    conn.execute(
-                        "UPDATE repositories SET auth_json = ? WHERE id = ?",
-                        (encrypted, repo_id),
-                    )
+            service.change_key(paths, passphrase, final_dest)
         except Exception:
-            temp_key.unlink(missing_ok=True)
             self.repl.console.print(
                 "[red]Re-encryption failed. Old key and data preserved.[/red]"
             )
             raise
 
-        # Transaction committed. Swap key files.
-        if key_path.is_symlink():
-            old_target = key_path.resolve()
-            key_path.unlink()
-            if old_target.resolve() != final_dest.resolve() and old_target.exists():
-                old_target.unlink()
-        elif key_path.exists():
-            key_path.unlink()
-
-        if final_dest.resolve() != key_path.resolve():
-            if final_dest.exists():
-                final_dest.unlink()
-            temp_key.rename(final_dest)
-            os.symlink(final_dest, key_path)
-        else:
-            temp_key.rename(key_path)
-
         self.repl.console.print(
             "[green]Key changed successfully.[/green]\n"
             "All auth credentials re-encrypted."
         )
-
-    def _decrypt_all_repos(self, paths: ProjectPaths) -> list[tuple[int, Repository]]:
-        """Load all repos with their decrypted auth data."""
-        assert self.repl.active_project is not None
-        row = self.repl.project_registry.resolve_by_name(self.repl.active_project)
-        if row is None:
-            return []
-        service = ProjectRepositoriesService(
-            self.repl.project_registry,
-            self.repl.projects.config,
-        )
-        repos = service.list_active(row.id)
-        return [
-            (repo.id, repo)
-            for repo in repos
-            if repo.id is not None and repo.auth is not None
-        ]
-
-    def _reencrypt_repos(self, paths: ProjectPaths) -> None:
-        """Read and re-write all repos to trigger encryption.
-
-        Used by _key_setup for initial encryption of existing
-        plain-text data. Key change uses its own atomic flow.
-        """
-        assert self.repl.active_project is not None
-        row = self.repl.project_registry.resolve_by_name(self.repl.active_project)
-        if row is None:
-            return
-
-        from infrastructure.store.connection import (
-            ConnectionFactory,
-        )
-        from infrastructure.store.repositories.repositories import (
-            RepositoryRepository,
-        )
-
-        factory = ConnectionFactory(paths.findings_db)
-        repo_repo = RepositoryRepository(factory)
-        for repo in repo_repo.list_active():
-            if repo.id is not None and repo.auth is not None:
-                repo_repo.update(repo.id, repo)
