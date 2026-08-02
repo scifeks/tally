@@ -13,10 +13,10 @@ import contextlib
 import dataclasses
 from datetime import UTC, datetime
 
+from application.ports.event_publisher import EventPublisherPort
 from application.tools.scan_run_registry import get_scan_run_registry
 from domain.pipeline.bus_event import BusEvent, new_event_id
 from domain.pipeline.scan_events import ScanEvent, ToolStarted, event_type_name
-from infrastructure.events.bus import EventBus
 
 SCAN_JOB_ID = "scan"
 SCAN_STREAM = "scan"
@@ -34,8 +34,10 @@ def _payload_for(event: ScanEvent) -> dict:
 class EventBusScanSink:
     """Publish scan events to a process-singleton EventBus."""
 
-    def __init__(self, bus: EventBus, *, job_id: str = SCAN_JOB_ID) -> None:
-        self._bus = bus
+    def __init__(
+        self, publisher: EventPublisherPort, *, job_id: str = SCAN_JOB_ID
+    ) -> None:
+        self._publisher = publisher
         self._job_id = job_id
 
     def emit(self, event: ScanEvent) -> None:
@@ -56,4 +58,4 @@ class EventBusScanSink:
             ts=datetime.now(UTC),
         )
         with contextlib.suppress(Exception):
-            self._bus.publish_threadsafe(bus_event)
+            self._publisher.publish_threadsafe(bus_event)

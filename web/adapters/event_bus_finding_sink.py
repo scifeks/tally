@@ -5,13 +5,13 @@ from __future__ import annotations
 import contextlib
 from datetime import UTC, datetime
 
+from application.ports.event_publisher import EventPublisherPort
 from application.ports.finding_event_sink import FindingEvent
 from domain.findings.events import (
     FindingCreated,
     FindingDeleted,
 )
 from domain.pipeline.bus_event import BusEvent, new_event_id
-from infrastructure.events.bus import EventBus
 from web.api._finding_serialiser import serialise_finding
 
 FINDING_JOB_ID = "finding"
@@ -21,8 +21,10 @@ FINDING_STREAM = "finding"
 class EventBusFindingSink:
     """Publish finding events to a process-singleton EventBus."""
 
-    def __init__(self, bus: EventBus, *, job_id: str = FINDING_JOB_ID) -> None:
-        self._bus = bus
+    def __init__(
+        self, publisher: EventPublisherPort, *, job_id: str = FINDING_JOB_ID
+    ) -> None:
+        self._publisher = publisher
         self._job_id = job_id
 
     def emit(self, event: FindingEvent) -> None:
@@ -55,4 +57,4 @@ class EventBusFindingSink:
             ts=datetime.now(UTC),
         )
         with contextlib.suppress(Exception):
-            self._bus.publish_threadsafe(bus_event)
+            self._publisher.publish_threadsafe(bus_event)

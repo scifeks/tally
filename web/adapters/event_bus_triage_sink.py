@@ -13,9 +13,9 @@ import contextlib
 import dataclasses
 from datetime import UTC, datetime
 
+from application.ports.event_publisher import EventPublisherPort
 from domain.pipeline.bus_event import BusEvent, new_event_id
 from domain.pipeline.triage_events import TriageEvent, event_type_name
-from infrastructure.events.bus import EventBus
 
 TRIAGE_JOB_ID = "triage"
 TRIAGE_STREAM = "triage"
@@ -32,8 +32,10 @@ def _payload_for(event: TriageEvent) -> dict:
 class EventBusTriageSink:
     """Publish triage events to a process-singleton EventBus."""
 
-    def __init__(self, bus: EventBus, *, job_id: str = TRIAGE_JOB_ID) -> None:
-        self._bus = bus
+    def __init__(
+        self, publisher: EventPublisherPort, *, job_id: str = TRIAGE_JOB_ID
+    ) -> None:
+        self._publisher = publisher
         self._job_id = job_id
 
     def emit(self, event: TriageEvent) -> None:
@@ -46,4 +48,4 @@ class EventBusTriageSink:
             ts=datetime.now(UTC),
         )
         with contextlib.suppress(Exception):
-            self._bus.publish_threadsafe(bus_event)
+            self._publisher.publish_threadsafe(bus_event)
