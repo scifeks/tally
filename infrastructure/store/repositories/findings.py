@@ -341,6 +341,7 @@ class FindingRepository(FindingRepositoryPort):
         }
         before = dict(row)
         updated_meta = json.dumps(existing_meta)
+        should_report = 0 if confidence == "false_positive" else 1
         with self._factory.connect() as conn:
             conn.execute(
                 "UPDATE findings "
@@ -351,6 +352,7 @@ class FindingRepository(FindingRepositoryPort):
                 "    last_seen = ?, "
                 "    triaged_at = ?, "
                 "    triaged_by = ?, "
+                "    should_report = ?, "
                 "    meta = ? "
                 "WHERE id = ?",
                 (
@@ -360,6 +362,7 @@ class FindingRepository(FindingRepositoryPort):
                     now_iso,
                     now_iso,
                     triaged_by,
+                    should_report,
                     updated_meta,
                     finding_id,
                 ),
@@ -373,16 +376,7 @@ class FindingRepository(FindingRepositoryPort):
         return True
 
     def get_reportable_findings(self) -> list[Finding]:
-        """Return findings confirmed by triage and marked for the report."""
-        sql = (
-            "SELECT * FROM findings WHERE triaged_by IS NOT NULL AND should_report = 1"
-        )
-        with self._factory.connect() as conn:
-            rows = conn.execute(sql).fetchall()
-        return [Finding.from_row(r) for r in rows]
-
-    def get_findings_marked_for_report(self) -> list[Finding]:
-        """Return findings marked for inclusion regardless of triage status."""
+        """Return findings marked for inclusion in reports."""
         sql = "SELECT * FROM findings WHERE should_report = 1"
         with self._factory.connect() as conn:
             rows = conn.execute(sql).fetchall()
@@ -409,19 +403,7 @@ class FindingRepository(FindingRepositoryPort):
         return [deserialise_row(r) for r in rows]
 
     def get_reportable_findings_deserialized(self) -> list[dict]:
-        """Triaged findings marked for report, as dicts."""
-        with self._factory.connect() as conn:
-            rows = conn.execute(
-                "SELECT * FROM findings"
-                " WHERE triaged_by IS NOT NULL"
-                " AND should_report = 1"
-            ).fetchall()
-        return [deserialise_row(r) for r in rows]
-
-    def get_findings_marked_for_report_deserialized(
-        self,
-    ) -> list[dict]:
-        """Findings with should_report=1, as dicts."""
+        """Return findings marked for inclusion in reports, as dicts."""
         with self._factory.connect() as conn:
             rows = conn.execute(
                 "SELECT * FROM findings WHERE should_report = 1"
@@ -435,6 +417,7 @@ class FindingRepository(FindingRepositoryPort):
         meta: dict[str, Any],
         *,
         source: str = "web_ui",
+        clear_triage: bool = False,
     ) -> bool:
         """Update analyst-writable fields, setting triaged_by and triaged_at."""
         from datetime import UTC, datetime
@@ -463,8 +446,13 @@ class FindingRepository(FindingRepositoryPort):
             set_parts.append(f"{col} = ?")
             params.append(val)
 
-        set_parts.extend(["meta = ?", "triaged_by = 'analyst_web'", "triaged_at = ?"])
-        params.extend([updated_meta, now_iso])
+        set_parts.append("meta = ?")
+        params.append(updated_meta)
+        if clear_triage:
+            set_parts.extend(["triaged_by = NULL", "triaged_at = NULL"])
+        else:
+            set_parts.extend(["triaged_by = 'analyst_web'", "triaged_at = ?"])
+            params.append(now_iso)
         params.append(finding_id)
 
         before = dict(row)

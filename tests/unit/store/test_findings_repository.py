@@ -516,5 +516,67 @@ class TestGetFindingsMarkedForReport:
                 (triaged_excluded,),
             )
 
-        result_ids = {f.id for f in repo.get_findings_marked_for_report()}
+        result_ids = {f.id for f in repo.get_reportable_findings()}
         assert result_ids == {untriaged_marked, triaged_marked}
+
+
+class TestUpdateFindingShouldReport:
+    def test_update_finding_sets_should_report_to_1_for_confirmed(
+        self, factory: ConnectionFactory, repo: FindingRepository
+    ) -> None:
+        _insert(
+            factory,
+            [
+                {"tool": "t", "domain": "code", "severity": "high", "url": "u1"},
+            ],
+        )
+        with factory.connect() as conn:
+            finding_id = conn.execute(
+                "SELECT id FROM findings ORDER BY id LIMIT 1"
+            ).fetchone()[0]
+
+        repo.update_finding(
+            finding_id=finding_id,
+            severity_rank=5,
+            confidence="confirmed",
+            finding_type_json="[]",
+            triage_meta={},
+            strategy="test",
+        )
+
+        with factory.connect() as conn:
+            result = conn.execute(
+                "SELECT should_report FROM findings WHERE id = ?",
+                (finding_id,),
+            ).fetchone()
+        assert result[0] == 1
+
+    def test_update_finding_sets_should_report_to_0_for_false_positive(
+        self, factory: ConnectionFactory, repo: FindingRepository
+    ) -> None:
+        _insert(
+            factory,
+            [
+                {"tool": "t", "domain": "code", "severity": "high", "url": "u1"},
+            ],
+        )
+        with factory.connect() as conn:
+            finding_id = conn.execute(
+                "SELECT id FROM findings ORDER BY id LIMIT 1"
+            ).fetchone()[0]
+
+        repo.update_finding(
+            finding_id=finding_id,
+            severity_rank=5,
+            confidence="false_positive",
+            finding_type_json="[]",
+            triage_meta={},
+            strategy="test",
+        )
+
+        with factory.connect() as conn:
+            result = conn.execute(
+                "SELECT should_report FROM findings WHERE id = ?",
+                (finding_id,),
+            ).fetchone()
+        assert result[0] == 0

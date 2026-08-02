@@ -48,7 +48,7 @@ def _make_generator(findings_by_tool: dict) -> ReportGenerator:
             all_findings.append(row)
 
     finding_repo.get_reportable_findings_deserialized.return_value = all_findings
-    finding_repo.get_findings_marked_for_report_deserialized.return_value = all_findings
+    finding_repo.get_all_findings_deserialized.return_value = all_findings
     return ReportGenerator(
         rag_engine=MagicMock(),
         project="test-proj",

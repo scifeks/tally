@@ -249,7 +249,7 @@ def _generate(
             if request.skip_triage
             else (
                 "No findings are marked for inclusion in the report. "
-                "Triage your findings and mark which ones to include "
+                "Use the findings page to mark which ones to include "
                 "before generating drafts."
             )
         )

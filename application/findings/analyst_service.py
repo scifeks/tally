@@ -73,12 +73,17 @@ class FindingAnalystService:
         fields: dict[str, Any],
         *,
         holder_token: str,
+        clear_triage: bool = False,
     ) -> bool:
         """Acquire the finding lock, write, release. Raises FindingsBusy if held."""
         with self._registry.findings([finding_id], holder_token):
             cols, meta = split_analyst_fields(fields)
             return self._repo.update_analyst_fields(
-                finding_id, cols, meta, source="web_ui"
+                finding_id,
+                cols,
+                meta,
+                source="web_ui",
+                clear_triage=clear_triage,
             )
 
     def update_fields_under_held_lock(
