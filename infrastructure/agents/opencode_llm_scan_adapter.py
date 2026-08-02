@@ -7,11 +7,11 @@ import subprocess
 from contextlib import contextmanager
 from pathlib import Path
 
-from application.llm_scan.findings_parser import parse_llm_findings
 from application.ports.llm_scan_backend import (
     LlmScanResult,
     PreparedLlmScanSession,
 )
+from domain.findings.llm_parser import parse_llm_findings
 
 _OC_CONFIG_PATH = "/etc/opencode/opencode.json"
 
@@ -130,8 +130,8 @@ class OpenCodeLlmScanAdapter:
     def _extract_text(self, stdout: str) -> str:
         """Extract text from NDJSON output.
 
-        OpenCode outputs newline-delimited JSON objects. This method filters
-        for text events and concatenates text parts.
+        OpenCode outputs streaming NDJSON; we extract text events for LLM
+        processing.
         """
         if not stdout.strip():
             return ""

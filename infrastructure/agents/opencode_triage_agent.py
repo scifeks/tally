@@ -11,7 +11,7 @@ from application.ports.triage_agent import (
     PreparedTriageSession,
     TriageSessionResult,
 )
-from application.triage.verdict import (
+from domain.triage.verdict import (
     Verdict,
     VerdictParseError,
     parse_verdict,

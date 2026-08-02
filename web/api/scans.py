@@ -12,8 +12,6 @@ from typing import Any
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import StreamingResponse
 
-from application.events.ids import new_event_id
-from application.events.types import EOS, BusEvent
 from application.locking import JobBusy
 from application.project.repositories_service import ProjectRepositoriesService
 from application.scans.scans_service import (
@@ -25,6 +23,7 @@ from application.scans.scans_service import (
 from application.tools.registry import discover_tools
 from application.tools.scan_service import get_scan_service
 from core.project_paths import ProjectPaths
+from domain.pipeline.bus_event import EOS, BusEvent, new_event_id
 from domain.scans.entry import ScanRunRow, ToolRunRow
 from domain.tools.scan_types import SEGMENT_ORDER
 from factories.persistence import (

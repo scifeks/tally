@@ -15,7 +15,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from application.locking import HolderMismatch, LockRegistry, get_registry
-from application.locking.cancellation import CancellationToken
 from application.reporting.assembler import TEMPLATES_DIR
 from application.reporting.orchestrator import (
     ReportCancelled,
@@ -23,6 +22,7 @@ from application.reporting.orchestrator import (
     ReportRequest,
     run_report,
 )
+from domain.locking.cancellation import CancellationToken
 from factories.persistence import make_store
 from factories.reporting import create_pdf_renderer, create_template_renderer
 from web.adapters.event_bus_report_sink import EventBusReportSink

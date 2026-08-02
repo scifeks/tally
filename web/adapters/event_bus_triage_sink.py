@@ -13,10 +13,9 @@ import contextlib
 import dataclasses
 from datetime import UTC, datetime
 
+from domain.pipeline.bus_event import BusEvent, new_event_id
 from domain.pipeline.triage_events import TriageEvent, event_type_name
 from infrastructure.events.bus import EventBus
-from infrastructure.events.ids import new_event_id
-from infrastructure.events.types import BusEvent
 
 TRIAGE_JOB_ID = "triage"
 TRIAGE_STREAM = "triage"

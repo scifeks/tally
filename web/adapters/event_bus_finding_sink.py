@@ -10,9 +10,8 @@ from domain.findings.events import (
     FindingCreated,
     FindingDeleted,
 )
+from domain.pipeline.bus_event import BusEvent, new_event_id
 from infrastructure.events.bus import EventBus
-from infrastructure.events.ids import new_event_id
-from infrastructure.events.types import BusEvent
 from web.api._finding_serialiser import serialise_finding
 
 FINDING_JOB_ID = "finding"

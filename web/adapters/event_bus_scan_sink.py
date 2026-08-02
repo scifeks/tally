@@ -14,10 +14,9 @@ import dataclasses
 from datetime import UTC, datetime
 
 from application.tools.scan_run_registry import get_scan_run_registry
+from domain.pipeline.bus_event import BusEvent, new_event_id
 from domain.pipeline.scan_events import ScanEvent, ToolStarted, event_type_name
 from infrastructure.events.bus import EventBus
-from infrastructure.events.ids import new_event_id
-from infrastructure.events.types import BusEvent
 
 SCAN_JOB_ID = "scan"
 SCAN_STREAM = "scan"

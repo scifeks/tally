@@ -11,10 +11,9 @@ import contextlib
 import dataclasses
 from datetime import UTC, datetime
 
+from domain.pipeline.bus_event import BusEvent, new_event_id
 from domain.reports.events import ReportUpdateEvent, event_type_name
 from infrastructure.events.bus import EventBus
-from infrastructure.events.ids import new_event_id
-from infrastructure.events.types import BusEvent
 
 REPORT_UPDATE_JOB_ID = "report_update"
 REPORT_UPDATE_STREAM = "report_update"

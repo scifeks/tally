@@ -9,7 +9,6 @@ from collections.abc import AsyncIterator
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import StreamingResponse
 
-from application.events.types import EOS
 from application.locking import JobBusy
 from application.triage.run_registry import get_triage_run_registry
 from application.triage.runner import NoScanRunError
@@ -17,6 +16,7 @@ from application.triage.triage_service import (
     TriageNotResumableError,
     TriageService,
 )
+from domain.pipeline.bus_event import EOS
 from domain.triage.entry import TriageBatchRow
 from domain.triage.entry import TriageRunSummary as TriageRunSummaryRow
 from factories.persistence import ProjectNotFound, create_triage_service

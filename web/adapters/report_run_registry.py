@@ -11,7 +11,7 @@ from __future__ import annotations
 import threading
 from dataclasses import dataclass
 
-from application.locking.cancellation import CancellationToken
+from domain.locking.cancellation import CancellationToken
 
 
 @dataclass(frozen=True)

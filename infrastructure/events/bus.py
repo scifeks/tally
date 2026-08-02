@@ -3,8 +3,13 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-from application.events.ids import new_event_id
-from application.events.types import EOS, BusEvent, SubscriberId, _EOSType
+from domain.pipeline.bus_event import (
+    EOS,
+    BusEvent,
+    SubscriberId,
+    _EOSType,
+    new_event_id,
+)
 from infrastructure.events.exceptions import SubscriberClosed, UnknownJob
 
 _DEFAULT_INPUT_SIZE = 256

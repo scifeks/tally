@@ -16,6 +16,7 @@ import contextlib
 from datetime import UTC, datetime
 from typing import Any
 
+from domain.pipeline.bus_event import BusEvent, new_event_id
 from domain.pipeline.chat_events import (
     ChatEvent,
     ChatStreamCancelled,
@@ -25,8 +26,6 @@ from domain.pipeline.chat_events import (
     event_type_name,
 )
 from infrastructure.events.bus import EventBus
-from infrastructure.events.ids import new_event_id
-from infrastructure.events.types import BusEvent
 
 CHAT_JOB_ID = "chat"
 CHAT_STREAM = "chat"
