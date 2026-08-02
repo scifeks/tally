@@ -78,12 +78,12 @@ async def batch_client(tmp_path: Path):
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(
         transport=transport,
-        base_url=f"http://127.0.0.1:{TEST_PORT}",
+        base_url=f"https://127.0.0.1:{TEST_PORT}",
     ) as client:
         resp = await client.post(
             "/api/v1/auth/exchange",
             json={"token": HANDSHAKE},
-            headers={"origin": f"http://127.0.0.1:{TEST_PORT}"},
+            headers={"origin": f"https://127.0.0.1:{TEST_PORT}"},
         )
         assert resp.status_code == 200, f"exchange failed: {resp.text}"
         for name, value in resp.cookies.items():
@@ -92,7 +92,7 @@ async def batch_client(tmp_path: Path):
         csrf_token = client.cookies["tally_csrf"]
         mut_headers = {
             "X-CSRF-Token": csrf_token,
-            "Origin": f"http://127.0.0.1:{TEST_PORT}",
+            "Origin": f"https://127.0.0.1:{TEST_PORT}",
         }
         yield client, ids, factory, mut_headers, project_id
 

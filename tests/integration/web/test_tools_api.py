@@ -94,7 +94,7 @@ async def tools_v1_client(tmp_path: Path):
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(
         transport=transport,
-        base_url=f"http://127.0.0.1:{TEST_PORT}",
+        base_url=f"https://127.0.0.1:{TEST_PORT}",
     ) as client:
         mut_headers = await _authenticate(client)
         yield client, mut_headers, tmp_path, project_id
@@ -124,7 +124,7 @@ async def _authed_client_for_config(tmp_path: Path, payload: dict[str, Any]):
     transport = httpx.ASGITransport(app=app)
     client = httpx.AsyncClient(
         transport=transport,
-        base_url=f"http://127.0.0.1:{TEST_PORT}",
+        base_url=f"https://127.0.0.1:{TEST_PORT}",
     )
     await _authenticate(client)
     return client
@@ -204,7 +204,7 @@ class TestToolsCatalog:
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(
             transport=transport,
-            base_url=f"http://127.0.0.1:{TEST_PORT}",
+            base_url=f"https://127.0.0.1:{TEST_PORT}",
         ) as client:
             resp = await client.get("/api/v1/tools/catalog")
         assert resp.status_code in (401, 403)
@@ -238,7 +238,7 @@ class TestInstalledTools:
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(
             transport=transport,
-            base_url=f"http://127.0.0.1:{TEST_PORT}",
+            base_url=f"https://127.0.0.1:{TEST_PORT}",
         ) as client:
             resp = await client.get("/api/v1/tools/installed")
         assert resp.status_code in (401, 403)
@@ -291,7 +291,7 @@ class TestRuntimeDependencies:
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(
             transport=transport,
-            base_url=f"http://127.0.0.1:{TEST_PORT}",
+            base_url=f"https://127.0.0.1:{TEST_PORT}",
         ) as client:
             resp = await client.get("/api/v1/runtime-dependencies")
         assert resp.status_code in (401, 403)

@@ -47,7 +47,7 @@ class TestFindingEventsRouting:
         client, _, _, _, _, _ = app_client
         resp = await client.get(
             _events_url(99999),
-            headers={"Origin": f"http://127.0.0.1:{TEST_PORT}"},
+            headers={"Origin": f"https://127.0.0.1:{TEST_PORT}"},
         )
         assert resp.status_code == 404
 

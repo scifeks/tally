@@ -1,14 +1,12 @@
-"""Factory for creating LLM scan backends from configuration."""
+"""LLM scan backend factory."""
 
 from __future__ import annotations
 
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from application.ports.llm_scan_backend import LlmScanBackendPort
-
 if TYPE_CHECKING:
-    pass
+    from application.ports.llm_scan_backend import LlmScanBackendPort
 
 
 def create_llm_scan_backend(
@@ -16,19 +14,7 @@ def create_llm_scan_backend(
     app_root: Path,
     repo_paths: dict[str, Path],
 ) -> tuple[LlmScanBackendPort, int]:
-    """Create an LLM scan backend and return (backend, timeout_seconds).
-
-    Resolves the configured LLM provider (Claude or OpenCode) from
-    triage_inference config, generates the Docker Compose environment,
-    and instantiates the appropriate backend adapter.
-
-    Args:
-        app_root: Application root directory.
-        repo_paths: Mapping of repo names to paths to be scanned.
-
-    Returns:
-        Tuple of (backend adapter, timeout_seconds).
-    """
+    """Create an LLM scan backend and return (backend, timeout)."""
     from application.triage.compose import generate_triage_compose
     from application.triage.factory import resolve_triage_config
 

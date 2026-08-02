@@ -163,10 +163,10 @@ async def test_unauthenticated_returns_401(tmp_path) -> None:
     app = build_test_app(tmp_path, "test-handshake-abc123xyz", port=12345)
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(
-        transport=transport, base_url="http://127.0.0.1:12345"
+        transport=transport, base_url="https://127.0.0.1:12345"
     ) as client:
         resp = await client.get(
             "/api/v1/projects/1/chat/sessions/1/messages",
-            headers={"Origin": "http://127.0.0.1:12345"},
+            headers={"Origin": "https://127.0.0.1:12345"},
         )
     assert resp.status_code == 401

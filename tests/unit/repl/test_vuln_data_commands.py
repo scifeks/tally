@@ -17,7 +17,7 @@ def _make_commands() -> tuple[VulnDataCommands, MagicMock]:
 
 
 _FACTORY_PATH = (
-    "application.repl.commands.vuln_data_commands.get_vulnerability_data_service"
+    "application.repl.commands.vuln_data_commands.create_vulnerability_data_service"
 )
 
 

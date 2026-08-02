@@ -287,11 +287,11 @@ class EnrichmentPipeline:
         """Return vulnerability data service, resolving lazily on first access."""
         if self._vuln_data_service is None:
             try:
-                from infrastructure.vulnerability_data.factory import (
-                    get_vulnerability_data_service,
+                from factories.vulnerability_data import (
+                    create_vulnerability_data_service,
                 )
 
-                svc = get_vulnerability_data_service(self._base_path)
+                svc = create_vulnerability_data_service(self._base_path)
                 if svc.is_loaded():
                     self._vuln_data_service = svc
             except Exception:
