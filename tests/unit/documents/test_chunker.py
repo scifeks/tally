@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from infrastructure.documents.chunker import chunk_text
+from domain.documents.chunker import chunk_text
 
 
 class TestChunkText:

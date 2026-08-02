@@ -1,4 +1,4 @@
-from application.events.types import (
+from domain.pipeline.bus_event import (
     EOS,
     BusEvent,
     SubscriberId,

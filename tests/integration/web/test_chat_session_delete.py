@@ -87,7 +87,7 @@ async def test_delete_without_csrf_returns_403(app_client) -> None:
     # Authenticated cookies are present, but no X-CSRF-Token header.
     resp = await client.delete(
         f"/api/v1/projects/{project_id}/chat/sessions/{sid}",
-        headers={"Origin": "http://127.0.0.1:12345"},
+        headers={"Origin": "https://127.0.0.1:12345"},
     )
     assert resp.status_code == 403, resp.text
     # Session is untouched.
@@ -101,10 +101,10 @@ async def test_delete_unauthenticated_returns_401(tmp_path) -> None:
     app = build_test_app(tmp_path, "test-handshake-abc123xyz", port=12345)
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(
-        transport=transport, base_url="http://127.0.0.1:12345"
+        transport=transport, base_url="https://127.0.0.1:12345"
     ) as client:
         resp = await client.delete(
             "/api/v1/projects/1/chat/sessions/1",
-            headers={"Origin": "http://127.0.0.1:12345"},
+            headers={"Origin": "https://127.0.0.1:12345"},
         )
     assert resp.status_code == 401

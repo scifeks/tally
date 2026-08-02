@@ -11,11 +11,11 @@ from typing import Any
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import StreamingResponse
 
-from application.events.types import EOS
 from application.findings.findings_service import FindingsService
 from application.locking import FindingsBusy
 from domain.findings.severity import Severity
 from domain.findings.sort import FindingSortColumn, SortDirection
+from domain.pipeline.bus_event import EOS
 from factories.persistence import (
     ProjectNotFound,
     create_findings_service,

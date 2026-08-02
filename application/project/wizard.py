@@ -17,10 +17,10 @@ from core.config import Repository
 from core.config.schemas.repo_service import RepoService
 from core.config.schemas.repository import RepoAuth
 from core.project_paths import ProjectPaths
-from infrastructure.tools.wrappers.utils.manifest_check import (
-    LANGUAGE_MANIFESTS,
-    has_dependency_manifests,
-    has_dependency_manifests_docker,
+from factories.scanning import (
+    check_dependency_manifests,
+    check_dependency_manifests_docker,
+    get_manifest_constants,
 )
 
 if TYPE_CHECKING:
@@ -59,18 +59,18 @@ def _sca_manifest_notification(repo: Repository) -> None:
     if not repo.services:
         return
     service = repo.services[0]
-    sca_langs = set(LANGUAGE_MANIFESTS)
+    sca_langs = set(get_manifest_constants())
     repo_langs = {lang.lower() for lang in (service.languages or [])}
     if not repo_langs & sca_langs:
         return
     if service.container_name:
-        found = has_dependency_manifests_docker(
+        found = check_dependency_manifests_docker(
             service.container_name,
             service.docker_path,
             service.languages or [],
         )
     else:
-        found = has_dependency_manifests(repo.path, service.languages or [])
+        found = check_dependency_manifests(repo.path, service.languages or [])
     if not found:
         print(
             "  Note: no dependency manifests found for the configured"

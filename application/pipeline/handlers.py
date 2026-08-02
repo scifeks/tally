@@ -23,9 +23,11 @@ from domain.pipeline.events import (
     IngestCompleted,
     ToolCompleted,
 )
-from infrastructure.embedding.factory import get_embedding_provider
-from infrastructure.llm.factory import get_llm_provider
-from infrastructure.vector.factory import make_chromadb_vector_index
+from factories.llm import (
+    create_embedding_provider,
+    create_llm_provider,
+    create_vector_index,
+)
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -42,15 +44,15 @@ logger = logging.getLogger(__name__)
 
 
 def _build_knowledge_base(project_name: str, base_path: Path) -> FindingKnowledgeBase:
-    embedding_provider = get_embedding_provider(base_path)
+    embedding_provider = create_embedding_provider(base_path)
     logger.info(
         "Embedding provider: %s model=%s url=%s",
         type(embedding_provider).__name__,
         getattr(embedding_provider, "_model", "?"),
         getattr(embedding_provider, "_base_url", "?"),
     )
-    chat_provider = get_llm_provider("chat", base_path)
-    vector_index = make_chromadb_vector_index(
+    chat_provider = create_llm_provider("chat", base_path)
+    vector_index = create_vector_index(
         project_name=project_name,
         base_path=base_path,
         embedding_provider=embedding_provider,

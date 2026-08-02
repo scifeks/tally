@@ -208,7 +208,7 @@ async def _authenticate(client: httpx.AsyncClient) -> dict[str, str]:
     resp = await client.post(
         "/api/v1/auth/exchange",
         json={"token": HANDSHAKE},
-        headers={"origin": "http://127.0.0.1:12345"},
+        headers={"origin": "https://127.0.0.1:12345"},
     )
     assert resp.status_code == 200, resp.text
     for name, value in resp.cookies.items():
@@ -217,7 +217,7 @@ async def _authenticate(client: httpx.AsyncClient) -> dict[str, str]:
     csrf_token = client.cookies["tally_csrf"]
     return {
         "X-CSRF-Token": csrf_token,
-        "Origin": "http://127.0.0.1:12345",
+        "Origin": "https://127.0.0.1:12345",
     }
 
 
@@ -243,7 +243,7 @@ async def test_post_message_after_seal_returns_409(tmp_path: Path) -> None:
 
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(
-        transport=transport, base_url="http://127.0.0.1:12345"
+        transport=transport, base_url="https://127.0.0.1:12345"
     ) as client:
         mut_headers = await _authenticate(client)
         resp = await client.post(

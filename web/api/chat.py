@@ -19,9 +19,8 @@ from application.chat.service import (
 )
 from application.chat.session_service import ChatSessionService
 from application.chat.stream_composer import RagUnavailable
-from application.events.ids import new_event_id
-from application.events.types import EOS, BusEvent
 from domain.chat.entry import ChatMessageRow, ChatSessionRow
+from domain.pipeline.bus_event import EOS, BusEvent, new_event_id
 from factories.persistence import (
     ProjectNotFound,
     create_chat_session_service,

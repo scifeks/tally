@@ -16,6 +16,7 @@ from application.locking import HolderMismatch, LockRegistry, get_registry
 from application.locking.cancellation import CancellationToken
 from application.ports.progress_reporter import ProgressReporter
 from application.ports.scan_event_sink import ScanEventSink
+from application.ports.subprocess_runner import SubprocessRunnerPort
 from application.ports.user_prompt import UserPromptPort
 from application.tools.executor import ToolExecutor
 from application.tools.factory import ToolWrapperFactory
@@ -23,7 +24,6 @@ from application.tools.orchestrator import ScanOrchestrator
 from application.tools.scan_run_registry import ScanRunRegistry, get_scan_run_registry
 from domain.pipeline import scan_events as se
 from domain.tools.scan_types import ScanSummary
-from infrastructure.tools.runner import SubprocessRunner
 
 if TYPE_CHECKING:
     from application.ports.chat_session_repository import (
@@ -70,9 +70,11 @@ class ScanService:
     def __init__(
         self,
         *,
+        subprocess_runner: SubprocessRunnerPort,
         lock_registry: LockRegistry | None = None,
         scan_run_registry: ScanRunRegistry | None = None,
     ) -> None:
+        self._subprocess_runner = subprocess_runner
         self._lock_registry = lock_registry or get_registry()
         self._scan_run_registry = scan_run_registry or get_scan_run_registry()
 
@@ -209,9 +211,7 @@ class ScanService:
         git_diff: GitDiffPort | None = None,
     ) -> None:
         from application.pipeline.factory import PipelineFactory
-        from infrastructure.tools.wrappers.utils.scan_state import (
-            reset_scan_scoped_state,
-        )
+        from factories.scanning import reset_scan_scoped_state
 
         reset_scan_scoped_state()
         setup_ok = False
@@ -221,7 +221,7 @@ class ScanService:
                 project_name=project_name,
                 base_path=Path(base_path),
                 prompt=prompt,
-                subprocess_runner=SubprocessRunner(),
+                subprocess_runner=self._subprocess_runner,
                 reporter=reporter,
             )
             pipeline_bus = PipelineFactory.create(
@@ -399,14 +399,3 @@ def _persist_tool_counts(
 
 def _utc_now_iso() -> str:
     return datetime.now(UTC).isoformat()
-
-
-_SERVICE: ScanService | None = None
-
-
-def get_scan_service() -> ScanService:
-    """Return the process-shared ScanService singleton."""
-    global _SERVICE
-    if _SERVICE is None:
-        _SERVICE = ScanService()
-    return _SERVICE

@@ -6,7 +6,7 @@ import json
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import Any, Protocol
 
 from core.project_paths import ProjectPaths
 
@@ -18,8 +18,10 @@ from .schemas import (
     ProjectConfig,
 )
 
-if TYPE_CHECKING:
-    from application.project.registry_service import ProjectRegistryService
+
+class RegistryLike(Protocol):
+    def resolve_by_name(self, name: str) -> Any: ...
+    def register(self, name: str, base_path: str) -> Any: ...
 
 
 class ConfigManager:
@@ -34,7 +36,7 @@ class ConfigManager:
     def __init__(
         self,
         base_path: str = ".",
-        registry: ProjectRegistryService | None = None,
+        registry: RegistryLike | None = None,
     ):
         self.base_path = Path(base_path)
         self.global_config_path = self.base_path / "config" / "global.json"

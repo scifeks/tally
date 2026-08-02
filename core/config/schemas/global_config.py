@@ -126,7 +126,7 @@ class GlobalConfig(BaseModel):
         """Allowed CORS origins: explicit list or derived from host + vite port."""
         if self.web_ui_allowed_origins:
             return list(self.web_ui_allowed_origins)
-        return [f"http://{self.web_ui_host}:{self.web_ui_vite_port}"]
+        return [f"https://{self.web_ui_host}:{self.web_ui_vite_port}"]
 
 
 GlobalConfig.model_rebuild()

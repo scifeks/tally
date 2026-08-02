@@ -12,8 +12,6 @@ from typing import Any
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import StreamingResponse
 
-from application.events.ids import new_event_id
-from application.events.types import EOS, BusEvent
 from application.locking import JobBusy
 from application.project.repositories_service import ProjectRepositoriesService
 from application.scans.scans_service import (
@@ -23,8 +21,8 @@ from application.scans.scans_service import (
     ScanValidationError,
 )
 from application.tools.registry import discover_tools
-from application.tools.scan_service import get_scan_service
 from core.project_paths import ProjectPaths
+from domain.pipeline.bus_event import EOS, BusEvent, new_event_id
 from domain.scans.entry import ScanRunRow, ToolRunRow
 from domain.tools.scan_types import SEGMENT_ORDER
 from factories.persistence import (
@@ -37,8 +35,7 @@ from factories.persistence import (
     create_scans_service,
     create_url_finding_repo,
 )
-from infrastructure.tools.runner import SubprocessRunner
-from infrastructure.vcs.git_diff_adapter import GitDiffAdapter
+from factories.scanning import create_git_diff, get_scan_service
 from web.adapters.event_bus_scan_sink import EventBusScanSink
 from web.adapters.no_approval_prompt import NoApprovalPromptAdapter
 from web.api._errors import (
@@ -371,7 +368,7 @@ async def start_scan(
             skip_enrichment=body.skipEnrichment,
             arg_profile_ids=body.argProfileIds,
             since_commit=body.sinceCommit,
-            git_diff=(GitDiffAdapter(SubprocessRunner()) if body.sinceCommit else None),
+            git_diff=create_git_diff() if body.sinceCommit else None,
             prompt=NoApprovalPromptAdapter(),
             event_sink=sink,
         )

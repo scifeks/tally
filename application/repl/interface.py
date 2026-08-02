@@ -264,8 +264,9 @@ class REPL:
         )
         if web_ui_runner is None:
             from infrastructure.web_ui.runner import WebUiRunner
+            from web.server import create_web_app
 
-            web_ui_runner = WebUiRunner()
+            web_ui_runner = WebUiRunner(create_web_app)
         if tool_registry is None:
             tool_registry = ToolRegistry()
             discover_tools(tool_registry, base_path)

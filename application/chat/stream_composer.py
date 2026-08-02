@@ -10,7 +10,7 @@ from application.rag.knowledge_base_cache import (
     get_or_build_knowledge_base,
 )
 from application.rag.query import QueryEngine
-from infrastructure.llm.factory import get_llm_provider
+from factories.llm import create_llm_provider
 
 if TYPE_CHECKING:
     from application.ports.llm_provider import LLMProvider
@@ -65,7 +65,7 @@ class ChatStreamComposer:
                 row.name,
                 base_path,
             )
-        provider = get_llm_provider("chat", base_path)
+        provider = create_llm_provider("chat", base_path)
         return cls(
             query_engine=QueryEngine(
                 knowledge_base,

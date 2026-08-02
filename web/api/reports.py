@@ -19,8 +19,6 @@ from fastapi import APIRouter, File, Form, HTTPException, Query, Request, Upload
 from fastapi.responses import FileResponse, Response, StreamingResponse
 from pydantic import BaseModel
 
-from application.events.ids import new_event_id
-from application.events.types import EOS, BusEvent
 from application.locking import JobBusy, get_registry
 from application.reporting.draft_run_registry import get_draft_run_registry
 from application.reporting.drafts import SECTION_REGISTRY
@@ -29,6 +27,7 @@ from application.reporting.reports_service import (
     UnknownSectionError,
 )
 from core.project_paths import ProjectPaths
+from domain.pipeline.bus_event import EOS, BusEvent, new_event_id
 from domain.projects.entry import ProjectRow
 from domain.reports.entry import REPORT_STATUSES, ReportRow
 from factories.persistence import ProjectNotFound, create_reports_service

@@ -53,7 +53,30 @@ Triage uses the same feature-inference pattern through `triage_inference`. The `
 | `web_ui_host` | string | `"127.0.0.1"` | Bind address for the FastAPI server and Vite dev server. `0.0.0.0` and `::` are rejected. Use an explicit loopback or LAN IP. |
 | `web_ui_port` | int | `8080` | TCP port for the FastAPI server started by `ui serve`. |
 | `web_ui_vite_port` | int | `3000` | TCP port for the Vite dev server started by `ui serve`. |
-| `web_ui_allowed_origins` | list\[string\] | derived | CORS allow-list for the Vite dev server. Defaults to `["http://<web_ui_host>:<web_ui_vite_port>"]` when absent or empty. Override only when running Vite under a different hostname. |
+| `web_ui_allowed_origins` | list\[string\] | derived | CORS allow-list for the Vite dev server. Defaults to `["https://<web_ui_host>:<web_ui_vite_port>"]` when absent or empty. Override only when running Vite under a different hostname. |
+
+### TLS Certificate Configuration
+
+The web UI runs over HTTPS using a self-signed TLS certificate. The certificate is generated automatically during `install.sh` for the default host (`127.0.0.1`).
+
+**Certificate files:**
+
+- `config/tls/cert.pem` - Self-signed certificate
+- `config/tls/key.pem` - Private key
+
+Your browser will show a security warning for self-signed certificates. Accept the warning to proceed (the certificate is only trusted for your local machine).
+
+**Regenerating the certificate**
+
+If you change `web_ui_host` to a different address, regenerate the TLS certificate from the REPL:
+
+```
+[project]> ui ssl regenerate
+```
+
+This creates a new self-signed certificate for the updated `web_ui_host`. Regeneration is required for the browser to recognize the new hostname.
+
+---
 
 ### Provider Config Fields
 

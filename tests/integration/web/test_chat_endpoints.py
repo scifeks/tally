@@ -100,7 +100,7 @@ async def test_create_session_without_csrf_is_forbidden(app_client) -> None:
     resp = await client.post(
         f"/api/v1/projects/{project_id}/chat/sessions",
         json={},
-        headers={"Origin": "http://127.0.0.1:12345"},
+        headers={"Origin": "https://127.0.0.1:12345"},
     )
     assert resp.status_code == 403, resp.text
 
@@ -114,12 +114,12 @@ async def test_create_session_unauthenticated_is_unauthorized(tmp_path) -> None:
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(
         transport=transport,
-        base_url="http://127.0.0.1:12345",
+        base_url="https://127.0.0.1:12345",
     ) as client:
         resp = await client.post(
             "/api/v1/projects/1/chat/sessions",
             json={},
-            headers={"Origin": "http://127.0.0.1:12345"},
+            headers={"Origin": "https://127.0.0.1:12345"},
         )
     assert resp.status_code == 401
 
@@ -210,11 +210,11 @@ async def test_list_unauthenticated_is_unauthorized(tmp_path) -> None:
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(
         transport=transport,
-        base_url="http://127.0.0.1:12345",
+        base_url="https://127.0.0.1:12345",
     ) as client:
         resp = await client.get(
             "/api/v1/projects/1/chat/sessions",
-            headers={"Origin": "http://127.0.0.1:12345"},
+            headers={"Origin": "https://127.0.0.1:12345"},
         )
     assert resp.status_code == 401
 

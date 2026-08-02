@@ -12,7 +12,6 @@ import subprocess
 import time
 from time import perf_counter
 
-from application.locking.cancellation import CancellationToken
 from application.ports.subprocess_runner import (
     SubprocessCancelled,
     SubprocessNotFound,
@@ -21,6 +20,7 @@ from application.ports.subprocess_runner import (
     SubprocessRunnerPort,
     SubprocessTimeout,
 )
+from domain.locking.cancellation import CancellationToken
 
 # Seconds between cancel-token checks while a subprocess is running.
 _CANCEL_POLL_INTERVAL = 0.5

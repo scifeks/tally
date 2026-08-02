@@ -15,7 +15,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from application.locking import HolderMismatch, LockRegistry, get_registry
-from application.locking.cancellation import CancellationToken
 from application.reporting.assembler import TEMPLATES_DIR
 from application.reporting.orchestrator import (
     ReportCancelled,
@@ -23,6 +22,7 @@ from application.reporting.orchestrator import (
     ReportRequest,
     run_report,
 )
+from domain.locking.cancellation import CancellationToken
 from factories.persistence import make_store
 from factories.reporting import create_pdf_renderer, create_template_renderer
 from web.adapters.event_bus_report_sink import EventBusReportSink
@@ -30,8 +30,8 @@ from web.adapters.no_approval_prompt import NoApprovalPromptAdapter
 from web.adapters.report_run_registry import ReportRunRegistry
 
 if TYPE_CHECKING:
+    from application.ports.event_publisher import EventPublisherPort
     from application.ports.report_repository import ReportRepositoryPort
-    from infrastructure.events.bus import EventBus
 
 logger = logging.getLogger("tally.web.reports")
 
@@ -58,7 +58,7 @@ def start_report_thread(
     request: WebReportRequest,
     holder_token: str,
     report_repo: ReportRepositoryPort,
-    bus: EventBus,
+    bus: EventPublisherPort,
     report_run_registry: ReportRunRegistry,
     retention_count: int,
     lock_registry: LockRegistry | None = None,
@@ -103,7 +103,7 @@ def _run_report(
     request: WebReportRequest,
     holder_token: str,
     report_repo: ReportRepositoryPort,
-    bus: EventBus,
+    bus: EventPublisherPort,
     cancel_token: CancellationToken,
     lock_registry: LockRegistry,
     report_run_registry: ReportRunRegistry,

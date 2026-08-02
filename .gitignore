@@ -65,6 +65,7 @@ MagicMock
 tmp/
 
 # Frontend
+ui/logs/
 ui/node_modules/
 ui/docs/roadmap
 ui-old/

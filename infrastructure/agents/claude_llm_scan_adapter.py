@@ -7,11 +7,11 @@ import subprocess
 from contextlib import contextmanager
 from pathlib import Path
 
-from application.llm_scan.findings_parser import parse_llm_findings
 from application.ports.llm_scan_backend import (
     LlmScanResult,
     PreparedLlmScanSession,
 )
+from domain.findings.llm_parser import parse_llm_findings
 
 
 class ClaudeLlmScanAdapter:

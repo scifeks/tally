@@ -6,7 +6,6 @@ import logging
 from pathlib import Path
 from time import perf_counter
 
-from application.llm_scan.factory import create_llm_scan_backend
 from application.llm_scan.prompts import build_scan_prompt
 from application.llm_scan.tree_shaker import build_tree
 from application.tools.scan_types.base import ScanType
@@ -18,6 +17,7 @@ from domain.tools.base import ToolResult
 from domain.tools.display import ToolDisplayRow
 from domain.tools.scan_types.models import ScanSummary
 from domain.tools.scan_types.resources import IExecutionResources
+from factories.llm_scan import create_llm_scan_backend
 
 logger = logging.getLogger(__name__)
 

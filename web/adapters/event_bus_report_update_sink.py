@@ -11,10 +11,9 @@ import contextlib
 import dataclasses
 from datetime import UTC, datetime
 
+from application.ports.event_publisher import EventPublisherPort
+from domain.pipeline.bus_event import BusEvent, new_event_id
 from domain.reports.events import ReportUpdateEvent, event_type_name
-from infrastructure.events.bus import EventBus
-from infrastructure.events.ids import new_event_id
-from infrastructure.events.types import BusEvent
 
 REPORT_UPDATE_JOB_ID = "report_update"
 REPORT_UPDATE_STREAM = "report_update"
@@ -23,8 +22,10 @@ REPORT_UPDATE_STREAM = "report_update"
 class EventBusReportUpdateSink:
     """Publish report update events to a process-singleton EventBus."""
 
-    def __init__(self, bus: EventBus, *, job_id: str = REPORT_UPDATE_JOB_ID) -> None:
-        self._bus = bus
+    def __init__(
+        self, publisher: EventPublisherPort, *, job_id: str = REPORT_UPDATE_JOB_ID
+    ) -> None:
+        self._publisher = publisher
         self._job_id = job_id
 
     def emit(self, event: ReportUpdateEvent) -> None:
@@ -38,4 +39,4 @@ class EventBusReportUpdateSink:
             ts=datetime.now(UTC),
         )
         with contextlib.suppress(Exception):
-            self._bus.publish_threadsafe(bus_event)
+            self._publisher.publish_threadsafe(bus_event)

@@ -14,12 +14,6 @@ from domain.tools.base import ToolResult
 from domain.tools.execution_config import NoirProviderSnapshot, ToolExecutionConfig
 from domain.tools.interface import ExecutionContext, ToolInterface
 from domain.tools.scan_types.models import SEGMENT_ORDER
-from infrastructure.tools.wrappers.docker._docker_exec import (
-    build_docker_exec,
-)
-from infrastructure.tools.wrappers.utils.manifest_check import (
-    has_manifests_for_language,
-)
 
 _log = logging.getLogger(__name__)
 
@@ -65,6 +59,8 @@ def should_skip_sca_tool(
     tool: Any, service: Any, repo_path: str = ""
 ) -> tuple[bool, str]:
     """Skip SCA tools that have no dependency manifests in the service path."""
+    from factories.scanning import check_manifests_for_language
+
     if not getattr(tool, "language_gates", None):
         return False, ""
     if getattr(tool, "scan_segment", "") != "sca":
@@ -83,7 +79,7 @@ def should_skip_sca_tool(
     if not mpath:
         return True, f"no manifest found for {service.name}"
     has = any(
-        has_manifests_for_language(mpath, lang, mcontainer)
+        check_manifests_for_language(mpath, lang, mcontainer)
         for lang in tool.language_gates
     )
     if not has:
@@ -123,6 +119,8 @@ def _build_raw_command(
     workdir: str | None = None,
 ) -> list[str]:
     """Build a command from raw CLI args using the tool's command config."""
+    from factories.scanning import build_docker_exec
+
     location = getattr(command_config, "location", None)
     if location == "docker":
         container = getattr(command_config, "container", None)

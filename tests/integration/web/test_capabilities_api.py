@@ -5,10 +5,13 @@ from __future__ import annotations
 from pathlib import Path
 
 import httpx
+import pytest
 
 from infrastructure.store.connection import ConnectionFactory
 from tests._app_factory import build_test_app
 from tests.integration.web.conftest import HANDSHAKE, TEST_PORT
+
+pytestmark = pytest.mark.integration
 
 
 def _make_unauthed_app(tmp_path: Path):
@@ -65,12 +68,12 @@ class TestCapabilities:
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(
             transport=transport,
-            base_url=f"http://127.0.0.1:{TEST_PORT}",
+            base_url=f"https://127.0.0.1:{TEST_PORT}",
         ) as client:
             exch = await client.post(
                 "/api/v1/auth/exchange",
                 json={"token": HANDSHAKE},
-                headers={"origin": f"http://127.0.0.1:{TEST_PORT}"},
+                headers={"origin": f"https://127.0.0.1:{TEST_PORT}"},
             )
             assert exch.status_code == 200
             for name, value in exch.cookies.items():
@@ -96,12 +99,12 @@ class TestCapabilities:
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(
             transport=transport,
-            base_url=f"http://127.0.0.1:{TEST_PORT}",
+            base_url=f"https://127.0.0.1:{TEST_PORT}",
         ) as client:
             exch = await client.post(
                 "/api/v1/auth/exchange",
                 json={"token": HANDSHAKE},
-                headers={"origin": f"http://127.0.0.1:{TEST_PORT}"},
+                headers={"origin": f"https://127.0.0.1:{TEST_PORT}"},
             )
             assert exch.status_code == 200
             for name, value in exch.cookies.items():
@@ -125,12 +128,12 @@ class TestCapabilities:
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(
             transport=transport,
-            base_url=f"http://127.0.0.1:{TEST_PORT}",
+            base_url=f"https://127.0.0.1:{TEST_PORT}",
         ) as client:
             exch = await client.post(
                 "/api/v1/auth/exchange",
                 json={"token": HANDSHAKE},
-                headers={"origin": f"http://127.0.0.1:{TEST_PORT}"},
+                headers={"origin": f"https://127.0.0.1:{TEST_PORT}"},
             )
             assert exch.status_code == 200
             for name, value in exch.cookies.items():
@@ -147,7 +150,7 @@ class TestCapabilities:
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(
             transport=transport,
-            base_url=f"http://127.0.0.1:{TEST_PORT}",
+            base_url=f"https://127.0.0.1:{TEST_PORT}",
         ) as client:
             resp = await client.get("/api/v1/capabilities")
         assert resp.status_code in (401, 403)

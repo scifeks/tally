@@ -27,8 +27,8 @@ class OriginCheckMiddleware(BaseHTTPMiddleware):
     ) -> None:
         super().__init__(app)
         self._allowed = {
-            f"http://localhost:{port}",
-            f"http://127.0.0.1:{port}",
+            f"https://localhost:{port}",
+            f"https://127.0.0.1:{port}",
             *extra_origins,
         }
 

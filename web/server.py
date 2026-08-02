@@ -82,6 +82,7 @@ def create_app(
     base_path: str,
     handshake_token: str,
     *,
+    host: str = "127.0.0.1",
     port: int,
     project_registry: ProjectRegistryService,
     tool_registry: ToolRegistry,
@@ -149,7 +150,7 @@ def create_app(
         port=port,
         extra_origins=allowed_origins or [],
     )
-    app.add_middleware(HostHeaderMiddleware, port=port)
+    app.add_middleware(HostHeaderMiddleware, port=port, host=host)
 
     if allowed_origins:
         app.add_middleware(
@@ -246,6 +247,7 @@ def create_server(
     app = create_app(
         base_path,
         handshake_token,
+        host=host,
         port=port,
         project_registry=project_registry,
         tool_registry=tool_registry,
@@ -263,6 +265,7 @@ def create_web_app(
     handshake_token: str,
     allowed_origins: list[str] | None = None,
     *,
+    host: str = "127.0.0.1",
     project_registry: ProjectRegistryService,
     tool_registry: ToolRegistry,
 ) -> FastAPI:
@@ -272,6 +275,7 @@ def create_web_app(
     return create_app(
         base_path,
         handshake_token,
+        host=host,
         port=port,
         project_registry=project_registry,
         tool_registry=tool_registry,

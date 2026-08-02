@@ -104,13 +104,10 @@ class TestSemgrepFullPipeline:
     def test_semgrep_full_pipeline_ingest_enrich_query(self, tmp_path: Path) -> None:
         """Full pipeline: ToolCompleted -> SQLite -> LLM enrich -> ChromaDB -> query.
 
-        Steps verified:
-        1. IngestHandler normalizes and writes 1 semgrep finding to SQLite.
-        2. EnrichmentHandler calls the (mocked) LLM and writes risk_type to
-           the finding's metadata; enriched flag becomes 1.
-        3. ChromaDBHandler upserts the enriched row into ChromaDB.
-        4. KnowledgeBase.find_relevant() returns >=1 result whose tool
-           metadata equals "semgrep".
+        IngestHandler normalizes and persists to SQLite, EnrichmentHandler
+        (mocked LLM) writes risk_type to metadata, ChromaDBHandler upserts
+        to ChromaDB, and KnowledgeBase.find_relevant() returns the result
+        with matching tool metadata.
         """
         project_name = "test-semgrep-pipeline"
         _write_global_config(tmp_path)
@@ -147,7 +144,7 @@ class TestSemgrepFullPipeline:
                 return_value={"risk_type": "sql_injection"},
             ),
             patch(
-                "application.rag.enrichment.get_llm_provider",
+                "factories.llm.create_llm_provider",
                 return_value=object(),
             ),
             patch(
