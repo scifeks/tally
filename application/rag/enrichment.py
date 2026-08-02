@@ -18,7 +18,7 @@ from domain.tools.constants import (
     SEVERITY_LEVELS,
 )
 from domain.tools.enrichment import FieldEnrichmentSpec, PromptStrategy
-from infrastructure.llm.factory import get_llm_provider
+from factories.llm import create_llm_provider
 
 from .ingestor import ToolHandlerFactory
 from .prompts import get_dedicated_prompt
@@ -279,7 +279,7 @@ class EnrichmentPipeline:
     def _provider(self) -> LLMProvider:
         """Return the LLM provider, resolving from config on first access."""
         if self._llm_provider is None:
-            self._llm_provider = get_llm_provider("enrichment", self._base_path)
+            self._llm_provider = create_llm_provider("enrichment", self._base_path)
         return self._llm_provider
 
     @property

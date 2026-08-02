@@ -15,7 +15,7 @@ from typing import Any
 from core.config._atomic import atomic_write_text
 from core.project_paths import ProjectPaths
 from domain.url_inventory.entry import UrlFinding
-from infrastructure.tools.wrappers.utils.url_merge import _normalise_url
+from domain.url_inventory.normalise import normalise_url
 
 
 def _query_string_from_meta(meta: dict[str, Any]) -> str:
@@ -54,18 +54,15 @@ def _seed_url(row: UrlFinding) -> str:
 def build_seeds(rows: Iterable[UrlFinding]) -> str:
     """Render *rows* as a newline-delimited seeds file.
 
-    Dedup uses ``URLMerger._normalise_url`` so seed-line collapsing
-    matches the legacy URL-merge canonicalization (host case-folded,
-    default ports stripped, single trailing slash collapsed). Multi-
-    source rows (same URL from Katana + Noir + a user file)
-    legitimately produce three url_findings rows that collapse to one
-    seed line.
+    Dedup canonicalizes host case, strips default ports and trailing
+    slashes so multi-source rows that resolve to the same URL collapse
+    to one seed line.
     """
     seen: set[str] = set()
     out: list[str] = []
     for row in rows:
         url = _seed_url(row)
-        key = _normalise_url(url)
+        key = normalise_url(url)
         if key in seen:
             continue
         seen.add(key)
@@ -74,19 +71,7 @@ def build_seeds(rows: Iterable[UrlFinding]) -> str:
 
 
 def build_oas3(rows: Iterable[UrlFinding], *, base_url: str | None = None) -> dict:
-    """Build a merged OAS3 document from *rows*.
-
-    For each row whose ``meta.original_file`` is an OAS3 operation object
-    (a dict with at least ``responses`` or ``parameters``), the operation
-    is slotted into ``paths[<path>][<method>]`` directly so the source
-    schema is preserved. For rows without a usable fragment (Katana
-    JSONL, simple URL records), a minimal stub operation is synthesised
-    so ZAP can still discover the endpoint.
-
-    The result has a single ``servers`` entry derived from the first row's
-    host/port (or *base_url* if provided) so ZAP's ``-openapifile`` mode
-    has a base to send requests against.
-    """
+    """Build merged OAS3 document from *rows*."""
     paths: dict[str, dict[str, Any]] = {}
     server_url: str | None = base_url
 

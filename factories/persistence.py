@@ -61,6 +61,7 @@ if TYPE_CHECKING:
     from application.ports.finding_repository import (
         FindingRepositoryPort,
     )
+    from application.ports.global_commands import GlobalCommandsPort
     from application.ports.project_repo_repository import (
         ProjectRepoRepositoryPort,
     )
@@ -402,3 +403,13 @@ def create_url_list_service(
         paths=paths,
         project_name=row.name,
     )
+
+
+def create_global_commands_repo(
+    config_path: Path,
+) -> GlobalCommandsPort:
+    from infrastructure.store.repositories.global_commands import (
+        GlobalCommandsRepository,
+    )
+
+    return GlobalCommandsRepository(config_path)

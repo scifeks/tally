@@ -10,9 +10,9 @@ from pydantic import ValidationError
 from application.tool_overrides.service import ToolOverridesService
 from core.config.schemas.command_entry import CommandEntry
 from core.project_paths import ProjectPaths
-from factories.persistence import create_overrides_repo
-from infrastructure.store.repositories.global_commands import (
-    GlobalCommandsRepository,
+from factories.persistence import (
+    create_global_commands_repo,
+    create_overrides_repo,
 )
 
 if TYPE_CHECKING:
@@ -223,13 +223,11 @@ class ToolCommands:
 
     def _load_commands_json(self) -> dict:
         path = self._commands_json_path()
-        repo = GlobalCommandsRepository(path)
-        return repo.load_all()
+        return create_global_commands_repo(path).load_all()
 
     def _save_commands_json(self, commands: dict) -> None:
         path = self._commands_json_path()
-        repo = GlobalCommandsRepository(path)
-        repo.save_all(commands)
+        create_global_commands_repo(path).save_all(commands)
 
     def _reload_registry(self) -> None:
         from application.tools.registry import discover_tools

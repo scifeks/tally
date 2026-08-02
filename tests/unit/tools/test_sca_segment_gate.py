@@ -182,7 +182,7 @@ class TestScaSegmentGate:
         )
 
         with patch(
-            "application.tools.scan_types.execution.has_manifests_for_language",
+            "factories.scanning.check_manifests_for_language",
             return_value=False,
         ) as mock_manifest_check:
             summary = RepoSegmentScan(["pip-audit"], segment_name="sca").execute(

@@ -16,9 +16,7 @@ from application.tool_overrides.service import (
 )
 from core.project_paths import ProjectPaths
 from factories.persistence import create_overrides_repo
-from infrastructure.tools.wrappers.utils.container_tool_probe import (
-    probe_container_tools,
-)
+from factories.scanning import probe_container_tools
 
 if TYPE_CHECKING:
     from application.repl.help_renderer import HelpRenderer

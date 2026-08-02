@@ -20,9 +20,11 @@ from application.reporting.tal_id import assign_tal_ids_to_findings, resolve_pre
 from core.config.manager import ConfigManager
 from core.project_paths import ProjectPaths
 from domain.pipeline.report_events import DraftCompleted, DraftFailed, DraftStarted
-from infrastructure.embedding.factory import get_embedding_provider
-from infrastructure.llm.factory import get_llm_provider
-from infrastructure.vector.factory import make_chromadb_vector_index
+from factories.llm import (
+    create_embedding_provider,
+    create_llm_provider,
+    create_vector_index,
+)
 
 if TYPE_CHECKING:
     from application.ports.draft_files import DraftFilesPort
@@ -227,7 +229,7 @@ def _generate(
     del prompt  # accepted for interface parity with run_report; no interactive steps
     _check_cancel(token, section)
 
-    llm = get_llm_provider("report", request.base_path)
+    llm = create_llm_provider("report", request.base_path)
     if not llm.is_available():
         raise DraftGenerationError(
             "The configured LLM is not reachable. Check your global config "
@@ -286,9 +288,9 @@ def _generate(
     )
 
     _check_cancel(token, section)
-    embedding_provider = get_embedding_provider(request.base_path)
-    chat_provider = get_llm_provider("chat", request.base_path)
-    vector_index = make_chromadb_vector_index(
+    embedding_provider = create_embedding_provider(request.base_path)
+    chat_provider = create_llm_provider("chat", request.base_path)
+    vector_index = create_vector_index(
         project_name=request.project,
         base_path=request.base_path,
         embedding_provider=embedding_provider,
