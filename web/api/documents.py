@@ -112,6 +112,7 @@ async def upload_document(
 
     store = _resolve_document_store(request, project_id)
     count = await asyncio.to_thread(store.add_chunks, filename, chunks)
+    await asyncio.to_thread(_seal_stale_sessions, request, project_id)
     return DocumentUploadResponse(filename=filename, chunks=count)
 
 
@@ -129,4 +130,28 @@ async def delete_document(
     removed = await asyncio.to_thread(store.remove_by_filename, filename)
     if removed == 0:
         raise NotFound(f"no document found: {filename}")
+    await asyncio.to_thread(_seal_stale_sessions, request, project_id)
     return DocumentDeleteResponse(filename=filename, chunks_removed=removed)
+
+
+def _seal_stale_sessions(request: Request, project_id: int) -> None:
+    """Seal documents-mode sessions after a store change."""
+    from application.chat.sealing import seal_sessions_by_mode
+    from factories.persistence import (
+        create_chat_session_service,
+    )
+
+    try:
+        svc = create_chat_session_service(
+            request.app.state.project_registry, project_id
+        )
+        seal_sessions_by_mode(
+            project_id,
+            mode="documents",
+            session_repo=svc.session_repo,
+        )
+    except Exception:
+        logger.warning(
+            "document session sealing failed for project %d",
+            project_id,
+        )

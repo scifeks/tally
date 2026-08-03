@@ -336,7 +336,7 @@ export function useCreateChatSession() {
     mutationFn: async ({ projectId, mode }) => {
       const data = await apiFetch<ChatSessionApi>(REST_ENDPOINTS.createChatSession(projectId), {
         method: 'POST',
-        body: { mode: mode ?? 'all' },
+        body: { mode: mode ?? 'findings' },
       })
       return mapChatSession(data)
     },

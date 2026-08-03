@@ -23,7 +23,10 @@ from application.chat.service import (
 from application.chat.service import (
     ProjectNotFound as ProjectNotFound,
 )
-from application.chat.stream_composer import ChatStreamComposer
+from application.chat.stream_composer import (
+    ChatStreamComposer,
+    RagUnavailable,
+)
 
 if TYPE_CHECKING:
     from application.ports.chat_event_sink import ChatStreamSink
@@ -177,6 +180,11 @@ class ChatSessionService:
             project_id,
             document_store_cache,
         )
+
+        if session.mode == "documents" and composer.document_store is None:
+            raise RagUnavailable(
+                "Document store unavailable for this project; check embedding provider"
+            )
 
         user_message_id = await asyncio.to_thread(
             self.append_user_message, session_id, content

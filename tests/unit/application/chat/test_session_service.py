@@ -47,7 +47,7 @@ class _StubSessionRepo:
                 id=new_id,
                 project_id=project_id,
                 title=title,
-                mode="all",
+                mode=mode,
                 created_at="2026-05-02T00:00:00Z",
                 updated_at="2026-05-02T00:00:00Z",
                 expired_at=None,

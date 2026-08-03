@@ -167,7 +167,7 @@ describe('useCreateChatSession', () => {
         projectId: 1,
       })) as unknown as typeof session
     })
-    expect(bodyText).toBe('{"mode":"all"}')
+    expect(bodyText).toBe('{"mode":"findings"}')
     expect(session?.id).toBe(555)
     expect(session?.projectId).toBe(1)
     expect(session?.title).toBe('2026-04-28 14:00')

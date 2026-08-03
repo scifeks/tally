@@ -125,19 +125,20 @@ function SessionItem({
 // ─── New Chat Dropdown ──────────────────────────────────────────────────────
 
 const MODE_OPTIONS: { value: ChatMode; label: string }[] = [
-  { value: 'all', label: 'All Sources' },
-  { value: 'findings', label: 'Findings Only' },
-  { value: 'documents', label: 'Documents Only' },
+  { value: 'findings', label: 'Findings' },
+  { value: 'documents', label: 'Documents' },
 ]
 
 function NewChatDropdown({
   onSelect,
   disabled,
   isPending,
+  dropUp,
 }: {
   onSelect: (mode: ChatMode) => void
   disabled: boolean
   isPending: boolean
+  dropUp?: boolean
 }) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
@@ -167,7 +168,12 @@ function NewChatDropdown({
         New Chat
       </button>
       {open && (
-        <div className="absolute z-10 top-full left-0 right-0 mt-1 border border-border bg-background shadow-lg">
+        <div
+          className={cn(
+            'absolute z-10 left-0 right-0 border border-border bg-background shadow-lg',
+            dropUp ? 'bottom-full mb-1' : 'top-full mt-1'
+          )}
+        >
           {MODE_OPTIONS.map(opt => (
             <button
               key={opt.value}
@@ -305,16 +311,25 @@ export default function Chat() {
   }, [messages])
 
   const handleNewSession = useCallback(
-    async (mode: ChatMode = 'all') => {
+    async (mode: ChatMode = 'findings') => {
       if (activeProjectId === null) return
       const session = await createSession
         .mutateAsync({ projectId: activeProjectId, mode })
         .catch(() => null)
       if (session === null) return
+      queryClient.setQueriesData<{ pages: Array<{ items: ChatSession[] }> }>(
+        { queryKey: ['chat', activeProjectId, 'sessions'] },
+        old => {
+          if (!old || old.pages.length === 0) return old
+          const pages = [...old.pages]
+          pages[0] = { ...pages[0], items: [session, ...pages[0].items] }
+          return { ...old, pages }
+        }
+      )
       setActiveSessionId(session.id)
       inputRef.current?.focus()
     },
-    [activeProjectId, createSession]
+    [activeProjectId, createSession, queryClient]
   )
 
   const handleDeleteSession = useCallback(
@@ -507,13 +522,13 @@ export default function Chat() {
                           changed. Start a new chat to continue your investigation.
                         </div>
                       </div>
-                      <button
-                        onClick={() => handleNewSession(activeSession?.mode ?? 'all')}
-                        disabled={createSession.isPending || activeProjectId === null}
-                        className="shrink-0 px-3 py-1 border border-accent text-accent hover:bg-accent/10 text-[10px] uppercase tracking-wider font-bold disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        New Chat
-                      </button>
+                      <div className="shrink-0 w-28">
+                        <NewChatDropdown
+                          onSelect={handleNewSession}
+                          disabled={activeProjectId === null}
+                          isPending={createSession.isPending}
+                        />
+                      </div>
                     </div>
                   )}
 
@@ -560,13 +575,14 @@ export default function Chat() {
                         Start a new chat to continue your investigation.
                       </div>
                     </div>
-                    <button
-                      onClick={() => handleNewSession(activeSession?.mode ?? 'all')}
-                      disabled={createSession.isPending || activeProjectId === null}
-                      className="shrink-0 px-3 py-1.5 bg-accent/20 border border-accent text-accent hover:bg-accent/30 text-[10px] uppercase tracking-wider font-bold disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      Start New Chat
-                    </button>
+                    <div className="shrink-0 w-32">
+                      <NewChatDropdown
+                        onSelect={handleNewSession}
+                        disabled={activeProjectId === null}
+                        isPending={createSession.isPending}
+                        dropUp
+                      />
+                    </div>
                   </div>
                 ) : (
                   <>
