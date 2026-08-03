@@ -355,9 +355,6 @@ export function useGenerateDrafts() {
       })
     },
     onError: err => setError(toErrorPayload(err)),
-    onSuccess: (_, { projectId }) => {
-      void queryClient.invalidateQueries({ queryKey: ['reports', projectId, 'drafts'] })
-    },
   })
 }
 
