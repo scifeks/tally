@@ -794,6 +794,7 @@ class ChatSessionSummary(BaseModel):
     id: int
     project_id: int
     title: str
+    mode: str
     created_at: str
     last_message_at: str | None
     message_count: int
@@ -808,9 +809,14 @@ class ChatSessionsListResponse(BaseModel):
 
 
 class ChatSessionCreateRequest(BaseModel):
-    """Body for ``POST /chat/sessions``. Reserved for v2 fields; empty in v1."""
+    """Body for ``POST /chat/sessions``."""
 
     model_config = ConfigDict(extra="ignore")
+
+    mode: str = Field(
+        default="all",
+        pattern=r"^(findings|documents|all)$",
+    )
 
 
 class ChatMessageResponse(BaseModel):
@@ -841,8 +847,7 @@ class ChatMessageSendRequest(BaseModel):
 
     The ``content`` field carries the user's chat turn. It must be
     non-empty after stripping; the upper bound (100k chars) keeps a
-    single user turn well below the 500k prompt-assembly ceiling
-    enforced inside ``application.chat.service``.
+    single user turn well below the 500k prompt-assembly ceiling.
     """
 
     model_config = ConfigDict(extra="ignore")
@@ -883,3 +888,24 @@ class ChatMessageCancelResponse(BaseModel):
 
     session_id: int
     cancelled_message_id: int | None
+
+
+class DocumentSource(BaseModel):
+    """One ingested document with its chunk count."""
+
+    name: str
+    chunks: int
+
+
+class DocumentListResponse(BaseModel):
+    items: list[DocumentSource]
+
+
+class DocumentUploadResponse(BaseModel):
+    filename: str
+    chunks: int
+
+
+class DocumentDeleteResponse(BaseModel):
+    filename: str
+    chunks_removed: int

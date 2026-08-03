@@ -260,7 +260,7 @@ describe('Chat page - sealed session UX (12.7)', () => {
     const inputPanel = screen.getByTestId('sealed-input-panel')
     expect(inputPanel).toHaveTextContent(/session sealed/i)
     expect(
-      within(inputPanel).getByRole('button', { name: /start new chat/i })
+      within(inputPanel).getByRole('button', { name: /new chat/i })
     ).toBeInTheDocument()
 
     // The active-session textarea must NOT render for a sealed session.
@@ -355,6 +355,7 @@ describe('Chat page - new session button', () => {
             id: 999,
             project_id: 1,
             title: '2026-04-28 13:00',
+            mode: 'all',
             created_at: '2026-04-28T13:00:00+00:00',
             last_message_at: null,
             message_count: 0,
@@ -371,6 +372,7 @@ describe('Chat page - new session button', () => {
       expect(screen.getByText(/Triage walkthrough — XSS findings/)).toBeInTheDocument()
     )
     await user.click(screen.getByRole('button', { name: /New Chat/i }))
+    await user.click(screen.getByText('Findings'))
     await waitFor(() => expect(posted).toBe(true))
   })
 })

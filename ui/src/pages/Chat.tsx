@@ -14,7 +14,7 @@ import {
   useProjects,
   useAppendChatMessageToCache,
 } from '@/lib/api'
-import type { ChatMessage, ChatSession, ChatStreamEvent } from '@/lib/types'
+import type { ChatMessage, ChatSession, ChatStreamEvent, ChatMode } from '@/lib/types'
 import { ChatMutationErrorModal } from '@/components/ChatMutationErrorModal'
 import { NoProjectSelectedState } from '@/components/NoProjectSelectedState'
 
@@ -103,7 +103,8 @@ function SessionItem({
       <div className="flex-1 min-w-0">
         <div className="truncate text-[11px]">{session.title}</div>
         <div className="text-[9px] text-dim">
-          {dateStr} · {session.messageCount} msgs{isExpired ? ' · sealed' : ''}
+          {modeLabel(session.mode)} · {dateStr} · {session.messageCount} msgs
+          {isExpired ? ' · sealed' : ''}
         </div>
       </div>
       <button
@@ -119,6 +120,82 @@ function SessionItem({
       </button>
     </div>
   )
+}
+
+// ─── New Chat Dropdown ──────────────────────────────────────────────────────
+
+const MODE_OPTIONS: { value: ChatMode; label: string }[] = [
+  { value: 'findings', label: 'Findings' },
+  { value: 'documents', label: 'Documents' },
+]
+
+function NewChatDropdown({
+  onSelect,
+  disabled,
+  isPending,
+  dropUp,
+}: {
+  onSelect: (mode: ChatMode) => void
+  disabled: boolean
+  isPending: boolean
+  dropUp?: boolean
+}) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [open])
+
+  return (
+    <div ref={ref} className="relative w-full">
+      <button
+        onClick={() => setOpen(prev => !prev)}
+        disabled={disabled || isPending}
+        className={cn(
+          'w-full flex items-center justify-center gap-2 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider border transition-colors',
+          disabled || isPending
+            ? 'opacity-50 cursor-not-allowed border-muted text-muted-foreground'
+            : 'border-accent text-accent hover:bg-accent/10'
+        )}
+      >
+        {isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
+        New Chat
+      </button>
+      {open && (
+        <div
+          className={cn(
+            'absolute z-10 left-0 right-0 border border-border bg-background shadow-lg',
+            dropUp ? 'bottom-full mb-1' : 'top-full mt-1'
+          )}
+        >
+          {MODE_OPTIONS.map(opt => (
+            <button
+              key={opt.value}
+              onClick={() => {
+                onSelect(opt.value)
+                setOpen(false)
+              }}
+              className="w-full text-left px-3 py-2 text-[11px] text-muted-foreground hover:bg-muted/50 hover:text-foreground transition-colors"
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function modeLabel(mode: ChatMode | undefined): string {
+  if (mode === 'findings') return 'FINDINGS'
+  if (mode === 'documents') return 'DOCS'
+  return 'ALL'
 }
 
 // ─── Main Component ─────────────────────────────────────────────────────────
@@ -233,15 +310,27 @@ export default function Chat() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
-  const handleNewSession = useCallback(async () => {
-    if (activeProjectId === null) return
-    const session = await createSession
-      .mutateAsync({ projectId: activeProjectId })
-      .catch(() => null)
-    if (session === null) return
-    setActiveSessionId(session.id)
-    inputRef.current?.focus()
-  }, [activeProjectId, createSession])
+  const handleNewSession = useCallback(
+    async (mode: ChatMode = 'findings') => {
+      if (activeProjectId === null) return
+      const session = await createSession
+        .mutateAsync({ projectId: activeProjectId, mode })
+        .catch(() => null)
+      if (session === null) return
+      queryClient.setQueriesData<{ pages: Array<{ items: ChatSession[] }> }>(
+        { queryKey: ['chat', activeProjectId, 'sessions'] },
+        old => {
+          if (!old || old.pages.length === 0) return old
+          const pages = [...old.pages]
+          pages[0] = { ...pages[0], items: [session, ...pages[0].items] }
+          return { ...old, pages }
+        }
+      )
+      setActiveSessionId(session.id)
+      inputRef.current?.focus()
+    },
+    [activeProjectId, createSession, queryClient]
+  )
 
   const handleDeleteSession = useCallback(
     async (sessionId: number) => {
@@ -266,7 +355,11 @@ export default function Chat() {
     setInputValue('')
 
     const result = await sendMessage
-      .mutateAsync({ projectId: activeProjectId, sessionId: activeSessionId, content })
+      .mutateAsync({
+        projectId: activeProjectId,
+        sessionId: activeSessionId,
+        content,
+      })
       .catch(() => null)
     if (result === null) {
       setInputValue(content)
@@ -333,23 +426,11 @@ export default function Chat() {
       <div className="flex-1 flex min-h-0 overflow-hidden">
         <div className="w-56 shrink-0 border-r border-border flex flex-col">
           <div className="p-2 border-b border-border">
-            <button
-              onClick={handleNewSession}
-              disabled={createSession.isPending || activeProjectId === null}
-              className={cn(
-                'w-full flex items-center justify-center gap-2 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider border transition-colors',
-                createSession.isPending || activeProjectId === null
-                  ? 'opacity-50 cursor-not-allowed border-muted text-muted-foreground'
-                  : 'border-accent text-accent hover:bg-accent/10'
-              )}
-            >
-              {createSession.isPending ? (
-                <Loader2 className="h-3 w-3 animate-spin" />
-              ) : (
-                <Plus className="h-3 w-3" />
-              )}
-              New Chat
-            </button>
+            <NewChatDropdown
+              onSelect={handleNewSession}
+              disabled={activeProjectId === null}
+              isPending={createSession.isPending}
+            />
           </div>
 
           <div className="flex-1 overflow-y-auto py-2">
@@ -396,6 +477,11 @@ export default function Chat() {
                     <div className="flex items-center gap-2 text-[10px]">
                       <span className="text-dim">SESSION:</span>
                       <span className="text-muted-foreground font-mono">{activeSessionId}</span>
+                      {activeSession && (
+                        <span className="px-1.5 py-0.5 bg-primary/10 border border-primary/30 text-primary text-[9px] font-bold uppercase tracking-wider">
+                          {modeLabel(activeSession.mode)}
+                        </span>
+                      )}
                       {sessionExpired && (
                         <span
                           className="flex items-center gap-1 px-1.5 py-0.5 bg-warn/30 border border-warn text-warn font-bold uppercase tracking-wider"
@@ -436,13 +522,13 @@ export default function Chat() {
                           changed. Start a new chat to continue your investigation.
                         </div>
                       </div>
-                      <button
-                        onClick={handleNewSession}
-                        disabled={createSession.isPending || activeProjectId === null}
-                        className="shrink-0 px-3 py-1 border border-accent text-accent hover:bg-accent/10 text-[10px] uppercase tracking-wider font-bold disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        New Chat
-                      </button>
+                      <div className="shrink-0 w-28">
+                        <NewChatDropdown
+                          onSelect={handleNewSession}
+                          disabled={activeProjectId === null}
+                          isPending={createSession.isPending}
+                        />
+                      </div>
                     </div>
                   )}
 
@@ -489,13 +575,14 @@ export default function Chat() {
                         Start a new chat to continue your investigation.
                       </div>
                     </div>
-                    <button
-                      onClick={handleNewSession}
-                      disabled={createSession.isPending || activeProjectId === null}
-                      className="shrink-0 px-3 py-1.5 bg-accent/20 border border-accent text-accent hover:bg-accent/30 text-[10px] uppercase tracking-wider font-bold disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      Start New Chat
-                    </button>
+                    <div className="shrink-0 w-32">
+                      <NewChatDropdown
+                        onSelect={handleNewSession}
+                        disabled={activeProjectId === null}
+                        isPending={createSession.isPending}
+                        dropUp
+                      />
+                    </div>
                   </div>
                 ) : (
                   <>

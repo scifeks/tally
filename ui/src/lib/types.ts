@@ -574,6 +574,7 @@ export interface ChatSession {
   projectId: number
   /** Server-set timestamp title. Never null. */
   title: string
+  mode: ChatMode
   createdAt: string
   /** Null until the first message is sent. */
   lastMessageAt: string | null
@@ -651,6 +652,16 @@ export interface ChatCancelResponse {
   sessionId: number
   cancelledMessageId: null
 }
+
+// ─── Document Types ──────────────────────────────────────────────────────────
+// Used by the Config page for document management.
+
+export interface DocumentSource {
+  name: string
+  chunks: number
+}
+
+export type ChatMode = 'findings' | 'documents' | 'all'
 
 // ─── Configuration Types ────────────────────────────────────────────────────
 // Used by the Config page for project, repository, and tool override management.

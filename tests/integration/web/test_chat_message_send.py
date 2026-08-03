@@ -96,6 +96,7 @@ def _patch_chat_deps(monkeypatch, *, chunks: list[str]) -> _FakeProvider:
         query_engine=_StubQueryEngine(),
         provider=provider,
         model_name=provider.model,
+        document_store=None,
     )
     monkeypatch.setattr(
         "application.chat.session_service.ChatStreamComposer.for_project",
@@ -215,6 +216,7 @@ async def test_post_409_when_stream_already_running(app_client, monkeypatch) -> 
         query_engine=_StubQueryEngine(),
         provider=provider,
         model_name=provider.model,
+        document_store=None,
     )
     monkeypatch.setattr(
         "application.chat.session_service.ChatStreamComposer.for_project",

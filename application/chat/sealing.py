@@ -33,6 +33,20 @@ def seal_sessions_for_project(
         session_repo.delete(row.id)
 
 
+def seal_sessions_by_mode(
+    project_id: int,
+    *,
+    mode: str,
+    session_repo: ChatSessionRepositoryPort,
+) -> int:
+    """Seal active sessions matching *mode* for *project_id*."""
+    active = session_repo.list_active_for_project(project_id)
+    matching = [row for row in active if row.mode == mode]
+    if matching:
+        session_repo.mark_expired([row.id for row in matching])
+    return len(matching)
+
+
 def purge_chat_for_project(
     project_id: int,
     *,

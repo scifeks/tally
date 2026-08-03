@@ -320,6 +320,7 @@ class ConnectionFactory:
                     id          INTEGER PRIMARY KEY AUTOINCREMENT,
                     project_id  INTEGER NOT NULL,
                     title       TEXT NOT NULL,
+                    mode        TEXT NOT NULL DEFAULT 'all',
                     created_at  TEXT NOT NULL DEFAULT (datetime('now')),
                     updated_at  TEXT NOT NULL DEFAULT (datetime('now')),
                     expired_at  TEXT
