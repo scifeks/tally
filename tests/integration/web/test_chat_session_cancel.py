@@ -82,6 +82,7 @@ def _patch_chat_deps(monkeypatch, *, provider: _FakeProvider) -> None:
         query_engine=_StubQueryEngine(),
         provider=provider,
         model_name=provider.model,
+        document_store=None,
     )
     monkeypatch.setattr(
         "application.chat.session_service.ChatStreamComposer.for_project",

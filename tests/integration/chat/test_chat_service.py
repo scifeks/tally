@@ -253,7 +253,7 @@ async def test_retrieval_failure_falls_back_to_no_context(
     [c async for c in gen]
 
     assert provider.received_messages is not None
-    assert "(no findings retrieved)" in provider.received_messages[0]["content"]
+    assert "(no context retrieved)" in provider.received_messages[0]["content"]
 
 
 @pytest.mark.asyncio

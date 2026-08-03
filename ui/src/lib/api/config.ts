@@ -270,6 +270,15 @@ export const REST_ENDPOINTS = {
   runSavedScan: (projectId: number, id: number) =>
     `${API_BASE_URL}/projects/${projectId}/saved-scans/${id}/run`,
 
+  // ─── Documents ─────────────────────────────────────────────────────────────
+  /** GET: list ingested documents for a project. */
+  documents: (projectId: number) => `${API_BASE_URL}/projects/${projectId}/documents`,
+  /** POST (multipart): upload and ingest a .md or .txt document. */
+  uploadDocument: (projectId: number) => `${API_BASE_URL}/projects/${projectId}/documents`,
+  /** DELETE: remove a document by filename. */
+  deleteDocument: (projectId: number, filename: string) =>
+    `${API_BASE_URL}/projects/${projectId}/documents/${encodeURIComponent(filename)}`,
+
   // ─── Argument Profiles ──────────────────────────────────────────────────────
   /** GET: list argument profiles for a project. Query: tool_name?, offset?, limit?. */
   listArgProfiles: (projectId: number) => `${API_BASE_URL}/projects/${projectId}/arg-profiles`,

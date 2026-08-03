@@ -19,6 +19,7 @@ import { ConfigPanel } from './ConfigPanel'
 import { ProjectInfoSection } from './ProjectInfoSection'
 import { RepositorySection } from './RepositorySection'
 import { ToolOverridesSection } from './ToolOverridesSection'
+import { DocumentsSection } from './DocumentsSection'
 import { SectionHeader } from './shared'
 import { NoProjectSelectedState } from '@/components/NoProjectSelectedState'
 import { ConfigMutationErrorModal } from '@/components/ConfigMutationErrorModal'
@@ -149,6 +150,8 @@ export default function Config() {
             </Panel>
           )}
         </div>
+
+        <DocumentsSection projectId={projectId} />
       </div>
 
       <ConfigMutationErrorModal />

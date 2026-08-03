@@ -10,6 +10,7 @@ import type {
   ChatCancelResponse,
   ChatMessage,
   ChatMessageRole,
+  ChatMode,
   ChatSendMessageResponse,
   ChatSession,
   ChatStreamEvent,
@@ -28,6 +29,7 @@ interface ChatSessionApi {
   id: number
   project_id: number
   title: string
+  mode: string
   created_at: string
   last_message_at: string | null
   message_count: number
@@ -94,6 +96,7 @@ export function mapChatSession(api: ChatSessionApi): ChatSession {
     id: api.id,
     projectId: api.project_id,
     title: api.title,
+    mode: (api.mode as ChatMode) ?? 'all',
     createdAt: api.created_at,
     lastMessageAt: api.last_message_at,
     messageCount: api.message_count,
@@ -322,6 +325,7 @@ export function useChatMessages(projectId: number | null, sessionId: number | nu
 
 export interface CreateChatSessionVariables {
   projectId: number
+  mode?: ChatMode
 }
 
 export function useCreateChatSession() {
@@ -329,10 +333,10 @@ export function useCreateChatSession() {
   const setError = useUI(s => s.setChatMutationError)
 
   return useMutation<ChatSession, ApiError, CreateChatSessionVariables>({
-    mutationFn: async ({ projectId }) => {
+    mutationFn: async ({ projectId, mode }) => {
       const data = await apiFetch<ChatSessionApi>(REST_ENDPOINTS.createChatSession(projectId), {
         method: 'POST',
-        body: {},
+        body: { mode: mode ?? 'all' },
       })
       return mapChatSession(data)
     },

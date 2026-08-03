@@ -27,6 +27,7 @@ from web.api.arg_profiles import arg_profiles_v1_router
 from web.api.auth import router as auth_router
 from web.api.chat import v1_router as chat_projects_v1_router
 from web.api.config import router as config_router
+from web.api.documents import v1_router as documents_v1_router
 from web.api.findings import v1_router as findings_v1_router
 from web.api.locks import router as locks_router
 from web.api.platform import platform_v1_router
@@ -121,6 +122,7 @@ def create_app(
 
     app.include_router(auth_router, prefix="/api/v1/auth")
     app.include_router(config_router, prefix="/api/v1/config")
+    app.include_router(documents_v1_router, prefix="/api/v1/projects")
     app.include_router(findings_v1_router, prefix="/api/v1/projects")
     app.include_router(locks_router, prefix="/api/v1/projects")
     app.include_router(projects_v1_router, prefix="/api/v1/projects")

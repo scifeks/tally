@@ -10,6 +10,7 @@ from infrastructure.store.migrations import (
     m0002_service_scoped_overrides,
     m0003_graphql_cop_headers,
     m0004_psalm_stubs,
+    m0005_chat_session_mode,
 )
 from infrastructure.store.migrations._helpers import (
     add_column_if_missing,
@@ -27,6 +28,7 @@ MIGRATIONS: list[ModuleType] = [
     m0002_service_scoped_overrides,
     m0003_graphql_cop_headers,
     m0004_psalm_stubs,
+    m0005_chat_session_mode,
 ]
 
 

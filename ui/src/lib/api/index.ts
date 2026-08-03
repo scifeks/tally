@@ -138,6 +138,10 @@ export {
   useDeleteToolOverride,
 } from './useConfig'
 
+// Document hooks
+export { useDocuments, useUploadDocument, useDeleteDocument } from './useDocuments'
+export type { UploadDocumentVariables, DeleteDocumentVariables } from './useDocuments'
+
 // Saved scans
 export {
   useSavedScans,

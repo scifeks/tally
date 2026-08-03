@@ -63,6 +63,7 @@ def _row_to_summary(
         id=row.id,
         project_id=row.project_id,
         title=row.title,
+        mode=row.mode,
         created_at=row.created_at,
         last_message_at=last_at,
         message_count=count,
@@ -122,7 +123,7 @@ async def create_chat_session(
     body: ChatSessionCreateRequest | None = None,
 ) -> ChatSessionSummary:
     """Create a chat session with auto-generated title."""
-    del body  # accepted for API symmetry; no fields consumed in v1
+    mode = body.mode if body is not None else "all"
     service = _service(request, project_id)
     title = _format_title(datetime.now(UTC))
     try:
@@ -130,6 +131,7 @@ async def create_chat_session(
             service.create_session,
             project_id=project_id,
             title=title,
+            mode=mode,
         )
     except ChatSessionNotFound as exc:
         raise NotFound(str(exc)) from exc

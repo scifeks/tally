@@ -65,8 +65,12 @@ class ChatSessionService:
     def message_repo(self) -> ChatMessageRepositoryPort:
         return self._message_repo
 
-    def create_session(self, *, project_id: int, title: str) -> ChatSessionRow:
-        session_id = self._session_repo.create(project_id=project_id, title=title)
+    def create_session(
+        self, *, project_id: int, title: str, mode: str = "all"
+    ) -> ChatSessionRow:
+        session_id = self._session_repo.create(
+            project_id=project_id, title=title, mode=mode
+        )
         row = self._session_repo.get(session_id)
         if row is None:
             raise ChatSessionNotFound(
@@ -182,6 +186,7 @@ class ChatSessionService:
             session_id=session_id,
             project_id=project_id,
             user_message=content,
+            mode=session.mode,
         )
         task: asyncio.Task[None] = asyncio.create_task(
             self._drive_stream(
@@ -244,6 +249,7 @@ class ChatSessionService:
                 provider=composer.provider,
                 model_name=composer.model_name,
                 event_sink=chat_sink,
+                document_store=composer.document_store,
             )
             try:
                 async for _chunk in gen:

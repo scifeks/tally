@@ -15,6 +15,7 @@ class ChatSessionRow:
     id: int
     project_id: int
     title: str
+    mode: str
     created_at: str
     updated_at: str
     expired_at: str | None

@@ -36,15 +36,18 @@ class _StubSessionRepo:
         self.list_return: tuple[list[ChatSessionRow], int] = ([], 0)
         self.suppress_re_fetch = False
 
-    def create(self, *, project_id: int, title: str) -> int:
+    def create(self, *, project_id: int, title: str, mode: str = "all") -> int:
         new_id = self._next_id
         self._next_id += 1
-        self.create_calls.append({"project_id": project_id, "title": title})
+        self.create_calls.append(
+            {"project_id": project_id, "title": title, "mode": mode}
+        )
         if not self.suppress_re_fetch:
             self.rows[new_id] = ChatSessionRow(
                 id=new_id,
                 project_id=project_id,
                 title=title,
+                mode="all",
                 created_at="2026-05-02T00:00:00Z",
                 updated_at="2026-05-02T00:00:00Z",
                 expired_at=None,
@@ -161,6 +164,7 @@ def _row(
         id=session_id,
         project_id=project_id,
         title="t",
+        mode="all",
         created_at="2026-05-02T00:00:00Z",
         updated_at="2026-05-02T00:00:00Z",
         expired_at=expired,
@@ -174,7 +178,9 @@ class TestChatSessionService:
         row = service.create_session(project_id=7, title="hello")
         assert row.project_id == 7
         assert row.title == "hello"
-        assert session_repo.create_calls == [{"project_id": 7, "title": "hello"}]
+        assert session_repo.create_calls == [
+            {"project_id": 7, "title": "hello", "mode": "all"}
+        ]
 
     def test_create_session_raises_when_re_fetch_returns_none(self) -> None:
         session_repo = _StubSessionRepo()
