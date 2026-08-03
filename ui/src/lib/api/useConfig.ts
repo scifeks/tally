@@ -1,7 +1,7 @@
 /**
- * Config-page hooks. Live-wired to the Phase 9 backend (project info,
- * repository CRUD + auth, tool overrides). Snake-case wire shapes are
- * kept private to this module; consumers see camelCase domain types.
+ * Config-page hooks for project info, repository CRUD + auth, tool
+ * overrides. Snake-case wire shapes are kept private to this module;
+ * consumers see camelCase domain types.
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
@@ -442,6 +442,7 @@ export function useDeleteRepository() {
 }
 
 export function useUpdateRepoAuth() {
+  const queryClient = useQueryClient()
   const setError = useUI(s => s.setConfigMutationError)
 
   return useMutation<
@@ -456,6 +457,11 @@ export function useUpdateRepoAuth() {
       })
     },
     onError: err => setError(toErrorPayload(err)),
+    onSuccess: (_, { projectId }) => {
+      queryClient.invalidateQueries({
+        queryKey: ['repositories', projectId],
+      })
+    },
   })
 }
 
