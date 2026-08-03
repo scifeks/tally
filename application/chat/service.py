@@ -175,6 +175,7 @@ class ChatRequest:
     session_id: int
     project_id: int
     user_message: str
+    user_message_id: int
     mode: str = "all"
 
 
@@ -208,15 +209,12 @@ async def stream_chat(
             f"{session.expired_at!r})"
         )
 
-    prior_turns: list[ChatMessageRow] = message_repo.list_for_session(
-        request.session_id
-    )
-
-    user_message_id = message_repo.append(
-        session_id=request.session_id,
-        role="user",
-        content=request.user_message,
-    )
+    user_message_id = request.user_message_id
+    prior_turns: list[ChatMessageRow] = [
+        t
+        for t in message_repo.list_for_session(request.session_id)
+        if t.id != user_message_id
+    ]
 
     retrieval_context = _retrieve_context(
         query_engine,

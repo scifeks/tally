@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { Send, Square, Plus, Trash2, MessageSquare, Loader2, Lock } from 'lucide-react'
+import { Send, Square, Plus, Trash2, MessageSquare, Loader2, Lock, ArrowDown } from 'lucide-react'
 import { cn, parseIso } from '@/lib/utils'
 import { useUI } from '@/lib/store'
 import {
@@ -17,6 +17,7 @@ import {
 import type { ChatMessage, ChatSession, ChatStreamEvent, ChatMode } from '@/lib/types'
 import { ChatMutationErrorModal } from '@/components/ChatMutationErrorModal'
 import { NoProjectSelectedState } from '@/components/NoProjectSelectedState'
+import { useStickToBottom } from '@/hooks/use-stick-to-bottom'
 
 interface StreamingOverlay {
   assistantContent: string
@@ -218,8 +219,15 @@ export default function Chat() {
   const [streamingOverlay, setStreamingOverlay] = useState<StreamingOverlay | null>(null)
   const appendChatMessageToCache = useAppendChatMessageToCache()
 
-  const messagesEndRef = useRef<HTMLDivElement>(null)
+  const {
+    containerRef: chatLogRef,
+    showJumpButton,
+    scrollToBottom,
+    stickToBottom,
+    handleScroll,
+  } = useStickToBottom<HTMLDivElement>()
   const inputRef = useRef<HTMLTextAreaElement>(null)
+  const sendInFlightRef = useRef(false)
 
   const { data: persistedMessages, isLoading: isLoadingMessages } = useChatMessages(
     activeProjectId,
@@ -270,6 +278,9 @@ export default function Chat() {
             queryClient.invalidateQueries({
               queryKey: ['chat', activeProjectId, 'sessions'],
             })
+            queryClient.invalidateQueries({
+              queryKey: ['chat', activeProjectId, 'messages', activeSessionId],
+            })
           }
           setStreamingOverlay(null)
           break
@@ -307,8 +318,12 @@ export default function Chat() {
   }, [persistedMessages, streamingOverlay, activeSessionId])
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
+    stickToBottom()
+  }, [messages, stickToBottom])
+
+  useEffect(() => {
+    if (streamingOverlay?.status === 'pending') scrollToBottom()
+  }, [streamingOverlay?.status, scrollToBottom])
 
   const handleNewSession = useCallback(
     async (mode: ChatMode = 'findings') => {
@@ -346,10 +361,12 @@ export default function Chat() {
   )
 
   const handleSend = useCallback(async () => {
+    if (sendInFlightRef.current) return
     if (!inputValue.trim()) return
     if (activeProjectId === null || activeSessionId === null) return
     if (isStreaming) return
 
+    sendInFlightRef.current = true
     const content = inputValue.trim()
     const now = new Date().toISOString()
     setInputValue('')
@@ -362,6 +379,7 @@ export default function Chat() {
       })
       .catch(() => null)
     if (result === null) {
+      sendInFlightRef.current = false
       setInputValue(content)
       return
     }
@@ -381,6 +399,7 @@ export default function Chat() {
       assistantTimestamp: new Date().toISOString(),
       status: 'pending',
     })
+    sendInFlightRef.current = false
   }, [
     activeProjectId,
     activeSessionId,
@@ -532,7 +551,11 @@ export default function Chat() {
                     </div>
                   )}
 
-                  <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4">
+                  <div
+                    ref={chatLogRef}
+                    onScroll={handleScroll}
+                    className="flex-1 min-h-0 overflow-y-auto px-4 py-4"
+                  >
                     {isLoadingMessages ? (
                       <div className="flex items-center justify-center h-full">
                         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -553,10 +576,20 @@ export default function Chat() {
                             isLast={idx === messages.length - 1}
                           />
                         ))}
-                        <div ref={messagesEndRef} />
                       </div>
                     )}
                   </div>
+
+                  {showJumpButton && (
+                    <button
+                      type="button"
+                      onClick={scrollToBottom}
+                      aria-label="Scroll to latest"
+                      className="absolute right-4 bottom-4 z-10 inline-flex items-center justify-center w-8 h-8 rounded-full bg-muted border border-border text-accent shadow-lg hover:bg-accent/20 transition-colors"
+                    >
+                      <ArrowDown className="h-4 w-4" />
+                    </button>
+                  )}
                 </div>
               </div>
 

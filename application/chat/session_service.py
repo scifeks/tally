@@ -194,6 +194,7 @@ class ChatSessionService:
             session_id=session_id,
             project_id=project_id,
             user_message=content,
+            user_message_id=user_message_id,
             mode=session.mode,
         )
         task: asyncio.Task[None] = asyncio.create_task(

@@ -157,8 +157,16 @@ async def test_happy_path_streams_tokens_and_persists_assistant_turn(
         ]
     )
     sink = CapturingSink()
+    user_message_id = message_repo.append(
+        session_id=seed_session,
+        role="user",
+        content="What's there?",
+    )
     request = ChatRequest(
-        session_id=seed_session, project_id=42, user_message="What's there?"
+        session_id=seed_session,
+        project_id=42,
+        user_message="What's there?",
+        user_message_id=user_message_id,
     )
 
     gen = await stream_chat(
@@ -207,8 +215,16 @@ async def test_retrieval_called_with_user_message_and_top_n(
             }
         ]
     )
+    user_message_id = message_repo.append(
+        session_id=seed_session,
+        role="user",
+        content="Audit the API",
+    )
     request = ChatRequest(
-        session_id=seed_session, project_id=42, user_message="Audit the API"
+        session_id=seed_session,
+        project_id=42,
+        user_message="Audit the API",
+        user_message_id=user_message_id,
     )
 
     gen = await stream_chat(
@@ -242,7 +258,17 @@ async def test_retrieval_failure_falls_back_to_no_context(
         def search(self, *args: Any, **kwargs: Any) -> list[dict[str, Any]]:
             raise RuntimeError("chroma down")
 
-    request = ChatRequest(session_id=seed_session, project_id=42, user_message="Hi")
+    user_message_id = message_repo.append(
+        session_id=seed_session,
+        role="user",
+        content="Hi",
+    )
+    request = ChatRequest(
+        session_id=seed_session,
+        project_id=42,
+        user_message="Hi",
+        user_message_id=user_message_id,
+    )
     gen = await stream_chat(
         request,
         session_repo=session_repo,
@@ -272,8 +298,16 @@ async def test_prompt_assembly_trims_prior_turns_above_ceiling(
         )
 
     provider = FakeProvider(["ok"])
+    user_message_id = message_repo.append(
+        session_id=seed_session,
+        role="user",
+        content="What now?",
+    )
     request = ChatRequest(
-        session_id=seed_session, project_id=42, user_message="What now?"
+        session_id=seed_session,
+        project_id=42,
+        user_message="What now?",
+        user_message_id=user_message_id,
     )
 
     gen = await stream_chat(
@@ -319,8 +353,16 @@ async def test_prior_turns_passed_to_provider_in_order(
     )
 
     provider = FakeProvider(["ok"])
+    user_message_id = message_repo.append(
+        session_id=seed_session,
+        role="user",
+        content="follow up",
+    )
     request = ChatRequest(
-        session_id=seed_session, project_id=42, user_message="follow up"
+        session_id=seed_session,
+        project_id=42,
+        user_message="follow up",
+        user_message_id=user_message_id,
     )
     gen = await stream_chat(
         request,
@@ -351,7 +393,17 @@ async def test_aclose_after_partial_stream_does_not_persist_assistant(
 ) -> None:
     provider = FakeProvider(["par", "tial", " response"])
     sink = CapturingSink()
-    request = ChatRequest(session_id=seed_session, project_id=42, user_message="go")
+    user_message_id = message_repo.append(
+        session_id=seed_session,
+        role="user",
+        content="go",
+    )
+    request = ChatRequest(
+        session_id=seed_session,
+        project_id=42,
+        user_message="go",
+        user_message_id=user_message_id,
+    )
 
     gen = await stream_chat(
         request,
@@ -382,7 +434,17 @@ async def test_provider_error_does_not_persist_assistant(
 ) -> None:
     provider = FakeProvider(["ok ", "so far"], raise_after=1)
     sink = CapturingSink()
-    request = ChatRequest(session_id=seed_session, project_id=42, user_message="hi")
+    user_message_id = message_repo.append(
+        session_id=seed_session,
+        role="user",
+        content="hi",
+    )
+    request = ChatRequest(
+        session_id=seed_session,
+        project_id=42,
+        user_message="hi",
+        user_message_id=user_message_id,
+    )
 
     gen = await stream_chat(
         request,
@@ -411,7 +473,12 @@ async def test_expired_session_raises_before_persistence(
 ) -> None:
     session_repo.mark_expired([seed_session])
     provider = FakeProvider(["never"])
-    request = ChatRequest(session_id=seed_session, project_id=42, user_message="hi")
+    request = ChatRequest(
+        session_id=seed_session,
+        project_id=42,
+        user_message="hi",
+        user_message_id=0,
+    )
 
     with pytest.raises(ChatSessionExpired):
         await stream_chat(
@@ -433,7 +500,12 @@ async def test_wrong_project_raises_not_found(
     seed_session: int,
 ) -> None:
     provider = FakeProvider(["never"])
-    request = ChatRequest(session_id=seed_session, project_id=999, user_message="hi")
+    request = ChatRequest(
+        session_id=seed_session,
+        project_id=999,
+        user_message="hi",
+        user_message_id=0,
+    )
 
     with pytest.raises(ChatSessionNotFound):
         await stream_chat(
@@ -454,7 +526,12 @@ async def test_unknown_session_raises_not_found(
     message_repo: ChatMessageRepository,
 ) -> None:
     provider = FakeProvider(["never"])
-    request = ChatRequest(session_id=99999, project_id=42, user_message="hi")
+    request = ChatRequest(
+        session_id=99999,
+        project_id=42,
+        user_message="hi",
+        user_message_id=0,
+    )
 
     with pytest.raises(ChatSessionNotFound):
         await stream_chat(
@@ -487,7 +564,17 @@ async def test_session_touched_on_completion(
         )
 
     provider = FakeProvider(["done"])
-    request = ChatRequest(session_id=seed_session, project_id=42, user_message="ping")
+    user_message_id = message_repo.append(
+        session_id=seed_session,
+        role="user",
+        content="ping",
+    )
+    request = ChatRequest(
+        session_id=seed_session,
+        project_id=42,
+        user_message="ping",
+        user_message_id=user_message_id,
+    )
     gen = await stream_chat(
         request,
         session_repo=session_repo,
