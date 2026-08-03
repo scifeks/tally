@@ -484,6 +484,7 @@ export function useAppendChatMessageToCache() {
       { queryKey: ['chat', projectId, 'messages', sessionId] },
       old => {
         if (!old || old.pages.length === 0) return old
+        if (old.pages.some(p => p.items.some(m => m.id === msg.id))) return old
         const lastIdx = old.pages.length - 1
         const last = old.pages[lastIdx]
         const pages = [...old.pages]
