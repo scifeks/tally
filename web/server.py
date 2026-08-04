@@ -19,6 +19,7 @@ from application.runtime import build_runtime_dependency_probes
 from application.runtime.dependency_service import RuntimeDependencyService
 from application.tools.registry import ToolRegistry
 from application.triage.readiness import compute_triage_readiness
+from core.config import ConfigManager
 from infrastructure.events.bus import EventBus
 from infrastructure.system.installed_tools_probe import InstalledToolsProbe
 from web.api._errors import install_error_handlers
@@ -111,9 +112,16 @@ def create_app(
         build_runtime_dependency_probes(base_path=base_path)
     )
 
+    try:
+        cfg = ConfigManager(base_path).global_config
+        claude_api_key = cfg.claude.api_key if cfg.claude else ""
+    except (FileNotFoundError, PermissionError):
+        claude_api_key = ""
+
     triage_readiness = compute_triage_readiness(
         base_path=base_path,
         docker_available=app.state.runtime_dependency_service.is_installed("docker"),
+        claude_api_key=claude_api_key,
     )
     app.state.capabilities_service = CapabilitiesService(
         base_path=base_path,

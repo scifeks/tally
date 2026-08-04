@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import TYPE_CHECKING, Protocol
 
 if TYPE_CHECKING:
@@ -9,6 +10,9 @@ if TYPE_CHECKING:
 
 
 class ProjectRegistryRepositoryPort(Protocol):
+    @property
+    def db_path(self) -> Path: ...
+
     def ping(self) -> None: ...
     def init_schema(self) -> None: ...
     def list_active(self) -> list[ProjectRow]: ...

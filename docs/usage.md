@@ -765,3 +765,71 @@ Each repo in the project becomes its own DefectDojo Product, named
 are configured in `config/global.json`. See
 [docs/integrations/defect-dojo.md](integrations/defect-dojo.md) for
 full setup instructions and entity mapping details.
+
+---
+
+## MCP Token Management
+
+Generate bearer tokens for MCP triage server authentication. Tokens are required when configuring external clients (like Claude Code) to connect to the `tally mcp serve` endpoint.
+
+### Creating a Token
+
+```
+[acme-audit]> mcp token create ci-agent
+```
+
+Tally generates a new token and displays it once:
+
+```
+MCP token created: tly_abc123xyz789...
+Token name: ci-agent
+Warning: Copy this token now. It will not be shown again.
+```
+
+Save the token in a secure location (environment variable, secrets manager, etc.). Tally stores only the token hash in the project database, never the plaintext.
+
+### Listing Tokens
+
+```
+[acme-audit]> mcp token list
+```
+
+View all registered tokens for the active project:
+
+```
+Name        Created
+ci-agent    2024-01-15T10:30:00Z
+automation  2024-01-10T14:22:15Z
+```
+
+### Revoking a Token
+
+```
+[acme-audit]> mcp token revoke ci-agent
+```
+
+Tally asks for confirmation before deletion:
+
+```
+Revoke token 'ci-agent'? [y/N]: y
+Token 'ci-agent' revoked.
+```
+
+Revoked tokens cannot be reactivated. Generate a new token if needed.
+
+### REPL Session Example
+
+```
+[myproject]> mcp token create ci-agent
+MCP token created: tly_abc123...xyz
+Token name: ci-agent
+Warning: Copy this token now. It will not be shown again.
+
+[myproject]> mcp token list
+Name        Created
+ci-agent    2024-01-15T10:30:00Z
+
+[myproject]> mcp token revoke ci-agent
+Revoke token 'ci-agent'? [y/N]: y
+Token 'ci-agent' revoked.
+```

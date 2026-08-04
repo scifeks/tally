@@ -72,6 +72,7 @@ def _dispatch(
     from application.cli.commands.integration_sync import (
         cmd_integration_sync,
     )
+    from application.cli.commands.mcp import cmd_mcp_serve
     from application.cli.commands.project import (
         cmd_project_create,
         cmd_project_list,
@@ -102,6 +103,7 @@ def _dispatch(
         "stats": cmd_stats,
         "integration-sync": cmd_integration_sync,
         "ui": cmd_ui,
+        "mcp": cmd_mcp_serve,
         "project-create": cmd_project_create,
         "project-list": cmd_project_list,
         "repo-add": cmd_repo_add,
@@ -126,6 +128,7 @@ def main() -> int:
         "repo-list",
         "repo-edit",
         "repo-delete",
+        "mcp",
     }
 
     parser = build_parser()
@@ -168,7 +171,12 @@ def main() -> int:
             run_repo_factory=lambda p: RunRepository(ConnectionFactory(p)),
         ).run()
 
-    needs_project = args.command not in ("ui", "project-create", "project-list")
+    needs_project = args.command not in (
+        "ui",
+        "mcp",
+        "project-create",
+        "project-list",
+    )
     is_rebuild = args.command == "triage" and getattr(args, "rebuild_container", False)
     if needs_project and not is_rebuild:
         if not args.project:

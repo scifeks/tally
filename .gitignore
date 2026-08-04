@@ -57,6 +57,7 @@ MagicMock
 
 #Roadmap and arch decisions
 /docs/roadmap
+/docs/decisions/
 /docs/superpowers/
 
 #Claude MCP stuff
@@ -79,7 +80,3 @@ tally.db*
 
 #Worktrees
 .worktrees/
-TAL-166 — Web UI buttons lack mouse hover state
-TAL-168 — Web UI containers missing padding across multiple pages
-TAL-169 — No success/failure feedback when updating project info
-TAL-170 — Buttons lack distinct enabled vs disabled visual states

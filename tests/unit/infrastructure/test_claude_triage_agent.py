@@ -1,6 +1,6 @@
 """Unit tests for ClaudeTriageAgent.
 
-Pin the argv shape, stdin piping, JSON wrapper parsing, session prep,
+Pin the argv shape, stdin piping, text output parsing, session prep,
 and error translation of the one-shot Claude Code adapter running
 inside a Docker container. ``subprocess.run`` is patched throughout.
 """
@@ -49,25 +49,10 @@ def _valid_verdict(**overrides: object) -> dict:
     return base
 
 
-def _claude_wrapper(
-    verdict_text: str,
-    *,
-    is_error: bool = False,
-) -> str:
-    return json.dumps(
-        {
-            "type": "result",
-            "subtype": "error" if is_error else "success",
-            "is_error": is_error,
-            "result": verdict_text,
-        }
-    )
-
-
 def _ok_completed(verdict_text: str) -> MagicMock:
     completed = MagicMock()
     completed.returncode = 0
-    completed.stdout = _claude_wrapper(verdict_text)
+    completed.stdout = verdict_text
     completed.stderr = ""
     return completed
 
@@ -161,7 +146,7 @@ def test_claude_binary_after_service_name(
     assert "claude" in cmd
 
 
-def test_print_and_json_flags(tmp_path: Path) -> None:
+def test_print_and_text_flags(tmp_path: Path) -> None:
     agent = _agent()
     with patch("subprocess.run", return_value=_happy_completed()) as m:
         agent.run_triage(
@@ -173,7 +158,7 @@ def test_print_and_json_flags(tmp_path: Path) -> None:
     cmd = m.call_args[0][0]
     assert "--print" in cmd
     assert "--output-format" in cmd
-    assert "json" in cmd
+    assert "text" in cmd
 
 
 def test_tools_restricted_to_read_only(
@@ -347,76 +332,6 @@ def test_empty_stdout_raises(tmp_path: Path) -> None:
     agent = _agent()
     with patch("subprocess.run", return_value=completed):
         with pytest.raises(VerdictParseError, match="empty stdout"):
-            agent.run_triage(
-                "prompt",
-                finding_id=_FINDING_ID,
-                timeout_seconds=60,
-                cwd=tmp_path,
-            )
-
-
-def test_malformed_wrapper_json_raises(
-    tmp_path: Path,
-) -> None:
-    completed = MagicMock()
-    completed.returncode = 0
-    completed.stdout = "not json at all"
-    completed.stderr = ""
-    agent = _agent()
-    with patch("subprocess.run", return_value=completed):
-        with pytest.raises(VerdictParseError, match="not valid JSON"):
-            agent.run_triage(
-                "prompt",
-                finding_id=_FINDING_ID,
-                timeout_seconds=60,
-                cwd=tmp_path,
-            )
-
-
-def test_wrapper_not_a_dict_raises(
-    tmp_path: Path,
-) -> None:
-    completed = MagicMock()
-    completed.returncode = 0
-    completed.stdout = json.dumps([1, 2, 3])
-    completed.stderr = ""
-    agent = _agent()
-    with patch("subprocess.run", return_value=completed):
-        with pytest.raises(VerdictParseError, match="not an object"):
-            agent.run_triage(
-                "prompt",
-                finding_id=_FINDING_ID,
-                timeout_seconds=60,
-                cwd=tmp_path,
-            )
-
-
-def test_wrapper_is_error_raises(tmp_path: Path) -> None:
-    completed = MagicMock()
-    completed.returncode = 0
-    completed.stdout = _claude_wrapper("oops", is_error=True)
-    completed.stderr = ""
-    agent = _agent()
-    with patch("subprocess.run", return_value=completed):
-        with pytest.raises(VerdictParseError, match="reported an error"):
-            agent.run_triage(
-                "prompt",
-                finding_id=_FINDING_ID,
-                timeout_seconds=60,
-                cwd=tmp_path,
-            )
-
-
-def test_wrapper_missing_result_field_raises(
-    tmp_path: Path,
-) -> None:
-    completed = MagicMock()
-    completed.returncode = 0
-    completed.stdout = json.dumps({"type": "result", "is_error": False})
-    completed.stderr = ""
-    agent = _agent()
-    with patch("subprocess.run", return_value=completed):
-        with pytest.raises(VerdictParseError, match="missing 'result'"):
             agent.run_triage(
                 "prompt",
                 finding_id=_FINDING_ID,

@@ -100,7 +100,8 @@ class TriageRunner:
         tool_registry: ToolRegistry,
         finding_repo: FindingRepositoryPort | None = None,
         repo_paths: dict[str, Path] | None = None,
-        triaged_by: str = "claudecode",
+        triage_provider: str,
+        triaged_by: str = "auto_triage",
         debug: bool = False,
         max_findings_per_batch: int = 4,
     ) -> None:
@@ -120,6 +121,7 @@ class TriageRunner:
         self._tool_registry = tool_registry
         self._finding_repo = finding_repo
         self._repo_paths: dict[str, Path] = repo_paths or {}
+        self._triage_provider = triage_provider
         self._triaged_by = triaged_by
         self._debug = debug
         self._max_findings_per_batch = max_findings_per_batch
@@ -576,6 +578,7 @@ class TriageRunner:
                 user_interaction=verdict.user_interaction,
             ),
             strategy=segment,
+            triage_provider=self._triage_provider,
             triaged_by=self._triaged_by,
             source="auto_triage",
         )

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import subprocess
 from contextlib import contextmanager
 from pathlib import Path
@@ -50,7 +49,7 @@ class ClaudeTriageAgent:
                 "claude",
                 "--print",
                 "--output-format",
-                "json",
+                "text",
                 "--dangerously-skip-permissions",
                 "--model",
                 self._model,
@@ -87,27 +86,4 @@ class ClaudeTriageAgent:
     def _extract_result(self, stdout: str) -> str:
         if not stdout.strip():
             raise VerdictParseError("empty stdout from claude")
-
-        try:
-            wrapper = json.loads(stdout)
-        except json.JSONDecodeError as exc:
-            raise VerdictParseError(f"claude output is not valid JSON: {exc}") from exc
-
-        if not isinstance(wrapper, dict):
-            raise VerdictParseError(
-                f"claude output is not an object: {type(wrapper).__name__}"
-            )
-
-        if wrapper.get("is_error"):
-            raise VerdictParseError(
-                f"claude reported an error: {wrapper.get('result', 'unknown')}"
-            )
-
-        result = wrapper.get("result")
-        if not isinstance(result, str):
-            raise VerdictParseError(
-                f"claude wrapper missing 'result' string field; "
-                f"keys={list(wrapper.keys())}"
-            )
-
-        return result
+        return stdout.strip()

@@ -170,7 +170,8 @@ def _make_runner(
         tool_registry=MagicMock(),
         finding_repo=fr,
         repo_paths={},
-        triaged_by="claudecode",
+        triage_provider="anthropic",
+        triaged_by="auto_triage",
         event_sink=event_sink,
         cancel_token=cancel_token,
     )

@@ -119,7 +119,8 @@ def _make_runner(
         tool_registry=MagicMock(),
         finding_repo=fr,
         repo_paths=repo_paths or {},
-        triaged_by="claudecode",
+        triage_provider="anthropic",
+        triaged_by="auto_triage",
     )
     return runner, store, triage_backend  # type: ignore[return-value]
 
@@ -343,7 +344,8 @@ def test_run_batch_findings_writes_verdict_fields(
             "call_stack": '["main.py:10", "db.py:5"]',
         },
         strategy="sast",
-        triaged_by="claudecode",
+        triage_provider="anthropic",
+        triaged_by="auto_triage",
         source="auto_triage",
     )
 

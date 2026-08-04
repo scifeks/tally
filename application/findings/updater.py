@@ -61,7 +61,7 @@ class FindingUpdateService:
         finding_repo: FindingRepositoryPort,
         audit_repo: AuditRepositoryPort,
         config_manager: ConfigManager | None = None,
-        triaged_by: str = "claudecode",
+        triaged_by: str = "manual",
         repo_factory: Callable[[str | Path, str], list[Repository]] | None = None,
     ) -> None:
         self._finding_repo = finding_repo
@@ -187,6 +187,7 @@ class FindingUpdateService:
                     call_stack=call_stack,
                 ),
                 strategy=strategy,
+                triage_provider=None,
                 triaged_by=self._triaged_by,
                 source="auto_triage",
             )

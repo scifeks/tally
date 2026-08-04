@@ -93,6 +93,8 @@ def _make_runner(
         triage_backend=triage_backend,
         session_timeout_seconds=300,
         finding_repo=MagicMock(),
+        triage_provider="anthropic",
+        triaged_by="auto_triage",
     )
     return runner, sink, triage_repo
 

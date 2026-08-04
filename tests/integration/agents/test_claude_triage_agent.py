@@ -36,26 +36,22 @@ def _make_agent() -> ClaudeTriageAgent:
 
 
 def _ok_verdict(finding_id: int = 1) -> MagicMock:
-    verdict = {
-        "result": json.dumps(
-            {
-                "finding_id": finding_id,
-                "confidence": "confirmed",
-                "finding_type": "vulnerability",
-                "severity": "high",
-                "reasoning": "test",
-                "remediation": "fix",
-                "attack_vector": "network",
-                "access_required": "none",
-                "exploitation_complexity": "low",
-                "user_interaction": "none",
-                "call_stack": [],
-            }
-        )
+    verdict_obj = {
+        "finding_id": finding_id,
+        "confidence": "confirmed",
+        "finding_type": "vulnerability",
+        "severity": "high",
+        "reasoning": "test",
+        "remediation": "fix",
+        "attack_vector": "network",
+        "access_required": "none",
+        "exploitation_complexity": "low",
+        "user_interaction": "none",
+        "call_stack": [],
     }
     completed = MagicMock()
     completed.returncode = 0
-    completed.stdout = json.dumps(verdict)
+    completed.stdout = json.dumps(verdict_obj)
     completed.stderr = ""
     return completed
 

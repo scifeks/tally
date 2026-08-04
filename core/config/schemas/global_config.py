@@ -102,6 +102,9 @@ class GlobalConfig(BaseModel):
     web_ui_vite_port: int = Field(default=3000)
     web_ui_allowed_origins: list[str] | None = None
 
+    # MCP server
+    mcp_port: int = Field(default=8765)
+
     @field_validator("blind_xss_callback_url")
     @classmethod
     def _validate_xss_callback_url(cls, v: str) -> str:
