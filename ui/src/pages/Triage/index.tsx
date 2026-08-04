@@ -365,204 +365,207 @@ export default function Triage() {
   }
 
   return (
-    <div className="h-full flex flex-col min-h-0 p-4 gap-4">
-      <TriageMutationErrorModal />
-      <TriagePromptInjectionWarningModal
-        open={showInjectionWarning}
-        onAccept={handleAcceptInjectionWarning}
-        onCancel={handleCancelInjectionWarning}
-      />
+    <div className="h-full overflow-y-auto">
+      <div className="min-h-full flex flex-col p-4 gap-4">
+        <TriageMutationErrorModal />
+        <TriagePromptInjectionWarningModal
+          open={showInjectionWarning}
+          onAccept={handleAcceptInjectionWarning}
+          onCancel={handleCancelInjectionWarning}
+        />
 
-      {/* Header: graphic + controls + stats */}
-      <div className="flex items-start gap-6 shrink-0">
-        <NeuralGrid active={isRunning} progress={progress} size={180} />
+        {/* Header: graphic + controls + stats */}
+        <div className="flex items-start gap-6">
+          <NeuralGrid active={isRunning} progress={progress} size={180} />
 
-        <div className="flex-1 flex flex-col gap-4">
-          {/* Project line */}
-          <div className="flex items-center gap-4">
-            <span className="text-[10px] uppercase tracking-[0.25em] text-muted-foreground">
-              <span className="text-accent">[</span> PROJECT <span className="text-accent">]</span>
-            </span>
-            <span className="text-sm text-primary font-bold">
-              {project?.code} / {project?.name}
-            </span>
-            <span className="text-xs text-dim">{eligibleCount} findings eligible</span>
-          </div>
-
-          {/* Status */}
-          <div className="flex items-center gap-4">
-            <span className="text-[10px] uppercase tracking-[0.25em] text-muted-foreground">
-              <span className="text-accent">[</span> STATUS <span className="text-accent">]</span>
-            </span>
-            <span className={statusClass}>{statusLabel === 'idle' ? 'ready' : statusLabel}</span>
-            {isRunning && (
-              <>
-                <span className="text-xs text-muted-foreground tabular-nums">
-                  elapsed: {formatElapsed(elapsedSec)}
-                </span>
-                <span className="text-xs text-accent tabular-nums">{progress}%</span>
-              </>
-            )}
-          </div>
-
-          {/* Progress bar */}
-          {currentRun !== null && (
-            <div className="h-2 bg-muted border border-border w-full max-w-md">
-              <div
-                className="h-full bg-accent transition-all duration-300"
-                style={{ width: `${progress}%` }}
-              />
+          <div className="flex-1 flex flex-col gap-4">
+            {/* Project line */}
+            <div className="flex items-center gap-4">
+              <span className="text-[10px] uppercase tracking-[0.25em] text-muted-foreground">
+                <span className="text-accent">[</span> PROJECT{' '}
+                <span className="text-accent">]</span>
+              </span>
+              <span className="text-sm text-primary font-bold">
+                {project?.code} / {project?.name}
+              </span>
+              <span className="text-xs text-dim">{eligibleCount} findings eligible</span>
             </div>
-          )}
 
-          {/* Claude-missing gate */}
-          {claudeMissing && !isRunning && (
-            <div className="flex items-start gap-2 border border-crit bg-crit/5 px-3 py-2 max-w-2xl">
-              <AlertTriangle className="h-4 w-4 text-crit mt-0.5 shrink-0" />
-              <div className="text-xs text-foreground leading-relaxed">
-                <span className="text-crit font-bold">Claude CLI not installed.</span> Start Triage
-                requires the <span className="text-primary">claude</span> binary on PATH.{' '}
-                {claudeDep?.installHint ?? ''}
-              </div>
-            </div>
-          )}
-
-          {/* Resume note (shown above the button when we just observed a
-              failure that left batches in a resumable state) */}
-          {showResumeAffordance && (
-            <div className="text-xs text-high" data-testid="triage-resume-note">
-              last run failed at finding #{resume.failedAtFindingId ?? '?'} - {resume.error}
-            </div>
-          )}
-
-          {/* Buttons */}
-          <div className="flex items-center gap-3">
-            {!isRunning && showResumeAffordance && (
-              <button
-                onClick={handleResumeClick}
-                disabled={startDisabled}
-                data-testid="triage-resume-button"
-                className={cn(
-                  'flex items-center gap-2 px-4 h-9 font-bold text-xs uppercase tracking-wider transition-colors',
-                  startDisabled
-                    ? 'bg-muted text-dim cursor-not-allowed'
-                    : 'bg-high text-background hover:bg-high/70'
-                )}
-              >
-                <Brain className="h-4 w-4" />
-                Resume
-              </button>
-            )}
-            {!isRunning && !showResumeAffordance && (
-              <button
-                onClick={handleStartClick}
-                disabled={startDisabled}
-                data-testid="triage-start-button"
-                className={cn(
-                  'flex items-center gap-2 px-4 h-9 font-bold text-xs uppercase tracking-wider transition-colors',
-                  startDisabled
-                    ? 'bg-muted text-dim cursor-not-allowed'
-                    : 'bg-accent text-background hover:bg-accent/70'
-                )}
-              >
-                <Brain className="h-4 w-4" />
-                Start Triage
-              </button>
-            )}
-            {isRunning && (
-              <button
-                onClick={handleStop}
-                disabled={stopDisabled}
-                data-testid="triage-stop-button"
-                className="flex items-center gap-2 px-4 h-9 border border-crit text-crit font-bold text-xs uppercase tracking-wider hover:bg-crit/15 hover:shadow-[0_0_10px_rgba(255,77,77,0.2)] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <Square className="h-4 w-4" />
-                Stop
-              </button>
-            )}
-            {showResetButton && (
-              <button
-                onClick={handleReset}
-                className="flex items-center gap-2 px-4 h-9 border border-border text-muted-foreground font-bold text-xs uppercase tracking-wider hover:border-primary/50 hover:text-foreground transition-colors"
-              >
-                <RotateCcw className="h-4 w-4" />
-                Reset
-              </button>
-            )}
-          </div>
-
-          {/* Summary stats */}
-          {currentRun !== null && (
-            <div className="flex items-center gap-6 text-xs">
-              <div className="flex items-center gap-2">
-                <span className="text-muted-foreground uppercase tracking-wider">Batches:</span>
-                <span className="text-primary tabular-nums font-bold">
-                  {completedBatches}/{batchList.length}
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-muted-foreground uppercase tracking-wider">Processed:</span>
-                <span className="text-accent tabular-nums font-bold">
-                  {totalProcessed}/{totalFindings}
-                </span>
-              </div>
-              {failedBatches > 0 && (
-                <div className="flex items-center gap-2">
-                  <span className="text-muted-foreground uppercase tracking-wider">Failed:</span>
-                  <span className="text-crit tabular-nums font-bold">{failedBatches}</span>
-                </div>
+            {/* Status */}
+            <div className="flex items-center gap-4">
+              <span className="text-[10px] uppercase tracking-[0.25em] text-muted-foreground">
+                <span className="text-accent">[</span> STATUS <span className="text-accent">]</span>
+              </span>
+              <span className={statusClass}>{statusLabel === 'idle' ? 'ready' : statusLabel}</span>
+              {isRunning && (
+                <>
+                  <span className="text-xs text-muted-foreground tabular-nums">
+                    elapsed: {formatElapsed(elapsedSec)}
+                  </span>
+                  <span className="text-xs text-accent tabular-nums">{progress}%</span>
+                </>
               )}
             </div>
-          )}
-        </div>
-      </div>
 
-      {/* Main content: batches + log */}
-      <div className="flex-1 min-h-0 grid grid-cols-2 gap-4">
-        {/* Batches panel */}
-        <Panel title="batches" className="min-h-0" bodyClassName="overflow-auto">
-          {batchList.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full gap-3 text-muted-foreground p-4">
-              <Brain className="h-10 w-10 text-dim" />
-              <div className="text-sm text-center">
-                {eligibleCount === 0
-                  ? 'No findings eligible for triage.'
-                  : 'Press Start Triage to begin AI analysis.'}
-              </div>
-            </div>
-          ) : (
-            <div className="divide-y divide-border">
-              {batchList.map(batch => (
-                <BatchRow
-                  key={batch.id}
-                  batch={batch}
-                  expanded={expandedBatches.has(batch.id)}
-                  onToggle={() => toggleBatch(batch.id)}
+            {/* Progress bar */}
+            {currentRun !== null && (
+              <div className="h-2 bg-muted border border-border w-full max-w-md">
+                <div
+                  className="h-full bg-accent transition-all duration-300"
+                  style={{ width: `${progress}%` }}
                 />
-              ))}
-            </div>
-          )}
-        </Panel>
+              </div>
+            )}
 
-        {/* Log panel */}
-        <Panel
-          title="triage log"
-          className="min-h-0"
-          bodyClassName="overflow-auto bg-background font-mono"
-        >
-          {logs.length === 0 ? (
-            <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
-              Waiting for triage to start...
+            {/* Claude-missing gate */}
+            {claudeMissing && !isRunning && (
+              <div className="flex items-start gap-2 border border-crit bg-crit/5 px-3 py-2 max-w-2xl">
+                <AlertTriangle className="h-4 w-4 text-crit mt-0.5 shrink-0" />
+                <div className="text-xs text-foreground leading-relaxed">
+                  <span className="text-crit font-bold">Claude CLI not installed.</span> Start
+                  Triage requires the <span className="text-primary">claude</span> binary on PATH.{' '}
+                  {claudeDep?.installHint ?? ''}
+                </div>
+              </div>
+            )}
+
+            {/* Resume note (shown above the button when we just observed a
+              failure that left batches in a resumable state) */}
+            {showResumeAffordance && (
+              <div className="text-xs text-high" data-testid="triage-resume-note">
+                last run failed at finding #{resume.failedAtFindingId ?? '?'} - {resume.error}
+              </div>
+            )}
+
+            {/* Buttons */}
+            <div className="flex items-center gap-3">
+              {!isRunning && showResumeAffordance && (
+                <button
+                  onClick={handleResumeClick}
+                  disabled={startDisabled}
+                  data-testid="triage-resume-button"
+                  className={cn(
+                    'flex items-center gap-2 px-4 h-9 font-bold text-xs uppercase tracking-wider transition-colors',
+                    startDisabled
+                      ? 'bg-muted text-dim cursor-not-allowed'
+                      : 'bg-high text-background hover:bg-high/70'
+                  )}
+                >
+                  <Brain className="h-4 w-4" />
+                  Resume
+                </button>
+              )}
+              {!isRunning && !showResumeAffordance && (
+                <button
+                  onClick={handleStartClick}
+                  disabled={startDisabled}
+                  data-testid="triage-start-button"
+                  className={cn(
+                    'flex items-center gap-2 px-4 h-9 font-bold text-xs uppercase tracking-wider transition-colors',
+                    startDisabled
+                      ? 'bg-muted text-dim cursor-not-allowed'
+                      : 'bg-accent text-background hover:bg-accent/70'
+                  )}
+                >
+                  <Brain className="h-4 w-4" />
+                  Start Triage
+                </button>
+              )}
+              {isRunning && (
+                <button
+                  onClick={handleStop}
+                  disabled={stopDisabled}
+                  data-testid="triage-stop-button"
+                  className="flex items-center gap-2 px-4 h-9 border border-crit text-crit font-bold text-xs uppercase tracking-wider hover:bg-crit/15 hover:shadow-[0_0_10px_rgba(255,77,77,0.2)] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Square className="h-4 w-4" />
+                  Stop
+                </button>
+              )}
+              {showResetButton && (
+                <button
+                  onClick={handleReset}
+                  className="flex items-center gap-2 px-4 h-9 border border-border text-muted-foreground font-bold text-xs uppercase tracking-wider hover:border-primary/50 hover:text-foreground transition-colors"
+                >
+                  <RotateCcw className="h-4 w-4" />
+                  Reset
+                </button>
+              )}
             </div>
-          ) : (
-            <>
-              {logs.map(event => (
-                <LogRow key={event.id} event={event} />
-              ))}
-              <div ref={logEndRef} />
-            </>
-          )}
-        </Panel>
+
+            {/* Summary stats */}
+            {currentRun !== null && (
+              <div className="flex items-center gap-6 text-xs">
+                <div className="flex items-center gap-2">
+                  <span className="text-muted-foreground uppercase tracking-wider">Batches:</span>
+                  <span className="text-primary tabular-nums font-bold">
+                    {completedBatches}/{batchList.length}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-muted-foreground uppercase tracking-wider">Processed:</span>
+                  <span className="text-accent tabular-nums font-bold">
+                    {totalProcessed}/{totalFindings}
+                  </span>
+                </div>
+                {failedBatches > 0 && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-muted-foreground uppercase tracking-wider">Failed:</span>
+                    <span className="text-crit tabular-nums font-bold">{failedBatches}</span>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Main content: batches + log */}
+        <div className="flex-1 min-h-64 grid grid-cols-2 gap-4">
+          {/* Batches panel */}
+          <Panel title="batches" className="min-h-0" bodyClassName="overflow-auto">
+            {batchList.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-full gap-3 text-muted-foreground p-4">
+                <Brain className="h-10 w-10 text-dim" />
+                <div className="text-sm text-center">
+                  {eligibleCount === 0
+                    ? 'No findings eligible for triage.'
+                    : 'Press Start Triage to begin AI analysis.'}
+                </div>
+              </div>
+            ) : (
+              <div className="divide-y divide-border">
+                {batchList.map(batch => (
+                  <BatchRow
+                    key={batch.id}
+                    batch={batch}
+                    expanded={expandedBatches.has(batch.id)}
+                    onToggle={() => toggleBatch(batch.id)}
+                  />
+                ))}
+              </div>
+            )}
+          </Panel>
+
+          {/* Log panel */}
+          <Panel
+            title="triage log"
+            className="min-h-0"
+            bodyClassName="overflow-auto bg-background font-mono"
+          >
+            {logs.length === 0 ? (
+              <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
+                Waiting for triage to start...
+              </div>
+            ) : (
+              <>
+                {logs.map(event => (
+                  <LogRow key={event.id} event={event} />
+                ))}
+                <div ref={logEndRef} />
+              </>
+            )}
+          </Panel>
+        </div>
       </div>
     </div>
   )

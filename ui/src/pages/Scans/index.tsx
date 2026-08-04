@@ -956,7 +956,7 @@ export default function Scans() {
       {activeTab === 'live' && (
         <Panel
           title="scan log"
-          className="flex-1 min-h-[400px]"
+          className="flex-1 min-h-64"
           bodyClassName="overflow-auto bg-background"
         >
           {logs.length === 0 && runStatus === 'idle' ? (
@@ -995,7 +995,7 @@ export default function Scans() {
       )}
 
       {activeTab === 'history' && (
-        <Panel title="scan history" className="flex-1 min-h-[400px]" bodyClassName="flex flex-col">
+        <Panel title="scan history" className="flex-1 min-h-64" bodyClassName="flex flex-col">
           <HistoryTable projectId={projectIdNum} />
         </Panel>
       )}
