@@ -36,6 +36,12 @@ class TestTriagePostSync:
 
         with (
             patch(
+                "application.triage.container.ensure_triage_image",
+            ),
+            patch(
+                "application.triage.container.ensure_triage_containers",
+            ),
+            patch(
                 "application.triage.triage_service.run_triage_for_project",
                 return_value={"success": 5},
             ),
@@ -76,6 +82,12 @@ class TestTriagePostSync:
 
         with (
             patch(
+                "application.triage.container.ensure_triage_image",
+            ),
+            patch(
+                "application.triage.container.ensure_triage_containers",
+            ),
+            patch(
                 "application.triage.triage_service.run_triage_for_project",
                 return_value={"success": 5},
             ),
@@ -115,6 +127,12 @@ class TestTriagePostSync:
         gc = _make_global_config(post_triage_sync=["defectdojo"])
 
         with (
+            patch(
+                "application.triage.container.ensure_triage_image",
+            ),
+            patch(
+                "application.triage.container.ensure_triage_containers",
+            ),
             patch(
                 "application.triage.triage_service.run_triage_for_project",
                 return_value={"success": 5},

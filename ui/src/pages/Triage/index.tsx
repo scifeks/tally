@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { Square, RotateCcw, Brain, AlertTriangle } from 'lucide-react'
 import { cn, toEpoch } from '@/lib/utils'
 import { Panel } from '@/components/tty'
@@ -63,6 +64,7 @@ export default function Triage() {
   const setTriageRunStatus = useUI(s => s.setTriageRunStatus)
   const triageInjectionAcked = useUI(s => s.triageInjectionAcked)
   const projectIdNum = activeProjectId ?? 0
+  const queryClient = useQueryClient()
 
   const { data: projects = [] } = useProjects()
   const project = projects.find(p => p.id === activeProjectId)
@@ -173,66 +175,71 @@ export default function Triage() {
     setBatches(next)
   }, [])
 
-  const handleEvent = useCallback((event: TriageLogEvent) => {
-    // batch_progress is high-frequency; only the latest value matters so
-    // it never goes into the log array. The summary endpoint already
-    // exposes the run-level processed/total fields the page reads.
-    if (event.type === 'batch_progress') return
+  const handleEvent = useCallback(
+    (event: TriageLogEvent) => {
+      // batch_progress is high-frequency; only the latest value matters so
+      // it never goes into the log array. The summary endpoint already
+      // exposes the run-level processed/total fields the page reads.
+      if (event.type === 'batch_progress') return
 
-    setLogs(prev => [...prev, event])
+      setLogs(prev => [...prev, event])
 
-    if (event.type === 'triage_failed') {
-      setResume({
-        scanRunId: event.scanRunId,
-        error: event.error ?? 'triage failed',
-        failedAtFindingId: event.failedAtFindingId ?? null,
-      })
-      return
-    }
-
-    if (event.type === 'run_completed' || event.type === 'run_cancelled') {
-      setResume(null)
-      return
-    }
-
-    // Lifecycle events update the batches map in place.
-    if (event.batchId === undefined) return
-    const batchId = event.batchId
-    setBatches(prev => {
-      const next = new Map(prev)
-      const existing = next.get(batchId)
-      if (event.type === 'batch_created') {
-        next.set(batchId, {
-          id: batchId,
-          segment: event.segment ?? null,
-          findingCount: event.findingsCount ?? 0,
-          status: 'pending',
-          attempt: 1,
+      if (event.type === 'triage_failed') {
+        setResume({
+          scanRunId: event.scanRunId,
+          error: event.error ?? 'triage failed',
+          failedAtFindingId: event.failedAtFindingId ?? null,
         })
-      } else if (event.type === 'batch_started' && existing) {
-        next.set(batchId, {
-          ...existing,
-          status: 'in_progress',
-          startedAt: event.timestamp,
-        })
-      } else if (event.type === 'batch_completed' && existing) {
-        next.set(batchId, {
-          ...existing,
-          status: 'completed',
-          finishedAt: event.timestamp,
-        })
-      } else if (event.type === 'batch_failed' && existing) {
-        next.set(batchId, { ...existing, status: 'failed' })
-      } else if (event.type === 'batch_retry' && existing) {
-        next.set(batchId, {
-          ...existing,
-          status: 'in_progress',
-          attempt: event.attempt ?? existing.attempt + 1,
-        })
+        queryClient.invalidateQueries({ queryKey: ['triage', projectIdNum] })
+        return
       }
-      return next
-    })
-  }, [])
+
+      if (event.type === 'run_completed' || event.type === 'run_cancelled') {
+        setResume(null)
+        queryClient.invalidateQueries({ queryKey: ['triage', projectIdNum] })
+        return
+      }
+
+      // Lifecycle events update the batches map in place.
+      if (event.batchId === undefined) return
+      const batchId = event.batchId
+      setBatches(prev => {
+        const next = new Map(prev)
+        const existing = next.get(batchId)
+        if (event.type === 'batch_created') {
+          next.set(batchId, {
+            id: batchId,
+            segment: event.segment ?? null,
+            findingCount: event.findingsCount ?? 0,
+            status: 'pending',
+            attempt: 1,
+          })
+        } else if (event.type === 'batch_started' && existing) {
+          next.set(batchId, {
+            ...existing,
+            status: 'in_progress',
+            startedAt: event.timestamp,
+          })
+        } else if (event.type === 'batch_completed' && existing) {
+          next.set(batchId, {
+            ...existing,
+            status: 'completed',
+            finishedAt: event.timestamp,
+          })
+        } else if (event.type === 'batch_failed' && existing) {
+          next.set(batchId, { ...existing, status: 'failed' })
+        } else if (event.type === 'batch_retry' && existing) {
+          next.set(batchId, {
+            ...existing,
+            status: 'in_progress',
+            attempt: event.attempt ?? existing.attempt + 1,
+          })
+        }
+        return next
+      })
+    },
+    [queryClient, projectIdNum]
+  )
 
   useTriageEvents(projectIdNum, handleEvent, {
     enabled: projectIdNum > 0,

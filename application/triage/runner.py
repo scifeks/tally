@@ -225,14 +225,27 @@ class TriageRunner:
         except Exception as exc:
             self._emit_run_failed(run_id, exc)
             raise
-        self._emit(
-            RunCompleted(
-                scan_run_id=run_id,
-                project_id=self._project_id,
-                message="Triage completed",
-                processed_count=result.sessions_run,
+        if result.failed > 0 and result.success == 0:
+            self._emit(
+                RunFailed(
+                    scan_run_id=run_id,
+                    project_id=self._project_id,
+                    error="All batches failed",
+                    completed_count=0,
+                    total_count=result.sessions_run,
+                    resumable=True,
+                    message=("Triage completed with all batches failing"),
+                )
             )
-        )
+        else:
+            self._emit(
+                RunCompleted(
+                    scan_run_id=run_id,
+                    project_id=self._project_id,
+                    message="Triage completed",
+                    processed_count=result.sessions_run,
+                )
+            )
         return result
 
     def run_dry_run(self) -> int:

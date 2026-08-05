@@ -9,8 +9,8 @@ from unittest.mock import MagicMock
 import pytest
 
 from application.ports.triage_agent import PreparedTriageSession
-from application.triage.runner import TriageRunner
-from domain.pipeline.triage_events import RunFailed
+from application.triage.runner import TriageResult, TriageRunner
+from domain.pipeline.triage_events import RunCompleted, RunFailed
 from domain.triage.entry import TriageBatchRow
 from domain.triage.entry import TriageRunSummary as TriageRunSummaryRow
 
@@ -166,3 +166,41 @@ def test_run_emits_run_failed_and_reraises_on_uncaught(
     assert len(failed_events) == 1
     assert failed_events[0].error == "db unavailable"
     assert failed_events[0].resumable is True
+
+
+def test_run_emits_run_failed_when_all_batches_fail(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    runner, sink, _ = _make_runner(tmp_path)
+    monkeypatch.setattr(runner, "batch", lambda: (7, 5))
+
+    all_failed = TriageResult(sessions_run=5, success=0, failed=5, incomplete=0)
+    monkeypatch.setattr(runner, "_run_batch_loop", lambda *_a, **_kw: all_failed)
+
+    result = runner.run()
+
+    failed = [e for e in sink.events if isinstance(e, RunFailed)]
+    completed = [e for e in sink.events if isinstance(e, RunCompleted)]
+    assert len(failed) == 1
+    assert len(completed) == 0
+    assert failed[0].resumable is True
+    assert failed[0].total_count == 5
+    assert result is all_failed
+
+
+def test_run_emits_run_completed_when_some_batches_succeed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    runner, sink, _ = _make_runner(tmp_path)
+    monkeypatch.setattr(runner, "batch", lambda: (7, 5))
+
+    partial = TriageResult(sessions_run=5, success=3, failed=2, incomplete=0)
+    monkeypatch.setattr(runner, "_run_batch_loop", lambda *_a, **_kw: partial)
+
+    result = runner.run()
+
+    completed = [e for e in sink.events if isinstance(e, RunCompleted)]
+    failed = [e for e in sink.events if isinstance(e, RunFailed)]
+    assert len(completed) == 1
+    assert len(failed) == 0
+    assert result is partial

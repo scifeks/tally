@@ -240,6 +240,18 @@ class TriageService:
         sink = event_sink
         try:
             try:
+                from application.triage.container import (
+                    ensure_triage_containers,
+                    ensure_triage_image,
+                )
+
+                ensure_triage_image(Path(base_path))
+                ensure_triage_containers(
+                    Path(base_path),
+                    project_name,
+                    repo_paths=self._repo_paths or None,
+                )
+
                 if is_resume:
                     result = resume_triage_for_project(
                         project_name,
