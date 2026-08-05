@@ -246,6 +246,7 @@ export function useActiveTriage(projectId: number) {
     },
     enabled: Boolean(projectId),
     staleTime: 5_000,
+    refetchInterval: query => (query.state.data != null ? 3_000 : false),
   })
 }
 
@@ -348,7 +349,12 @@ export function useCancelTriage() {
     },
     onError: err => setError(toErrorPayload(err)),
     onSuccess: (_, { projectId }) => {
-      queryClient.invalidateQueries({ queryKey: ['triage', projectId] })
+      queryClient.setQueryData<TriageRun | null>(['triage', projectId, 'active'], prev =>
+        prev ? { ...prev, status: 'cancelling' as TriageRunStatus } : prev
+      )
+      queryClient.invalidateQueries({
+        queryKey: ['triage', projectId],
+      })
     },
   })
 }

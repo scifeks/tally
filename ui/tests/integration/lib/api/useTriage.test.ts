@@ -300,6 +300,30 @@ describe('useCancelTriage', () => {
     await waitFor(() => expect(mut.result.current.isError).toBe(true))
     expect(useUI.getState().triageMutationError?.code).toBe('TRIAGE_NOT_CANCELLABLE')
   })
+
+  it('optimistically sets active run status to cancelling', async () => {
+    const { qc, wrapper } = makeWrapper()
+    qc.setQueryData(['triage', 1, 'active'], {
+      scanRunId: 1,
+      projectId: 1,
+      status: 'running',
+      startedAt: null,
+      finishedAt: null,
+      totalFindings: 10,
+      processedFindings: 0,
+    })
+    const mut = renderHook(() => useCancelTriage(), { wrapper })
+    await act(async () => {
+      await mut.result.current.mutateAsync({
+        projectId: 1,
+        scanRunId: 1,
+      })
+    })
+    const cached = qc.getQueryData(['triage', 1, 'active']) as {
+      status: string
+    } | null
+    expect(cached?.status).toBe('cancelling')
+  })
 })
 
 // ─── useResumeTriage ────────────────────────────────────────────────────────

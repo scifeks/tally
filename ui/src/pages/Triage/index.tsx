@@ -407,7 +407,13 @@ export default function Triage() {
               <span className="text-[10px] uppercase tracking-[0.25em] text-muted-foreground">
                 <span className="text-accent">[</span> STATUS <span className="text-accent">]</span>
               </span>
-              <span className={statusClass}>{statusLabel === 'idle' ? 'ready' : statusLabel}</span>
+              <span className={statusClass}>
+                {statusLabel === 'idle'
+                  ? 'ready'
+                  : statusLabel === 'cancelling'
+                    ? 'cancelling…'
+                    : statusLabel}
+              </span>
               {isRunning && (
                 <>
                   <span className="text-xs text-muted-foreground tabular-nums">

@@ -470,6 +470,7 @@ class TriageRunner:
         max_attempts = self._retry_count + 1
 
         for finding in batch_data:
+            self._check_canceled()
             fid = finding.get("id", -1)
             prompt = render_fn(finding, project=self._project)
             ok = False

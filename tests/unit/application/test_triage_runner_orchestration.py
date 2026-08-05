@@ -99,6 +99,33 @@ class _FailingBackend(_PerFindingBackend):
         return _make_verdict(finding_id)
 
 
+class _CancellingAfterFirstBackend(_PerFindingBackend):
+    """Sets cancel token after first run_triage call."""
+
+    def __init__(
+        self,
+        cancel_token: CancellationToken,
+        *,
+        prepared_cwd: Path | None = None,
+    ) -> None:
+        super().__init__(prepared_cwd=prepared_cwd)
+        self._cancel_token = cancel_token
+
+    def run_triage(
+        self,
+        prompt: str,
+        *,
+        finding_id: int,
+        timeout_seconds: int,
+        cwd: Path,
+    ) -> Verdict:
+        self.calls.append((prompt, finding_id, timeout_seconds, cwd))
+        verdict = _make_verdict(finding_id)
+        if len(self.calls) == 1:
+            self._cancel_token.set()
+        return verdict
+
+
 class _RecordingSink:
     def __init__(self) -> None:
         self.events: list[object] = []
@@ -359,3 +386,39 @@ def test_cancel_during_batch_loop_cleans_up(
     cancelled = [e for e in sink.events if isinstance(e, RunCancelled)]
     assert len(cancelled) == 1
     assert cancelled[0].scan_run_id == 1
+
+
+def test_cancel_between_findings_stops_early(
+    tmp_path: Path,
+) -> None:
+    finding_repo = MagicMock()
+    finding_repo.update_finding.return_value = True
+    sink = _RecordingSink()
+    cancel_token = CancellationToken()
+
+    backend = _CancellingAfterFirstBackend(
+        cancel_token,
+        prepared_cwd=tmp_path,
+    )
+    runner, store, _ = _make_runner(
+        tmp_path,
+        agent=backend,
+        finding_repo=finding_repo,
+        event_sink=sink,
+        cancel_token=cancel_token,
+    )
+
+    batch = _make_semgrep_batch(1, [10, 11, 12])
+    store.claim_batch.side_effect = [batch, None]
+    mock_semgrep = _make_mock_tool("semgrep", skip=False, scan_segment="sast")
+    reg = _mock_reg(runner)
+    reg.get_all_tools.return_value = []
+    reg.get_tool.return_value = mock_semgrep
+
+    with pytest.raises(TriageCancelled):
+        runner.run()
+
+    assert len(backend.calls) == 1
+    store.cancel_remaining.assert_called_with(1)
+    cancelled = [e for e in sink.events if isinstance(e, RunCancelled)]
+    assert len(cancelled) == 1
