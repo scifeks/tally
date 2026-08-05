@@ -44,6 +44,7 @@ class DockerTriageContainer:
                     str(compose_path),
                     "up",
                     "-d",
+                    "--wait",
                 ],
                 capture_output=True,
                 text=True,

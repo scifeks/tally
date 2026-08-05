@@ -178,7 +178,7 @@ def test_batch_calls_create_per_combo(tmp_path: Path) -> None:
     runner, store, _ = _make_runner(tmp_path)
     store.get_active_finding_combos.return_value = [
         ("semgrep", "repo1", "sast"),
-        ("zap", "repo1", "api"),
+        ("zap", "repo1", "web"),
     ]
     store.fetch_active_findings_for_batching.return_value = []
     store.create_batches.return_value = 2
@@ -187,7 +187,7 @@ def test_batch_calls_create_per_combo(tmp_path: Path) -> None:
 
     assert store.fetch_active_findings_for_batching.call_count == 2
     store.fetch_active_findings_for_batching.assert_any_call("semgrep", "repo1", "sast")
-    store.fetch_active_findings_for_batching.assert_any_call("zap", "repo1", "api")
+    store.fetch_active_findings_for_batching.assert_any_call("zap", "repo1", "web")
     assert store.create_batches.call_count == 2
     for call in store.create_batches.call_args_list:
         assert call.args[0] == run_id

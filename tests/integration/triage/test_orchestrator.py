@@ -339,7 +339,7 @@ def test_create_triage_batches_called_per_combo(
         [
             ("semgrep", "repo1", "sast"),
             ("semgrep", "repo1", "sast"),
-            ("zap", "repo1", "api"),
+            ("zap", "repo1", "web"),
         ],
     )
 
@@ -375,7 +375,7 @@ def test_create_triage_batches_called_per_combo(
     assert mock_fetch.call_count == 2
     calls = {(c.args[0], c.args[1], c.args[2]) for c in mock_fetch.call_args_list}
     assert ("semgrep", "repo1", "sast") in calls
-    assert ("zap", "repo1", "api") in calls
+    assert ("zap", "repo1", "web") in calls
 
 
 def test_batching_error_aborts_before_session_prep(

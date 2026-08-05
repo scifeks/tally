@@ -105,7 +105,7 @@ def _make_api_finding(
     return {
         "tool": tool,
         "repo": repo,
-        "segment": "api",
+        "segment": "web",
         "url": url,
         "severity": severity,
         "risk_type": risk_type,
@@ -212,7 +212,7 @@ class TestCreateTriageBatches:
             ]
         assert row_count == 0
 
-    def test_api_segment_uses_url_query(self, tmp_path: Path) -> None:
+    def test_web_segment_uses_url_query(self, tmp_path: Path) -> None:
         factory, run_repo, finding_repo, triage_repo = _make_repos(tmp_path)
         run_id = run_repo.create_run({})
         findings = [
@@ -221,6 +221,6 @@ class TestCreateTriageBatches:
         ]
         _seed_findings(run_repo, finding_repo, findings, factory)
         count = triage_repo.create_batches(
-            run_id, _batch_for(triage_repo, "zap", "myrepo", "api")
+            run_id, _batch_for(triage_repo, "zap", "myrepo", "web")
         )
         assert count >= 1

@@ -103,7 +103,7 @@ def _make_api_finding(
     return {
         "tool": tool,
         "repo": repo,
-        "segment": "api",
+        "segment": "web",
         "url": url,
         "severity": severity,
         "risk_type": risk_type,
@@ -126,7 +126,7 @@ class TestGetActiveFindings:
         _seed_findings(run_repo, finding_repo, findings, factory)
         combos = repo.get_active_finding_combos(frozenset())
         assert ("semgrep", "r1", "sast") in combos
-        assert ("zap", "r1", "api") in combos
+        assert ("zap", "r1", "web") in combos
         assert len([c for c in combos if c == ("semgrep", "r1", "sast")]) == 1
 
     def test_excludes_skip_tools(

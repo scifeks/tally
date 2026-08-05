@@ -1,4 +1,4 @@
-"""Integration tests for the Phase 6 triage endpoints."""
+"""Integration tests for triage endpoints."""
 
 from __future__ import annotations
 
@@ -32,7 +32,7 @@ def _reset_triage_state():
 
 
 def _seed_scan_run(factory, *, project_id: int) -> int:
-    """Insert a Phase 5.1 scan_runs row and return its id."""
+    """Insert a scan_runs row and return its id."""
     repo = RunRepository(factory)
     return repo.create(
         project_id=project_id,
@@ -273,6 +273,11 @@ async def test_start_triage_runs_worker_end_to_end(app_client, monkeypatch) -> N
         return {"sessions_run": 0, "success": 0, "failed": 0, "incomplete": 0}
 
     monkeypatch.setattr(triage_service, "run_triage_for_project", fake_run_triage)
+
+    from application.triage import container as _ctr
+
+    monkeypatch.setattr(_ctr, "ensure_triage_image", lambda *a, **kw: None)
+    monkeypatch.setattr(_ctr, "ensure_triage_containers", lambda *a, **kw: None)
 
     resp = await client.post(
         f"/api/v1/projects/{project_id}/triage",

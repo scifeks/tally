@@ -48,7 +48,7 @@ if TYPE_CHECKING:
 
 
 _PROMPT_RENDERERS: dict[str, Callable[..., str]] = {
-    "api": api_trace.render,
+    "web": api_trace.render,
     "sast": sast_trace.render,
 }
 

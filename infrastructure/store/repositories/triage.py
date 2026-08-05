@@ -32,12 +32,12 @@ class TriageBatchRepository(TriageBatchRepositoryPort):
     ) -> list[dict[str, Any]]:
         """Return the active findings for *tool*/*repo*/*segment* in batching order.
 
-        Only ``api`` and ``sast`` segments produce rows; other segments
+        Only ``web`` and ``sast`` segments produce rows; other segments
         return an empty list. Row shape varies by segment to surface the
         fields the batching algorithm uses.
         """
         params = (segment, tool, repo)
-        if segment == "api":
+        if segment == "web":
             sql = """
                 SELECT
                     f.id, r.name AS repo, f.url, f.tool,
