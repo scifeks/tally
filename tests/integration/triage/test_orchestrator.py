@@ -413,8 +413,16 @@ def test_batching_error_aborts_before_session_prep(
     mock_prepare.assert_not_called()
 
 
-def test_batch_count_reported(project_db, capsys) -> None:
+def test_batch_count_reported(project_db) -> None:
+    from application.triage.orchestrator import run_triage_for_project
+    from domain.pipeline.triage_events import BatchCreated
     from infrastructure.store import make_store
+
+    collected: list[object] = []
+
+    class _CollectingSink:
+        def emit(self, event: object) -> None:
+            collected.append(event)
 
     project, tmp_root, db = project_db
     _make_db_active(db, [("semgrep", "repo1", "sast")])
@@ -435,17 +443,20 @@ def test_batch_count_reported(project_db, capsys) -> None:
         patch("application.triage.factory.TriageAgentFactory") as mock_factory,
     ):
         mock_factory.return_value.create.return_value = _StubAdapter()
-        run_triage(
+        run_triage_for_project(
             project,
-            _make_tool_registry_mock(),
+            project_id=1,
+            tool_registry=_make_tool_registry_mock(),
             app_root=tmp_root,
             run_repo=run_repo,
             finding_repo=finding_repo,
             triage_repo=triage_repo,
             audit_repo=audit_repo,
             repo_paths={},
+            event_sink=_CollectingSink(),
         )
 
-    out = capsys.readouterr().out
-    assert "3" in out
-    assert "semgrep" in out
+    batch_events = [e for e in collected if isinstance(e, BatchCreated)]
+    assert len(batch_events) == 1
+    assert batch_events[0].findings_count == 3
+    assert "semgrep" in batch_events[0].message

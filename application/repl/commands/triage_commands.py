@@ -135,7 +135,7 @@ class TriageCommands:
                 project_id=row.id,
                 project_name=self._repl.active_project,
                 tool_registry=self._repl.tool_registry,
-                event_sink=ConsoleTriageEventSink(),
+                event_sink=ConsoleTriageEventSink(self._repl.console),
             )
         except NoScanRunError as exc:
             self._repl.console.print(f"[red]Error:[/red] {exc}")

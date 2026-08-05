@@ -172,7 +172,6 @@ class TriageRunner:
                     repo,
                     segment,
                 )
-                print(f"  Batched {count} batch(es) for {tool}/{repo}/{segment}")
                 if count > 0:
                     self._emit(
                         BatchCreated(

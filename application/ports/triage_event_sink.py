@@ -3,9 +3,8 @@
 The triage runner calls ``sink.emit(event)`` on every state transition.
 Concrete adapters decide what to do with the event:
 
-- REPL adapter (``ConsoleTriageEventSink``): no-op. The REPL's existing
-  ``print()`` / logging output remains in place to preserve byte-identical
-  REPL behavior.
+- REPL adapter (``ConsoleTriageEventSink``): prints batch progress to the
+  Rich console.
 - API adapter (``EventBusTriageSink``): projects the event into a
   ``BusEvent(stream="triage", ...)`` and publishes it to the
   process-singleton ``EventBus`` for SSE fan-out.
@@ -27,7 +26,7 @@ class TriageEventSink(Protocol):
 
 
 class NullTriageEventSink:
-    """Discards every event. Default for tests and the REPL parity path."""
+    """Discards every event. Default for tests."""
 
     def emit(self, event: TriageEvent) -> None:
         del event
