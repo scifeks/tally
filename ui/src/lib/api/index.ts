@@ -56,6 +56,10 @@ export type {
   UseTriageHistoryOptions,
 } from './useTriage'
 
+// Platform hooks (cross-project)
+export { useCapabilities } from './useCapabilities'
+export type { Capabilities } from './useCapabilities'
+
 // Runtime / installed-tools hooks (cross-project)
 export { useRuntimeDependencies, useInstalledTools } from './useRuntime'
 

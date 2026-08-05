@@ -15,6 +15,7 @@ import {
   useResumeTriage,
   useTriageEvents,
   useRuntimeDependencies,
+  useCapabilities,
 } from '@/lib/api'
 import type {
   TriageBatch,
@@ -97,6 +98,9 @@ export default function Triage() {
   const { data: runtimeDeps } = useRuntimeDependencies()
   const claudeDep = runtimeDeps?.dependencies.find(d => d.name === 'claude')
   const claudeMissing = claudeDep !== undefined && !claudeDep.installed
+
+  // Fetch platform capabilities for backend label display.
+  const { data: capabilities } = useCapabilities()
 
   // Live batches map. Seeded from the detail query, then mutated by SSE.
   const [batches, setBatches] = useState<Map<number, BatchDisplay>>(new Map())
@@ -422,6 +426,13 @@ export default function Triage() {
                   style={{ width: `${progress}%` }}
                 />
               </div>
+            )}
+
+            {/* Backend label */}
+            {capabilities?.triageBackendLabel && (
+              <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                {capabilities.triageBackendLabel}
+              </span>
             )}
 
             {/* Claude-missing gate */}

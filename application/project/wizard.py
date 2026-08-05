@@ -230,6 +230,12 @@ def _interview_form_auth(
         default=current.password if current else "",
     )
 
+    verify_ssl_str = _prompt(
+        "  Verify SSL certificates? (y/n)",
+        default="y" if (not current or current.verify_ssl) else "n",
+    )
+    verify_ssl = verify_ssl_str.lower() != "n"
+
     return RepoAuth(
         auth_type="form",
         login_url=login_url,
@@ -238,6 +244,7 @@ def _interview_form_auth(
         credentials_env=credentials_env,
         username=username,
         password=password,
+        verify_ssl=verify_ssl,
     )
 
 

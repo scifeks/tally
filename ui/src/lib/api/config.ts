@@ -217,6 +217,10 @@ export const REST_ENDPOINTS = {
   cancelChatResponse: (projectId: number, sessionId: number) =>
     `${API_BASE_URL}/projects/${projectId}/chat/sessions/${sessionId}/cancel`,
 
+  // ─── Platform (cross-project) ──────────────────────────────────────────────
+  /** GET: platform capabilities (chat, triage, report retention) */
+  capabilities: `${API_BASE_URL}/capabilities`,
+
   // ─── Configuration ──────────────────────────────────────────────────────────
   /** GET: project info for config page */
   projectInfo: (projectId: number) => `${API_BASE_URL}/projects/${projectId}/info`,

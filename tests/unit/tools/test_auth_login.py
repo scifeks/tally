@@ -259,6 +259,32 @@ class TestPerformLogin:
 
         assert result == {"Cookie": "a=1; b=2; c=3"}
 
+    def test_verify_ssl_false_passed_to_httpx_client(self) -> None:
+        auth = _make_auth(username="u", password="p")
+        auth.verify_ssl = False
+        ctx = self._make_ctx_manager(
+            jar_items=[("PHPSESSID", "sess")],
+        )
+        with patch("httpx.Client", return_value=ctx) as mock_client:
+            perform_login(auth)
+
+        mock_client.assert_called_once()
+        call_kwargs = mock_client.call_args[1]
+        assert call_kwargs["verify"] is False
+
+    def test_verify_ssl_true_passed_to_httpx_client(self) -> None:
+        auth = _make_auth(username="u", password="p")
+        auth.verify_ssl = True
+        ctx = self._make_ctx_manager(
+            jar_items=[("PHPSESSID", "sess")],
+        )
+        with patch("httpx.Client", return_value=ctx) as mock_client:
+            perform_login(auth)
+
+        mock_client.assert_called_once()
+        call_kwargs = mock_client.call_args[1]
+        assert call_kwargs["verify"] is True
+
 
 # resolve_auth_headers and build_tool_headers
 

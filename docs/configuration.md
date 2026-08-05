@@ -439,6 +439,7 @@ For applications with HTML login forms, set `auth_type` to `"form"`. Tally perfo
 | `credentials_env` | string | no | | Environment variable containing credentials in `user:pass` format. Takes precedence over inline `username` and `password` when set. |
 | `username` | string | no | | Inline username. Used only if `credentials_env` is not set. |
 | `password` | string | no | | Inline password. Used only if `credentials_env` is not set. |
+| `verify_ssl` | bool | no | `true` | Verify TLS certificates. Set to `false` for self-signed certificates on local dev stacks. |
 
 #### Header-based Auth
 

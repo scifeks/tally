@@ -13,6 +13,7 @@ _TRIAGE_BACKEND_LABELS = {
     "llama_cpp": "OpenCode (llama.cpp)",
     "claude_code": "Claude Code",
     "open_code": "OpenCode",
+    "opencode": "OpenCode",
 }
 
 
@@ -62,7 +63,7 @@ def compute_triage_readiness(
             reason="Docker is not installed or not running",
         )
 
-    if provider == "claude_code" and not _has_anthropic_key(claude_api_key):
+    if provider in ("claude", "claude_code") and not _has_anthropic_key(claude_api_key):
         return TriageReadiness(
             provider=provider,
             backend_label=backend_label,

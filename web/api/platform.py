@@ -67,4 +67,5 @@ def get_capabilities(request: Request) -> CapabilitiesResponse:
         triage_enabled=caps.triage_enabled,
         report_retention_enabled=caps.report_retention_enabled,
         max_report_history=caps.max_report_history,
+        triage_backend_label=caps.triage_backend_label,
     )
