@@ -147,6 +147,9 @@ class ToolExecutor:
         ts_file = datetime.now(UTC).strftime("%Y-%m-%d_%H%M%S")
         label = _sanitize_filename(label)
         findings_exit_ok = getattr(tool, "findings_exit_ok", False)
+        findings_exit_codes: frozenset[int] = getattr(
+            tool, "findings_exit_codes", frozenset({1})
+        )
 
         start = perf_counter()
         run_result = self._run_with_escalation(
@@ -157,6 +160,7 @@ class ToolExecutor:
             cwd,
             start,
             findings_exit_ok,
+            findings_exit_codes,
             env,
             stdin_data,
         )
@@ -329,6 +333,7 @@ class ToolExecutor:
         cwd: str | None,
         start: float,
         findings_exit_ok: bool,
+        findings_exit_codes: frozenset[int],
         env: dict[str, str] | None = None,
         stdin_data: str | None = None,
     ) -> _RunResult | ToolResult:
@@ -345,7 +350,9 @@ class ToolExecutor:
             _log.error("Tool %s: permission denied: %s", tool_name, cmd[0])
             return self._failure(tool_name, timestamp, f"Permission denied: {cmd[0]!r}")
 
-        success = proc.returncode == 0 or (findings_exit_ok and proc.returncode == 1)
+        success = proc.returncode == 0 or (
+            findings_exit_ok and proc.returncode in findings_exit_codes
+        )
 
         if not success and _needs_root(proc.stderr):
             sudo_cmd = ["sudo"] + cmd
@@ -387,6 +394,8 @@ class ToolExecutor:
                     return self._failure(
                         tool_name, timestamp, "Permission denied running sudo"
                     )
-                success = proc.returncode == 0
+                success = proc.returncode == 0 or (
+                    findings_exit_ok and proc.returncode in findings_exit_codes
+                )
 
         return _RunResult(proc=proc, start=start, success=success)

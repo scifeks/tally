@@ -109,7 +109,14 @@ class TestExecutorErrorPaths:
             "p", tmp_path, NoApprovalPromptAdapter(), subprocess_runner=runner
         )
         result = exec_._run_with_escalation(
-            ["cmd"], "mytool", "ts", 300, None, perf_counter(), False
+            ["cmd"],
+            "mytool",
+            "ts",
+            300,
+            None,
+            perf_counter(),
+            False,
+            frozenset({1}),
         )
         assert isinstance(result, ToolResult)
         assert result.success is False
@@ -123,7 +130,14 @@ class TestExecutorErrorPaths:
             "p", tmp_path, NoApprovalPromptAdapter(), subprocess_runner=runner
         )
         result = exec_._run_with_escalation(
-            ["cmd"], "mytool", "ts", 300, None, perf_counter(), False
+            ["cmd"],
+            "mytool",
+            "ts",
+            300,
+            None,
+            perf_counter(),
+            False,
+            frozenset({1}),
         )
         assert isinstance(result, ToolResult)
         assert result.success is False
@@ -137,7 +151,14 @@ class TestExecutorErrorPaths:
             "p", tmp_path, NoApprovalPromptAdapter(), subprocess_runner=runner
         )
         result = exec_._run_with_escalation(
-            ["cmd"], "mytool", "ts", 300, None, perf_counter(), False
+            ["cmd"],
+            "mytool",
+            "ts",
+            300,
+            None,
+            perf_counter(),
+            False,
+            frozenset({1}),
         )
         assert isinstance(result, ToolResult)
         assert result.success is False
@@ -153,7 +174,14 @@ class TestExecutorErrorPaths:
             "p", tmp_path, NoApprovalPromptAdapter(), subprocess_runner=runner
         )
         result = exec_._run_with_escalation(
-            ["cmd"], "mytool", "ts", 300, None, perf_counter(), False
+            ["cmd"],
+            "mytool",
+            "ts",
+            300,
+            None,
+            perf_counter(),
+            False,
+            frozenset({1}),
         )
         assert not isinstance(result, ToolResult)
         assert hasattr(result, "proc")
@@ -180,7 +208,14 @@ class TestExecutorReporterWiring:
             "p", tmp_path, NoApprovalPromptAdapter(), subprocess_runner=runner
         )
         executor._run_with_escalation(
-            ["cmd"], "mytool", "ts", 300, None, perf_counter(), False
+            ["cmd"],
+            "mytool",
+            "ts",
+            300,
+            None,
+            perf_counter(),
+            False,
+            frozenset({1}),
         )
         captured = capsys.readouterr()
         assert captured.out == ""
@@ -196,7 +231,14 @@ class TestExecutorReporterWiring:
             reporter=reporter,
         )
         executor._run_with_escalation(
-            ["cmd"], "mytool", "ts", 300, None, perf_counter(), False
+            ["cmd"],
+            "mytool",
+            "ts",
+            300,
+            None,
+            perf_counter(),
+            False,
+            frozenset({1}),
         )
         assert reporter.messages == ["    ✗ Failed  (command not found)"]
 

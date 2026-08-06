@@ -168,3 +168,69 @@ class TestExecutorRunRaw:
             result = executor.run_raw(raw_cmd, mock_tool)
 
         assert isinstance(result, ToolResult)
+
+    def test_exit_code_3_success_when_in_findings_exit_codes(
+        self,
+        executor: ToolExecutor,
+        mock_subprocess_runner: MagicMock,
+    ) -> None:
+        mock_subprocess_runner.run.return_value = MagicMock(
+            stdout='{"advisories": {}}',
+            stderr="",
+            returncode=3,
+        )
+        mock_tool = MagicMock()
+        mock_tool.name = "composer-audit"
+        mock_tool.parse_output.return_value = {"vulnerabilities": []}
+        mock_tool.findings_exit_ok = True
+        mock_tool.findings_exit_codes = frozenset({1, 2, 3})
+
+        raw_cmd = ["composer", "audit", "--format=json"]
+        with patch("application.tools.executor.sanitize_command"):
+            result = executor.run_raw(raw_cmd, mock_tool)
+
+        assert result.success is True
+
+    def test_exit_code_3_failure_when_not_in_findings_exit_codes(
+        self,
+        executor: ToolExecutor,
+        mock_subprocess_runner: MagicMock,
+    ) -> None:
+        mock_subprocess_runner.run.return_value = MagicMock(
+            stdout="error output",
+            stderr="",
+            returncode=3,
+        )
+        mock_tool = MagicMock()
+        mock_tool.name = "some-tool"
+        mock_tool.parse_output.return_value = {}
+        mock_tool.findings_exit_ok = True
+        mock_tool.findings_exit_codes = frozenset({1})
+
+        raw_cmd = ["some-tool", "scan"]
+        with patch("application.tools.executor.sanitize_command"):
+            result = executor.run_raw(raw_cmd, mock_tool)
+
+        assert result.success is False
+
+    def test_exit_code_2_success_when_in_findings_exit_codes(
+        self,
+        executor: ToolExecutor,
+        mock_subprocess_runner: MagicMock,
+    ) -> None:
+        mock_subprocess_runner.run.return_value = MagicMock(
+            stdout='{"advisories": {}, "abandoned": {}}',
+            stderr="",
+            returncode=2,
+        )
+        mock_tool = MagicMock()
+        mock_tool.name = "composer-audit"
+        mock_tool.parse_output.return_value = {"vulnerabilities": []}
+        mock_tool.findings_exit_ok = True
+        mock_tool.findings_exit_codes = frozenset({1, 2, 3})
+
+        raw_cmd = ["composer", "audit", "--format=json"]
+        with patch("application.tools.executor.sanitize_command"):
+            result = executor.run_raw(raw_cmd, mock_tool)
+
+        assert result.success is True
