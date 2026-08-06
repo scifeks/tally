@@ -283,13 +283,33 @@ export function useTriageRun(
   return useQuery({
     queryKey: ['triage', projectId, 'detail', scanRunId],
     queryFn: async (): Promise<TriageRun> => {
-      const data = await apiFetch<TriageRunDetailApi>(
-        REST_ENDPOINTS.triageRun(projectId, scanRunId as number)
-      )
-      return mapTriageRun(data)
+      try {
+        const data = await apiFetch<TriageRunDetailApi>(
+          REST_ENDPOINTS.triageRun(projectId, scanRunId as number)
+        )
+        return mapTriageRun(data)
+      } catch (err) {
+        if (err instanceof ApiError && err.status === 404) {
+          return {
+            scanRunId: scanRunId as number,
+            projectId,
+            status: 'queued' as TriageRunStatus,
+            startedAt: null,
+            finishedAt: null,
+            totalFindings: 0,
+            processedFindings: 0,
+            batches: [],
+          }
+        }
+        throw err
+      }
     },
     enabled: (options?.enabled ?? true) && Boolean(projectId) && scanRunId !== null,
     staleTime: 5_000,
+    retry: (failureCount, err) => {
+      if (err instanceof ApiError && err.status === 404) return false
+      return failureCount < 3
+    },
   })
 }
 

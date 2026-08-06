@@ -148,6 +148,26 @@ describe('useTriageRun', () => {
     const { result } = renderHook(() => useTriageRun(1, null), { wrapper })
     expect(result.current.fetchStatus).toBe('idle')
   })
+
+  it('resolves with a queued placeholder on 404', async () => {
+    const { wrapper } = makeWrapper()
+    const { result } = renderHook(
+      () => useTriageRun(1, 997),
+      { wrapper },
+    )
+    await waitFor(
+      () => expect(result.current.isSuccess).toBe(true),
+      { timeout: 2000 },
+    )
+    expect(result.current.data).toMatchObject({
+      scanRunId: 997,
+      projectId: 1,
+      status: 'queued',
+      totalFindings: 0,
+      processedFindings: 0,
+      batches: [],
+    })
+  })
 })
 
 // ─── useStartTriage ─────────────────────────────────────────────────────────

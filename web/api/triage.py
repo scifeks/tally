@@ -173,7 +173,8 @@ async def get_latest_triage(
 ) -> TriageRunSummary:
     """Return the most recent triage run summary for *project_id*.
 
-    404 when the project has zero triage history.
+    404 when the project has zero triage history or when a newer
+    scan exists (the old triage is stale).
     """
     service = _service(request, project_id)
     triage_repo = service.triage_repo
@@ -183,6 +184,13 @@ async def get_latest_triage(
         limit=1,
     )
     if not run_ids:
+        raise NotFound(
+            f"project {project_id} has no triage history",
+        )
+    latest_scan_id = await asyncio.to_thread(
+        service.run_repo.latest_run_id,
+    )
+    if latest_scan_id is not None and run_ids[0] < latest_scan_id:
         raise NotFound(
             f"project {project_id} has no triage history",
         )
@@ -437,8 +445,20 @@ async def get_triage(
     triage_repo = service.triage_repo
     summary = await asyncio.to_thread(triage_repo.summarize_for_run, scan_run_id)
     if summary is None:
-        raise NotFound(
-            f"no triage runs found for scan_run_id {scan_run_id}",
+        handle = get_triage_run_registry().get(scan_run_id)
+        if handle is None or handle.project_id != project_id:
+            raise NotFound(
+                f"no triage runs found for scan_run_id {scan_run_id}",
+            )
+        return TriageDetailResponse(
+            scan_run_id=scan_run_id,
+            project_id=project_id,
+            status="queued",
+            started_at=None,
+            finished_at=None,
+            total_findings=0,
+            processed_findings=0,
+            batches=[],
         )
     batches = await asyncio.to_thread(triage_repo.list_for_run, scan_run_id)
     return TriageDetailResponse(

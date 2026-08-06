@@ -165,6 +165,49 @@ async def test_detail_404_when_no_triage_batches(app_client) -> None:
     assert resp.json()["error"]["code"] == "NOT_FOUND"
 
 
+@pytest.mark.asyncio
+async def test_detail_returns_queued_when_handle_registered(app_client) -> None:
+    from application.locking.cancellation import CancellationToken
+
+    client, _fid, _rag, factory, _muth, project_id = app_client
+    run_id = _seed_scan_run(factory, project_id=project_id)
+    get_triage_run_registry().register(
+        scan_run_id=run_id,
+        project_id=project_id,
+        cancel_token=CancellationToken(),
+    )
+
+    resp = await client.get(f"/api/v1/projects/{project_id}/triage/{run_id}")
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["scan_run_id"] == run_id
+    assert body["project_id"] == project_id
+    assert body["status"] == "queued"
+    assert body["batches"] == []
+    assert body["total_findings"] == 0
+    assert body["processed_findings"] == 0
+
+
+@pytest.mark.asyncio
+async def test_detail_404_when_handle_belongs_to_other_project(
+    app_client,
+) -> None:
+    from application.locking.cancellation import CancellationToken
+
+    client, _fid, _rag, factory, _muth, project_id = app_client
+    run_id = _seed_scan_run(factory, project_id=project_id)
+    other_project_id = project_id + 9999
+    get_triage_run_registry().register(
+        scan_run_id=run_id,
+        project_id=other_project_id,
+        cancel_token=CancellationToken(),
+    )
+
+    resp = await client.get(f"/api/v1/projects/{project_id}/triage/{run_id}")
+    assert resp.status_code == 404, resp.text
+    assert resp.json()["error"]["code"] == "NOT_FOUND"
+
+
 # POST /triage  (dispatch)
 
 
@@ -549,6 +592,42 @@ async def test_latest_returns_newest_run(app_client) -> None:
     assert body["project_id"] == project_id
     assert body["status"] == "running"
     assert body["total_findings"] == 2
+
+
+@pytest.mark.asyncio
+async def test_latest_404_when_newer_scan_exists(app_client) -> None:
+    """A newer scan_run makes the latest triage stale."""
+    client, _fid, _rag, factory, _muth, project_id = app_client
+    old_run = _seed_scan_run(factory, project_id=project_id)
+    _seed_triage_batch(
+        factory,
+        run_id=old_run,
+        finding_ids=[1],
+        status="completed",
+    )
+    _seed_scan_run(factory, project_id=project_id)
+
+    resp = await client.get(f"/api/v1/projects/{project_id}/triage/latest")
+    assert resp.status_code == 404, resp.text
+
+
+@pytest.mark.asyncio
+async def test_latest_200_when_triage_matches_latest_scan(
+    app_client,
+) -> None:
+    """Triage on the latest scan is NOT stale."""
+    client, _fid, _rag, factory, _muth, project_id = app_client
+    run_id = _seed_scan_run(factory, project_id=project_id)
+    _seed_triage_batch(
+        factory,
+        run_id=run_id,
+        finding_ids=[1],
+        status="completed",
+    )
+
+    resp = await client.get(f"/api/v1/projects/{project_id}/triage/latest")
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["scan_run_id"] == run_id
 
 
 @pytest.mark.asyncio
