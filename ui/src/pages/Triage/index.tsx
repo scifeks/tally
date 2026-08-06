@@ -94,12 +94,10 @@ export default function Triage() {
   const { mutate: cancelTriageMutation, isPending: isCancelPending } = useCancelTriage()
   const { mutate: resumeTriageMutation, isPending: isResumePending } = useResumeTriage()
 
-  // Disable Start when Claude binary is missing.
   const { data: runtimeDeps } = useRuntimeDependencies()
   const claudeDep = runtimeDeps?.dependencies.find(d => d.name === 'claude')
   const claudeMissing = claudeDep !== undefined && !claudeDep.installed
 
-  // Fetch platform capabilities for backend label display.
   const { data: capabilities } = useCapabilities()
 
   // Live batches map. Seeded from the detail query, then mutated by SSE.
@@ -310,12 +308,10 @@ export default function Triage() {
     setPendingAction(null)
   }, [])
 
-  // Auto-scroll log
   useEffect(() => {
     logEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [logs])
 
-  // Cleanup
   useEffect(() => {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current)
@@ -381,6 +377,7 @@ export default function Triage() {
         <TriageMutationErrorModal />
         <TriagePromptInjectionWarningModal
           open={showInjectionWarning}
+          providerLabel={capabilities?.triageBackendLabel ?? null}
           onAccept={handleAcceptInjectionWarning}
           onCancel={handleCancelInjectionWarning}
         />
