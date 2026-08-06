@@ -492,3 +492,51 @@ class TestNoirParseOutputFiltering:
         tool._exclude_indicators = ["vendor"]
         tool.parse_output("", {})
         assert tool._exclude_indicators == []
+
+    def test_filtered_oas3_written_to_disk(self, tmp_path: Path) -> None:
+        import json
+
+        report = tmp_path / "report.json"
+        self._write_oas3(
+            report,
+            {
+                "/api/users": {"get": {}},
+                "/vendor/autoload.php": {"get": {}},
+                "/api/orders": {"post": {}},
+            },
+        )
+        tool = NoirLocalTool()
+        tool._last_report_path = report
+        tool._exclude_indicators = ["vendor"]
+        tool.parse_output("", {})
+
+        raw = json.loads(report.read_text(encoding="utf-8"))
+        assert "/api/users" in raw["paths"]
+        assert "/api/orders" in raw["paths"]
+        assert "/vendor/autoload.php" not in raw["paths"]
+
+    def test_oas3_metadata_preserved_after_filtering(self, tmp_path: Path) -> None:
+        import json
+
+        report = tmp_path / "report.json"
+        oas3 = {
+            "openapi": "3.0.0",
+            "info": {"title": "test", "version": "0.1"},
+            "servers": [{"url": "http://localhost:9090"}],
+            "paths": {
+                "/api/users": {"get": {"parameters": [{"name": "id", "in": "query"}]}},
+                "/vendor/x.php": {"get": {}},
+            },
+        }
+        report.write_text(json.dumps(oas3))
+        tool = NoirLocalTool()
+        tool._last_report_path = report
+        tool._exclude_indicators = ["vendor"]
+        tool.parse_output("", {})
+
+        raw = json.loads(report.read_text(encoding="utf-8"))
+        assert raw["openapi"] == "3.0.0"
+        assert raw["info"]["title"] == "test"
+        assert raw["servers"] == [{"url": "http://localhost:9090"}]
+        params = raw["paths"]["/api/users"]["get"]["parameters"]
+        assert params == [{"name": "id", "in": "query"}]

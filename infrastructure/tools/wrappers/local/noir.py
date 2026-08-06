@@ -18,6 +18,7 @@ filter in ``iter_oas3_rows`` remains as defense-in-depth.
 
 from __future__ import annotations
 
+import json
 import shutil
 from pathlib import Path
 from typing import Any
@@ -159,6 +160,25 @@ class NoirLocalTool(BaseNoirTool):
                     )
                 ]
                 parsed["summary"]["total_endpoints"] = len(parsed["endpoints"])
+                if (
+                    self._last_report_path is not None
+                    and self._last_report_path.exists()
+                ):
+                    surviving = {ep["path"] for ep in parsed["endpoints"]}
+                    try:
+                        raw = json.loads(
+                            self._last_report_path.read_text(encoding="utf-8")
+                        )
+                        if isinstance(raw, dict) and isinstance(raw.get("paths"), dict):
+                            raw["paths"] = {
+                                k: v for k, v in raw["paths"].items() if k in surviving
+                            }
+                            self._last_report_path.write_text(
+                                json.dumps(raw),
+                                encoding="utf-8",
+                            )
+                    except (OSError, json.JSONDecodeError):
+                        pass
 
             if (
                 not parsed.get("endpoints")
