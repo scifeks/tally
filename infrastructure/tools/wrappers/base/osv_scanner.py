@@ -87,6 +87,7 @@ class BaseOSVScannerTool(ToolInterface):
             ExecutionPass(
                 label_suffix=context.repo.name,
                 kwargs={"repo_path": repo_path},
+                cwd=repo_path,
             )
         ]
 
