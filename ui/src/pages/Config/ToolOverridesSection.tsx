@@ -261,6 +261,16 @@ export function ToolOverridesSection({
             )}
           </div>
 
+          {(selectedTool.requiresBaseUrls ||
+            selectedTool.requiresUrlInventory ||
+            selectedTool.requiresWordlist) && (
+            <div className="space-y-1 text-xs text-yellow-600 dark:text-yellow-400">
+              {selectedTool.requiresBaseUrls && <div>Requires base URLs</div>}
+              {selectedTool.requiresUrlInventory && <div>Requires URL discovery</div>}
+              {selectedTool.requiresWordlist && <div>Requires wordlist</div>}
+            </div>
+          )}
+
           {/* Type / Location / Args row */}
           <div className="grid grid-cols-3 gap-4">
             {/* Type */}

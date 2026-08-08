@@ -10,8 +10,11 @@ from domain.tools.base import ToolResult
 from domain.tools.interface import ExecutionContext, ExecutionPass, ToolInterface
 
 
-def resolve_wordlist() -> str | None:
-    """Check FFUF_WORDLIST env var, then common system paths."""
+def resolve_wordlist(config_path: str = "") -> str | None:
+    """Check config path, FFUF_WORDLIST env, then system paths."""
+    if config_path and Path(config_path).exists():
+        return config_path
+
     env_wordlist = os.environ.get("FFUF_WORDLIST")
     if env_wordlist and Path(env_wordlist).exists():
         return env_wordlist
@@ -99,7 +102,7 @@ class BaseFFufTool(ToolInterface):
         assert context.repo is not None
         assert context.service is not None
 
-        wordlist = resolve_wordlist()
+        wordlist = resolve_wordlist(context.tool_config.ffuf_wordlist_path)
         if not wordlist:
             import logging
 

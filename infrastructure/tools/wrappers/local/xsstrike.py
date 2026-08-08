@@ -163,12 +163,7 @@ class XSSTrikeLocalTool(BaseXSStrikeTool):
             self._last_log_path = None
 
     def build_execution_passes(self, context: ExecutionContext) -> list[ExecutionPass]:
-        """Return one ExecutionPass for XSStrike.
-
-        Phase 9: the seeds file is JIT-rebuilt from ``url_findings`` rows
-        right before the scan runs. Returns an empty list (skipping
-        XSStrike) when no rows exist for the repo.
-        """
+        """Return one ExecutionPass for XSStrike."""
         from application.url_inventory.jit import jit_rebuild_artifacts
         from infrastructure.store.connection import ConnectionFactory
         from infrastructure.store.repositories.url_findings import (
@@ -197,8 +192,9 @@ class XSSTrikeLocalTool(BaseXSStrikeTool):
         if not seeds_file or not Path(seeds_file).exists():
             logger.warning(
                 "XSStrike: no URL inventory for %s; skipping. "
-                "Run Katana, Noir, or configure an endpoint file to "
-                "generate URL discovery output.",
+                "XSStrike needs URLs from Katana, Noir, or an "
+                "endpoint file. Run URL discovery tools first "
+                "or configure an endpoint file in the project.",
                 repo.name,
             )
             return []

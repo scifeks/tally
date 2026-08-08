@@ -96,6 +96,14 @@ class GlobalConfig(BaseModel):
         ),
     )
 
+    ffuf_wordlist_path: str = Field(
+        default="",
+        description=(
+            "Path to a wordlist file for ffuf. Checked before "
+            "FFUF_WORDLIST env var and system paths."
+        ),
+    )
+
     # Web UI / dev server
     web_ui_host: str = Field(default="127.0.0.1")
     web_ui_port: int = Field(default=8080)

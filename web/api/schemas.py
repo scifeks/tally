@@ -356,6 +356,9 @@ class ToolCatalogItem(BaseModel):
     supports_local: bool
     supports_docker: bool
     description: str
+    requires_base_urls: bool = False
+    requires_url_inventory: bool = False
+    requires_wordlist: bool = False
 
 
 class ToolCatalogResponse(BaseModel):

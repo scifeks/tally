@@ -770,6 +770,9 @@ export interface ToolCatalogEntry {
   name: string
   supportsLocal: boolean
   supportsDocker: boolean
+  requiresBaseUrls: boolean
+  requiresUrlInventory: boolean
+  requiresWordlist: boolean
 }
 
 /**

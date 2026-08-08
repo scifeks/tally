@@ -103,6 +103,9 @@ interface ToolCatalogItemApi {
   supports_local: boolean
   supports_docker: boolean
   description: string
+  requires_base_urls: boolean
+  requires_url_inventory: boolean
+  requires_wordlist: boolean
 }
 
 interface ToolCatalogResponseApi {
@@ -263,6 +266,9 @@ function mapToolCatalog(api: ToolCatalogItemApi): ToolCatalogEntry {
     name: api.name,
     supportsLocal: api.supports_local,
     supportsDocker: api.supports_docker,
+    requiresBaseUrls: api.requires_base_urls,
+    requiresUrlInventory: api.requires_url_inventory,
+    requiresWordlist: api.requires_wordlist,
   }
 }
 

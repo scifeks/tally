@@ -79,6 +79,13 @@ def _supports_docker(tool_name: str) -> bool:
     return (_WRAPPERS_ROOT / "docker" / f"{normalized}.py").exists()
 
 
+_URL_INVENTORY_TOOLS: frozenset[str] = frozenset({"dalfox", "xsstrike", "sqlmap"})
+
+
+def _needs_url_inventory(tool) -> bool:
+    return tool.name in _URL_INVENTORY_TOOLS
+
+
 def _discover_all_tool_names() -> set[str]:
     """Scan wrapper directories for all tools with implementations."""
     names: set[str] = set()
@@ -141,6 +148,9 @@ def get_tools_catalog(request: Request) -> ToolCatalogResponse:
             supports_local=_supports_local(tool.name),
             supports_docker=_supports_docker(tool.name),
             description=tool.description,
+            requires_base_urls=tool.requires_base_urls,
+            requires_url_inventory=_needs_url_inventory(tool),
+            requires_wordlist=(tool.name == "ffuf"),
         )
         for tool in tools
     ]
@@ -155,6 +165,8 @@ def get_tools_catalog(request: Request) -> ToolCatalogResponse:
                     supports_local=_supports_local(tool_name),
                     supports_docker=_supports_docker(tool_name),
                     description="",
+                    requires_url_inventory=(tool_name in _URL_INVENTORY_TOOLS),
+                    requires_wordlist=(tool_name == "ffuf"),
                 )
             )
     return ToolCatalogResponse(items=items, total=len(items))

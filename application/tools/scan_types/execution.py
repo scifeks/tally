@@ -52,6 +52,7 @@ def _build_tool_execution_config(
         noir_provider=noir_snapshot,
         blind_xss_callback_url=gc.blind_xss_callback_url,
         antares_config=antares_config,
+        ffuf_wordlist_path=gc.ffuf_wordlist_path,
     )
 
 
