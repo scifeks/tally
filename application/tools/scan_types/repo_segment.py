@@ -50,6 +50,76 @@ def _emit_skipped(
     )
 
 
+def _try_llm_extraction(
+    config: ScanTypeConfig,
+    resources: IExecutionResources,
+    repo: Any,
+    service: Any,
+) -> int:
+    """Run LLM endpoint extraction if configured and URL inventory empty."""
+    if not config.tool_config.endpoint_extraction_enabled:
+        return 0
+
+    if repo is None or repo.id is None:
+        return 0
+
+    if not service or not service.base_urls:
+        return 0
+
+    from urllib.parse import urlparse
+
+    from application.url_inventory.llm_extractor import (
+        LlmEndpointExtractor,
+    )
+    from core.project_paths import ProjectPaths
+    from infrastructure.llm.factory import get_llm_provider
+    from infrastructure.store.connection import ConnectionFactory
+    from infrastructure.store.repositories.url_findings import (
+        UrlFindingRepository,
+    )
+
+    parsed = urlparse(service.base_urls[0])
+    host = parsed.hostname or "localhost"
+    port = parsed.port or (443 if parsed.scheme == "https" else 80)
+    protocol = parsed.scheme or "https"
+
+    paths = ProjectPaths.from_canonical(config.base_path, config.project_name)
+    factory = ConnectionFactory(paths.findings_db)
+    factory.init_schema()
+    url_repo = UrlFindingRepository(factory)
+
+    existing = url_repo.list_for_repo(repo.id)
+    if existing:
+        return 0
+
+    try:
+        provider = get_llm_provider("endpoint_extraction", config.base_path)
+    except ValueError:
+        return 0
+
+    extractor = LlmEndpointExtractor(provider, url_repo)
+
+    excluded_dirs = []
+    if hasattr(service, "excluded_dirs") and service.excluded_dirs:
+        excluded_dirs = service.excluded_dirs
+
+    count = extractor.extract_for_repo(
+        repo_path=repo.path,
+        repo_id=repo.id,
+        run_id=config.run_id,
+        host=host,
+        port=port,
+        protocol=protocol,
+        excluded_dirs=excluded_dirs,
+    )
+
+    if count > 0:
+        msg = f"    [green]LLM extracted {count} endpoints for {repo.name}[/green]"
+        resources.display.print_status(msg)
+
+    return count
+
+
 class RepoSegmentScan(ScanType):
     """Run a set of tools on every configured repository."""
 
@@ -265,6 +335,7 @@ class RepoSegmentScan(ScanType):
                             skip_reason,
                         )
                         total_skipped += 1
+                        _try_llm_extraction(config, resources, repo, service)
                         continue
 
                     if tool.requires_base_urls and not service.base_urls:
@@ -391,6 +462,7 @@ class RepoSegmentScan(ScanType):
                                     "    [dim]ZAP will fall back to spider-only "
                                     "mode for this repository.[/dim]"
                                 )
+                                _try_llm_extraction(config, resources, repo, service)
                             total_ingested += dispatch_and_count_ingested(
                                 resources.event_bus,
                                 ToolCompleted(

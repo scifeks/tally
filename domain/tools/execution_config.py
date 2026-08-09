@@ -25,3 +25,4 @@ class ToolExecutionConfig:
     blind_xss_callback_url: str = ""
     antares_config: Any = None
     ffuf_wordlist_path: str = ""
+    endpoint_extraction_enabled: bool = False

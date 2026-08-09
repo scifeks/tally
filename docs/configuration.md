@@ -15,7 +15,7 @@ This file must exist before Tally starts. If it is missing or invalid, Tally exi
 
 Tally uses a two-layer provider configuration system. Provider configs define connection profiles for Ollama, Llama.cpp, or Claude. Feature configs reference a provider and optionally override settings per feature.
 
-Each of five inference features can use a different provider independently:
+Each of six inference features can use a different provider independently:
 
 | Feature config | Used by |
 |---|---|
@@ -24,6 +24,7 @@ Each of five inference features can use a different provider independently:
 | `report_inference` | The `report` command |
 | `embedding_inference` | ChromaDB vector embeddings |
 | `noir_inference` | NOIR security API |
+| `endpoint_extraction_inference` | LLM-based endpoint extraction from source code |
 
 Triage uses the same feature-inference pattern through `triage_inference`. The `provider` field selects which provider block supplies the base URL and default model. Optional overrides like `model` work the same way as for other features.
 
@@ -41,6 +42,7 @@ Triage uses the same feature-inference pattern through `triage_inference`. The `
 | `report_inference` | object | Feature config for the `report` command. See [Feature Config Fields](#feature-config-fields). |
 | `embedding_inference` | object | Feature config for ChromaDB vector embeddings. See [Feature Config Fields](#feature-config-fields). |
 | `noir_inference` | object | Feature config for NOIR security API. See [Feature Config Fields](#feature-config-fields). |
+| `endpoint_extraction_inference` | object | Feature config for LLM-based endpoint extraction. See [Feature Config Fields](#feature-config-fields). |
 | `triage_inference` | object | Feature config for AI triage. Requires Docker. See [Feature Config Fields](#feature-config-fields) and [docs/triage.md](triage.md). |
 | `antares_inference` | object | Feature config for Antares CWE scanner LLM backend. See [Feature Config Fields](#feature-config-fields) and [docs/antares-shim.md](antares-shim.md). |
 | `defectdojo` | object | DefectDojo connection settings. See [DefectDojo Fields](#defectdojo-fields) and [docs/integrations/defect-dojo.md](integrations/defect-dojo.md). |
@@ -126,9 +128,9 @@ The `ollama` and `llama_cpp` provider configs share the same schema:
 
 ### Feature Config Fields
 
-Each of the five inference features (`chat_inference`, `enrichment_inference`,
-`report_inference`, `embedding_inference`, `noir_inference`) uses the same
-feature config schema:
+Each of the six inference features (`chat_inference`, `enrichment_inference`,
+`report_inference`, `embedding_inference`, `noir_inference`,
+`endpoint_extraction_inference`) uses the same feature config schema:
 
 #### Fields
 
@@ -228,6 +230,38 @@ See [docs/integrations/defect-dojo.md](integrations/defect-dojo.md) for entity m
 ```
 
 Leave `api_key` empty to have Tally read the key from the `ANTHROPIC_API_KEY` environment variable at startup.
+
+### Example: Enable LLM Endpoint Extraction with Ollama
+
+When configured, Tally uses the specified LLM to extract HTTP endpoints from controller source code. This runs automatically during scans when noir is skipped or returns no endpoints, and the URL inventory is empty. Extracted endpoints include query and form parameters, producing parameterized URLs for DAST tools.
+
+```json
+{
+  "ollama": {
+    "base_url": "http://localhost:11434",
+    "model": "qwen3:14b"
+  },
+  "endpoint_extraction_inference": {
+    "provider": "ollama"
+  }
+}
+```
+
+### Example: Enable LLM Endpoint Extraction with Claude
+
+Use Claude API for higher accuracy on complex endpoint patterns:
+
+```json
+{
+  "claude": {
+    "api_key": "",
+    "model": "claude-sonnet-5"
+  },
+  "endpoint_extraction_inference": {
+    "provider": "claude"
+  }
+}
+```
 
 ### Example: Enable Claude Code Triage
 

@@ -387,7 +387,7 @@ class ConnectionFactory:
                     ),
                     CHECK (
                         (source = 'scan' AND tool IS NOT NULL
-                         AND tool IN ('katana', 'noir'))
+                         AND tool IN ('katana', 'noir', 'llm'))
                         OR (source = 'user' AND tool IS NULL)
                     ),
                     FOREIGN KEY (repo_id) REFERENCES repositories(id)

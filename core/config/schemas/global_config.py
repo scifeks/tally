@@ -56,6 +56,7 @@ class GlobalConfig(BaseModel):
     embedding_inference: FeatureInferenceConfig | None = None
     triage_inference: FeatureInferenceConfig | None = None
     antares_inference: FeatureInferenceConfig | None = None
+    endpoint_extraction_inference: FeatureInferenceConfig | None = None
     antares_sweep_config: dict[str, Any] | None = None
     projects_dir: str = Field(default="./projects")
     location_attestation_confirmed: bool = Field(default=False)

@@ -65,6 +65,34 @@ setup instructions, and a description of how conversion works.
 
 ---
 
+## LLM Endpoint Extraction
+
+LLM endpoint extraction is an alternative URL discovery mechanism that complements Noir and Katana. When configured, Tally uses an LLM to read controller source code and extract HTTP routes, query parameters, and form parameters, producing parameterized URLs for DAST tools.
+
+### When it triggers
+
+Endpoint extraction runs automatically during scans when both conditions are met:
+
+1. Noir is skipped for the repository (unsupported framework) or returns zero endpoints
+2. The `endpoint_extraction_inference` feature is configured in `config/global.json`
+
+The scan also checks the URL inventory; if it contains endpoints, extraction is skipped to avoid redundant work.
+
+### What it produces
+
+Extracted endpoints become informational findings (same as Noir and Katana output) and feed downstream DAST tools (sqlmap, dalfox, xsstrike) that require parameterized URLs.
+
+### Provider options
+
+Choose a provider based on your needs:
+
+- **Ollama or llama.cpp.** Run inference locally at no API cost. Fast, suitable for small-to-medium codebases. Set `base_url` in the `ollama` or `llama_cpp` provider config and reference it in `endpoint_extraction_inference`.
+- **Claude API.** Higher accuracy on complex endpoint patterns and modern frameworks. Requires Anthropic API key. Set `api_key` in the `claude` provider config and reference it in `endpoint_extraction_inference`.
+
+See [docs/configuration.md](configuration.md) for examples of enabling endpoint extraction with each provider.
+
+---
+
 ## ffuf
 
 ffuf is a fast web fuzzer written in Go that discovers hidden files, directories, vhosts, and parameters by brute-forcing HTTP requests with a wordlist. It runs in the `web` scan segment against configured `base_urls`.
