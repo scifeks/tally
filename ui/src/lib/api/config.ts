@@ -300,4 +300,11 @@ export const REST_ENDPOINTS = {
   /** GET: stream bytes for a single file-type arg (used to populate editor state). */
   downloadArgProfileFile: (projectId: number, id: number, argName: string) =>
     `${API_BASE_URL}/projects/${projectId}/arg-profiles/${id}/files/${encodeURIComponent(argName)}`,
+
+  // ─── Global Settings ───────────────────────────────────────────────────────
+  /** GET/PUT: global tool settings (wordlists, etc.) */
+  globalToolSettings: `${API_BASE_URL}/global-settings/tool-config`,
+  /** GET: browse server filesystem for file selection */
+  fsBrowse: (path: string) =>
+    `${API_BASE_URL}/global-settings/fs-browse?path=${encodeURIComponent(path)}`,
 } as const

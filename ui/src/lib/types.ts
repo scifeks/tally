@@ -793,6 +793,25 @@ export interface ToolOverrideConfig {
   }
 }
 
+/** Global tool settings (cross-project). */
+export interface GlobalToolSettings {
+  ffufWordlistPaths: string[]
+}
+
+/** Single filesystem entry from the browse API. */
+export interface FileSystemEntry {
+  name: string
+  path: string
+  isDir: boolean
+  sizeBytes: number | null
+}
+
+/** Response from the filesystem browse API. */
+export interface FileSystemBrowseResult {
+  currentPath: string
+  entries: FileSystemEntry[]
+}
+
 /**
  * Project information for the config page. Mirrors the backend
  * `ProjectInfoResponse` (canonical snake_case field names from

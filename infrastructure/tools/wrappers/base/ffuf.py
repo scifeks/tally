@@ -10,27 +10,31 @@ from domain.tools.base import ToolResult
 from domain.tools.interface import ExecutionContext, ExecutionPass, ToolInterface
 
 
-def resolve_wordlist(config_path: str = "") -> str | None:
-    """Check config path, FFUF_WORDLIST env, then system paths."""
-    if config_path and Path(config_path).exists():
-        return config_path
+def resolve_wordlists(configured_paths: list[str]) -> list[str]:
+    """Return valid wordlist paths from config, env, or system defaults.
+
+    If any configured path exists on disk, return only the valid
+    configured paths. Otherwise fall back to FFUF_WORDLIST env var,
+    then common system locations.
+    """
+    valid = [p for p in configured_paths if p and Path(p).exists()]
+    if valid:
+        return valid
 
     env_wordlist = os.environ.get("FFUF_WORDLIST")
     if env_wordlist and Path(env_wordlist).exists():
-        return env_wordlist
+        return [env_wordlist]
 
     common_paths = [
         "/usr/share/seclists/Discovery/Web-Content/directory-list-2.3-medium.txt",
         "/usr/share/wordlists/dirb/common.txt",
         "/usr/share/wordlists/dirbuster/directory-list-2.3-medium.txt",
     ]
-
     for path_str in common_paths:
-        path = Path(path_str)
-        if path.exists():
-            return path_str
+        if Path(path_str).exists():
+            return [path_str]
 
-    return None
+    return []
 
 
 class BaseFFufTool(ToolInterface):
@@ -102,8 +106,8 @@ class BaseFFufTool(ToolInterface):
         assert context.repo is not None
         assert context.service is not None
 
-        wordlist = resolve_wordlist(context.tool_config.ffuf_wordlist_path)
-        if not wordlist:
+        wordlists = resolve_wordlists(context.tool_config.ffuf_wordlist_paths)
+        if not wordlists:
             import logging
 
             logger = logging.getLogger(__name__)
@@ -113,18 +117,23 @@ class BaseFFufTool(ToolInterface):
             return []
 
         base_url = context.service.base_urls[0]
-        output_file = self._get_output_file(context)
+        passes: list[ExecutionPass] = []
 
-        return [
-            ExecutionPass(
-                label_suffix=f"{context.repo.name}",
-                kwargs={
-                    "base_url": base_url,
-                    "wordlist": wordlist,
-                    "output_file": output_file,
-                },
-            ),
-        ]
+        for wordlist in wordlists:
+            wl_name = Path(wordlist).stem
+            output_file = self._get_output_file(context)
+            passes.append(
+                ExecutionPass(
+                    label_suffix=f"{context.repo.name}_{wl_name}",
+                    kwargs={
+                        "base_url": base_url,
+                        "wordlist": wordlist,
+                        "output_file": output_file,
+                    },
+                ),
+            )
+
+        return passes
 
     @staticmethod
     def _get_output_file(context: ExecutionContext) -> str:
@@ -144,7 +153,45 @@ class BaseFFufTool(ToolInterface):
         return str(output_dir / f"{repo_name}_{ts}.json")
 
     def merge_pass_results(self, pass_results: list[ToolResult]) -> ToolResult:
-        return pass_results[0]
+        if len(pass_results) == 1:
+            return pass_results[0]
+
+        seen: set[tuple[str, int]] = set()
+        merged_findings: list[dict[str, Any]] = []
+
+        for result in pass_results:
+            parsed = result.parsed_data or {}
+            for finding in parsed.get("findings", []):
+                key = (
+                    finding.get("url", ""),
+                    finding.get("status", 0),
+                )
+                if key not in seen:
+                    seen.add(key)
+                    merged_findings.append(finding)
+
+        combined_files: dict[str, Path] = {}
+        for i, result in enumerate(pass_results):
+            for k, v in result.output_files.items():
+                combined_files[f"pass{i}_{k}"] = v
+
+        total_duration = sum(r.duration_seconds for r in pass_results)
+        combined_output = "\n".join(r.output or "" for r in pass_results)
+
+        return ToolResult(
+            tool_name="ffuf",
+            success=any(r.success for r in pass_results),
+            output=combined_output,
+            parsed_data={
+                "findings": merged_findings,
+                "summary": {
+                    "total_findings": len(merged_findings),
+                },
+            },
+            output_files=combined_files,
+            timestamp=pass_results[0].timestamp,
+            duration_seconds=total_duration,
+        )
 
     def count_findings(self, parsed_data: dict[str, Any]) -> int:
         summary = parsed_data.get("summary", {})
