@@ -221,12 +221,13 @@ class SavedScansService:
         if not name:
             errors.append(FieldError(field="name", issue="must not be empty"))
 
-        if not tool_names and not arg_profile_ids:
+        if not tool_names and not arg_profile_ids and not skip_tool_names:
             errors.append(
                 FieldError(
                     field="toolNames",
                     issue=(
-                        "at least one of toolNames or argProfileIds must be non-empty"
+                        "at least one of toolNames, skipToolIds,"
+                        " or argProfileIds must be non-empty"
                     ),
                 )
             )
