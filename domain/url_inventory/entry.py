@@ -32,6 +32,8 @@ class UrlTool(StrEnum):
 
     KATANA = "katana"
     NOIR = "noir"
+    LLM = "llm"
+    APIDOCS = "apidocs"
 
 
 @dataclass(frozen=True)

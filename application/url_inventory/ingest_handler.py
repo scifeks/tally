@@ -1,7 +1,7 @@
-"""Ingest URLs from Katana and Noir scan results into the url_findings table.
+"""Ingest URLs from discovery tool scan results into the url_findings table.
 
-Subscribes to ``ToolCompleted``. For Katana/Noir, locates the OAS3 file
-produced by the wrapper, parses it through the matching ``UrlListProvider``,
+Subscribes to ``ToolCompleted``. For Katana, Noir, and apidocs, locates the
+OAS3 file produced by the wrapper, parses it through the matching provider,
 persists the rows into ``url_findings`` via ``UrlInventoryService``,
 and rebuilds merged artifacts so downstream DAST tools see the new URLs.
 """
@@ -12,7 +12,11 @@ import logging
 from typing import TYPE_CHECKING
 
 from application.url_inventory.ports import UrlProviderContext
-from application.url_inventory.providers import KatanaProvider, NoirProvider
+from application.url_inventory.providers import (
+    ApidocsProvider,
+    KatanaProvider,
+    NoirProvider,
+)
 from application.url_inventory.service import UrlInventoryService
 from core.project_paths import ProjectPaths
 from domain.url_inventory.entry import UrlTool
@@ -32,11 +36,12 @@ logger = logging.getLogger(__name__)
 _TOOL_PROVIDER_MAP: dict[str, tuple[type, UrlTool]] = {
     "katana": (KatanaProvider, UrlTool.KATANA),
     "noir": (NoirProvider, UrlTool.NOIR),
+    "apidocs": (ApidocsProvider, UrlTool.APIDOCS),
 }
 
 
 class UrlInventoryIngestHandler:
-    """Bus handler: routes Katana/Noir output into url_findings."""
+    """Bus handler: routes discovery tool output into url_findings."""
 
     def __init__(
         self,
