@@ -82,11 +82,14 @@ def _seed_findings(
 
 def _batch_for(
     triage_repo: TriageBatchRepository,
+    run_id: int,
     tool: str,
     repo: str,
     segment: str,
 ) -> list[list[dict[str, Any]]]:
-    findings = triage_repo.fetch_active_findings_for_batching(tool, repo, segment)
+    findings = triage_repo.fetch_active_findings_for_batching(
+        run_id, tool, repo, segment
+    )
     return compute_batches(findings)
 
 
@@ -178,9 +181,9 @@ class TestBatchingAllTools:
             _make_secrets_finding(repo="r1"),
             _make_sca_finding(repo="r1"),
         ]
-        _seed_findings(run_repo, finding_repo, findings, factory)
+        run_id = _seed_findings(run_repo, finding_repo, findings, factory)
 
-        combos = triage_repo.get_active_finding_combos(frozenset())
+        combos = triage_repo.get_active_finding_combos(run_id, frozenset())
 
         assert ("semgrep", "r1", "sast") in combos
         assert ("graphql-cop", "r1", "web") in combos
@@ -195,9 +198,9 @@ class TestBatchingAllTools:
             _make_sast_finding(file_path="src/a.py", line_start=20),
             _make_sast_finding(file_path="src/b.py", line_start=5),
         ]
-        _seed_findings(run_repo, finding_repo, findings, factory)
+        run_id = _seed_findings(run_repo, finding_repo, findings, factory)
 
-        batches = _batch_for(triage_repo, "semgrep", "myrepo", "sast")
+        batches = _batch_for(triage_repo, run_id, "semgrep", "myrepo", "sast")
 
         assert len(batches) >= 1
         all_ids = [f["id"] for b in batches for f in b]
@@ -215,9 +218,9 @@ class TestBatchingAllTools:
                 risk_type="xss",
             ),
         ]
-        _seed_findings(run_repo, finding_repo, findings, factory)
+        run_id = _seed_findings(run_repo, finding_repo, findings, factory)
 
-        batches = _batch_for(triage_repo, "graphql-cop", "myrepo", "web")
+        batches = _batch_for(triage_repo, run_id, "graphql-cop", "myrepo", "web")
 
         assert len(batches) >= 1
         all_ids = [f["id"] for b in batches for f in b]
@@ -240,10 +243,10 @@ class TestBatchingAllTools:
     ) -> None:
         factory, run_repo, finding_repo, triage_repo = _make_repos(tmp_path)
         findings = [builder(), builder(), builder()]
-        _seed_findings(run_repo, finding_repo, findings, factory)
+        run_id = _seed_findings(run_repo, finding_repo, findings, factory)
 
         fetched = triage_repo.fetch_active_findings_for_batching(
-            tool, "myrepo", segment
+            run_id, tool, "myrepo", segment
         )
         batches = compute_batches(fetched)
 
@@ -278,12 +281,12 @@ class TestBatchingAllTools:
         ]
         run_id = _seed_findings(run_repo, finding_repo, findings, factory)
 
-        combos = triage_repo.get_active_finding_combos(frozenset())
+        combos = triage_repo.get_active_finding_combos(run_id, frozenset())
         batch_counts: dict[str, int] = {}
 
         for tool, repo, segment in combos:
             fetched = triage_repo.fetch_active_findings_for_batching(
-                tool, repo, segment
+                run_id, tool, repo, segment
             )
             batches = compute_batches(fetched)
             count = triage_repo.create_batches(run_id, batches)

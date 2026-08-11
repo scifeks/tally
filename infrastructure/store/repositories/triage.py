@@ -28,7 +28,7 @@ class TriageBatchRepository(TriageBatchRepositoryPort):
         self._factory = factory
 
     def fetch_active_findings_for_batching(
-        self, tool: str, repo: str, segment: str
+        self, run_id: int, tool: str, repo: str, segment: str
     ) -> list[dict[str, Any]]:
         """Return the active findings for *tool*/*repo*/*segment* in batching order.
 
@@ -36,7 +36,7 @@ class TriageBatchRepository(TriageBatchRepositoryPort):
         return an empty list. Row shape varies by segment to surface the
         fields the batching algorithm uses.
         """
-        params = (segment, tool, repo)
+        params = (run_id, segment, tool, repo)
         if segment == "web":
             sql = """
                 SELECT
@@ -51,7 +51,7 @@ class TriageBatchRepository(TriageBatchRepositoryPort):
                     json_extract(f.meta, '$.alert_name') AS alert_name
                 FROM findings f
                 JOIN repositories r ON f.repo_id = r.id
-                WHERE f.segment = ? AND f.tool = ? AND r.name = ?
+                WHERE f.run_id = ? AND f.segment = ? AND f.tool = ? AND r.name = ?
                   AND f.status = 'active'
                 ORDER BY f.severity ASC, f.url,
                          json_extract(f.meta, '$.risk_type')
@@ -68,7 +68,7 @@ class TriageBatchRepository(TriageBatchRepositoryPort):
                     json_extract(f.meta, '$.owasp') AS owasp
                 FROM findings f
                 JOIN repositories r ON f.repo_id = r.id
-                WHERE f.segment = ? AND f.tool = ? AND r.name = ?
+                WHERE f.run_id = ? AND f.segment = ? AND f.tool = ? AND r.name = ?
                   AND f.status = 'active'
                 ORDER BY
                     f.severity ASC,
@@ -168,7 +168,7 @@ class TriageBatchRepository(TriageBatchRepositoryPort):
             return cur.rowcount
 
     def get_active_finding_combos(
-        self, skip_tools: frozenset[str]
+        self, run_id: int, skip_tools: frozenset[str]
     ) -> list[tuple[str, str, str]]:
         """Return distinct (tool, repo_name, segment) tuples for active findings.
 
@@ -180,7 +180,8 @@ class TriageBatchRepository(TriageBatchRepositoryPort):
                 "SELECT DISTINCT f.tool, r.name, f.segment"
                 " FROM findings f"
                 " JOIN repositories r ON f.repo_id = r.id"
-                " WHERE f.status = 'active' AND f.segment IS NOT NULL",
+                " WHERE f.run_id = ? AND f.status = 'active' AND f.segment IS NOT NULL",
+                (run_id,),
             ).fetchall()
         return [
             (r["tool"], r["name"], r["segment"])

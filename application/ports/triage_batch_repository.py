@@ -10,7 +10,7 @@ if TYPE_CHECKING:
 
 class TriageBatchRepositoryPort(Protocol):
     def fetch_active_findings_for_batching(
-        self, tool: str, repo: str, segment: str
+        self, run_id: int, tool: str, repo: str, segment: str
     ) -> list[dict[str, Any]]: ...
     def create_batches(
         self, run_id: int, batches: list[list[dict[str, Any]]]
@@ -19,7 +19,7 @@ class TriageBatchRepositoryPort(Protocol):
     def complete_batch(self, batch_id: int, status: str) -> None: ...
     def reset_for_resume(self, run_id: int) -> int: ...
     def get_active_finding_combos(
-        self, skip_tools: frozenset[str]
+        self, run_id: int, skip_tools: frozenset[str]
     ) -> list[tuple[str, str, str]]: ...
     def cancel_remaining(self, run_id: int) -> int: ...
     def list_run_ids_for_project(

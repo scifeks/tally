@@ -251,14 +251,14 @@ class McpTriageService:
         self._triage_repo.complete_batch(batch_id, "skipped")
         return {"status": "skipped"}
 
-    # -- Private helpers --
+    # Private helpers
 
     def _compute_batches_for_run(self, run_id: int) -> None:
         """Fetch untriaged findings and compute new batches for run_id."""
-        combos = self._triage_repo.get_active_finding_combos(frozenset())
+        combos = self._triage_repo.get_active_finding_combos(run_id, frozenset())
         for tool, repo, segment in combos:
             findings = self._triage_repo.fetch_active_findings_for_batching(
-                tool, repo, segment
+                run_id, tool, repo, segment
             )
             if findings:
                 batches = compute_batches(findings)

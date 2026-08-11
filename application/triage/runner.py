@@ -152,13 +152,13 @@ class TriageRunner:
             for t in self._tool_registry.get_all_tools()
             if getattr(t, "skip", False)
         )
-        combos = self._triage_repo.get_active_finding_combos(skip_tools)
+        combos = self._triage_repo.get_active_finding_combos(run_id, skip_tools)
 
         total = 0
         for tool, repo, segment in combos:
             try:
                 findings = self._triage_repo.fetch_active_findings_for_batching(
-                    tool, repo, segment
+                    run_id, tool, repo, segment
                 )
                 batches = compute_batches(
                     findings,

@@ -655,6 +655,10 @@ class TriageStartRequest(BaseModel):
         default=None,
         validation_alias=AliasChoices("finding_ids", "findingIds"),
     )
+    scan_run_id: int | None = Field(
+        default=None,
+        validation_alias=AliasChoices("scan_run_id", "scanRunId"),
+    )
 
 
 class TriageRunSummary(BaseModel):

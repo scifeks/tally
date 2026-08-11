@@ -98,9 +98,10 @@ def _make_db_active(
     rows: list[tuple[str, str, str]],
 ) -> None:
     _init_store(db_path)
-    _seed_scan_run(db_path)
     conn = sqlite3.connect(str(db_path))
     conn.row_factory = sqlite3.Row
+    cur = conn.execute("INSERT INTO scan_runs (args) VALUES ('{}')")
+    run_id = cur.lastrowid  # type: ignore[assignment]
     repo_ids: dict[str, int] = {}
     for tool, repo_name, segment in rows:
         if repo_name not in repo_ids:
@@ -111,9 +112,9 @@ def _make_db_active(
             repo_ids[repo_name] = cur.lastrowid  # type: ignore[assignment]
         conn.execute(
             "INSERT INTO findings"
-            " (tool, status, repo_id, segment, triaged_at)"
-            " VALUES (?, 'active', ?, ?, NULL)",
-            (tool, repo_ids[repo_name], segment),
+            " (run_id, tool, status, repo_id, segment, triaged_at)"
+            " VALUES (?, ?, 'active', ?, ?, NULL)",
+            (run_id, tool, repo_ids[repo_name], segment),
         )
     conn.commit()
     conn.close()
@@ -373,7 +374,7 @@ def test_create_triage_batches_called_per_combo(
         )
 
     assert mock_fetch.call_count == 2
-    calls = {(c.args[0], c.args[1], c.args[2]) for c in mock_fetch.call_args_list}
+    calls = {(c.args[1], c.args[2], c.args[3]) for c in mock_fetch.call_args_list}
     assert ("semgrep", "repo1", "sast") in calls
     assert ("zap", "repo1", "web") in calls
 

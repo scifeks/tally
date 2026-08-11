@@ -292,6 +292,7 @@ async def start_triage(
             tool_registry=request.app.state.tool_registry,
             event_sink=sink,
             finding_ids=finding_ids,
+            scan_run_id=body.scan_run_id,
         )
     except NoScanRunError as exc:
         raise NotFound(

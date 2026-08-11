@@ -118,6 +118,7 @@ class TriageService:
         tool_registry: ToolRegistry,
         event_sink: TriageEventSink | None = None,
         finding_ids: tuple[int, ...] | None = None,
+        scan_run_id: int | None = None,
     ) -> TriageStartHandle:
         """Start a triage run against the latest scan_run for a project.
 
@@ -126,7 +127,8 @@ class TriageService:
         """
         del finding_ids  # finding-scoped triage is reserved for later
         ensure_triage_backend_configured(app_root=Path(base_path))
-        scan_run_id = self._run_repo.latest_run_id()
+        if scan_run_id is None:
+            scan_run_id = self._run_repo.latest_run_id()
         if scan_run_id is None:
             raise NoScanRunError(
                 f"No scan runs found for project {project_name!r}; "

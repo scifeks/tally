@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { Square, RotateCcw, Brain, AlertTriangle } from 'lucide-react'
+import { Square, RotateCcw, Brain, AlertTriangle, ChevronDown } from 'lucide-react'
 import { cn, toEpoch } from '@/lib/utils'
 import { Panel } from '@/components/tty'
 import { useUI } from '@/lib/store'
@@ -16,6 +16,7 @@ import {
   useTriageEvents,
   useRuntimeDependencies,
   useCapabilities,
+  useScanHistory,
 } from '@/lib/api'
 import type {
   TriageBatch,
@@ -108,9 +109,14 @@ export default function Triage() {
   const [pendingAction, setPendingAction] = useState<'start' | 'resume' | null>(null)
   const [showInjectionWarning, setShowInjectionWarning] = useState(false)
   const [elapsedSec, setElapsedSec] = useState(0)
+  const [selectedScanRunId, setSelectedScanRunId] = useState<number | null>(null)
+  const [showRunDropdown, setShowRunDropdown] = useState(false)
+  const runDropdownRef = useRef<HTMLDivElement>(null)
 
   const logEndRef = useRef<HTMLDivElement>(null)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  const { data: scanRuns } = useScanHistory(projectIdNum, { status: 'done' as const })
 
   // Seed batches from the REST detail when its scanRunId matches the current
   // run; replace wholesale on run change.
@@ -248,15 +254,18 @@ export default function Triage() {
     onSnapshot: handleSnapshot,
   })
 
-  // ─── Action helpers ───────────────────────────────────────────────────────
+  // Action helpers
 
   const fireStart = useCallback(() => {
     if (projectIdNum === 0) return
     setLogs([])
     setBatches(new Map())
     setResume(null)
-    startTriageMutation({ projectId: projectIdNum, options: {} })
-  }, [projectIdNum, startTriageMutation])
+    startTriageMutation({
+      projectId: projectIdNum,
+      options: { scanRunId: selectedScanRunId ?? undefined },
+    })
+  }, [projectIdNum, startTriageMutation, selectedScanRunId])
 
   const fireResume = useCallback(() => {
     if (projectIdNum === 0 || resume === null) return
@@ -318,7 +327,17 @@ export default function Triage() {
     }
   }, [])
 
-  // ─── Derived display values ───────────────────────────────────────────────
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (runDropdownRef.current && !runDropdownRef.current.contains(e.target as Node)) {
+        setShowRunDropdown(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [])
+
+  // Derived display values
 
   const batchList = useMemo(() => Array.from(batches.values()), [batches])
   const completedBatches = batchList.filter(b => b.status === 'completed').length
@@ -477,20 +496,73 @@ export default function Triage() {
                 </button>
               )}
               {!isRunning && !showResumeAffordance && (
-                <button
-                  onClick={handleStartClick}
-                  disabled={startDisabled}
-                  data-testid="triage-start-button"
-                  className={cn(
-                    'flex items-center gap-2 px-4 h-9 font-bold text-xs uppercase tracking-wider transition-colors',
-                    startDisabled
-                      ? 'bg-muted text-dim cursor-not-allowed'
-                      : 'bg-accent text-background hover:bg-accent/70'
+                <div ref={runDropdownRef} className="relative flex">
+                  <button
+                    onClick={handleStartClick}
+                    disabled={startDisabled}
+                    data-testid="triage-start-button"
+                    className={cn(
+                      'flex items-center gap-2 px-4 h-9 font-bold text-xs uppercase tracking-wider transition-colors',
+                      startDisabled
+                        ? 'bg-muted text-dim cursor-not-allowed'
+                        : 'bg-accent text-background hover:bg-accent/70'
+                    )}
+                  >
+                    <Brain className="h-4 w-4" />
+                    {selectedScanRunId != null
+                      ? `Triage Run #${selectedScanRunId}`
+                      : 'Start Triage'}
+                  </button>
+                  {scanRuns.length > 1 && (
+                    <button
+                      onClick={() => setShowRunDropdown(s => !s)}
+                      disabled={startDisabled}
+                      aria-label="pick a scan run to triage"
+                      data-testid="triage-run-dropdown-toggle"
+                      className={cn(
+                        'flex items-center px-2 h-9 border-l border-background/30 transition-all',
+                        startDisabled
+                          ? 'bg-muted text-dim cursor-not-allowed'
+                          : 'bg-accent text-background hover:bg-accent/70'
+                      )}
+                    >
+                      <ChevronDown className="h-4 w-4" />
+                    </button>
                   )}
-                >
-                  <Brain className="h-4 w-4" />
-                  Start Triage
-                </button>
+                  {showRunDropdown && scanRuns.length > 1 && (
+                    <div className="absolute top-full left-0 mt-1 w-72 border border-border bg-background z-50 shadow-lg isolate">
+                      <div className="px-3 py-1.5 text-[10px] uppercase tracking-[0.2em] text-dim border-b border-border">
+                        [ scan runs ]
+                      </div>
+                      {scanRuns.map(scan => (
+                        <button
+                          key={scan.id}
+                          onClick={() => {
+                            setSelectedScanRunId(scan.id)
+                            setShowRunDropdown(false)
+                          }}
+                          className={cn(
+                            'w-full text-left px-3 py-2 text-xs hover:bg-muted transition-colors border-b border-border last:border-b-0',
+                            selectedScanRunId === scan.id && 'bg-accent/20 text-accent'
+                          )}
+                        >
+                          <div className="font-bold tabular-nums">
+                            Run #{scan.id}
+                            {scan.findingsCount != null && (
+                              <span className="ml-2 font-normal text-dim">
+                                {scan.findingsCount} findings
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-[10px] text-dim">
+                            {scan.toolIds.join(', ')}
+                            {scan.startedAt && ` · ${scan.startedAt}`}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
               )}
               {isRunning && (
                 <button

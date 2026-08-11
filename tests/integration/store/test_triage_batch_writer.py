@@ -21,10 +21,12 @@ from tests.finding_helpers import normalize_test_findings  # noqa: E402
 
 
 def _batch_for(
-    triage_repo: TriageBatchRepository, tool: str, repo: str, segment: str
+    triage_repo: TriageBatchRepository, run_id: int, tool: str, repo: str, segment: str
 ) -> list[list[dict]]:
     """Replicate the runner's read-then-compute step for the writer tests."""
-    findings = triage_repo.fetch_active_findings_for_batching(tool, repo, segment)
+    findings = triage_repo.fetch_active_findings_for_batching(
+        run_id, tool, repo, segment
+    )
     return compute_batches(findings)
 
 
@@ -60,7 +62,7 @@ def _seed_findings(
     finding_repo: FindingRepository,
     findings: list[dict],
     factory: ConnectionFactory | None = None,
-) -> None:
+) -> int:
     if factory is not None:
         repo_ids: dict[str, int] = {}
         for f in findings:
@@ -72,6 +74,7 @@ def _seed_findings(
         ]
     run_id = run_repo.create_run({})
     finding_repo.insert_findings(run_id, normalize_test_findings(findings))
+    return run_id
 
 
 def _make_sast_finding(
@@ -122,9 +125,9 @@ class TestCreateTriageBatches:
             _make_sast_finding(file_path="src/b.py", risk_type="xss", line_start=1),
             _make_sast_finding(file_path="src/b.py", risk_type="xss", line_start=2),
         ]
-        _seed_findings(run_repo, finding_repo, findings, factory)
+        seed_run_id = _seed_findings(run_repo, finding_repo, findings, factory)
         count = triage_repo.create_batches(
-            run_id, _batch_for(triage_repo, "semgrep", "myrepo", "sast")
+            run_id, _batch_for(triage_repo, seed_run_id, "semgrep", "myrepo", "sast")
         )
         assert count == 2
         with factory.connect() as conn:
@@ -140,9 +143,9 @@ class TestCreateTriageBatches:
             _make_sast_finding(file_path="src/a.py", risk_type="sqli"),
             _make_sast_finding(file_path="src/a.py", risk_type="sqli", line_start=20),
         ]
-        _seed_findings(run_repo, finding_repo, findings, factory)
+        seed_run_id = _seed_findings(run_repo, finding_repo, findings, factory)
         triage_repo.create_batches(
-            run_id, _batch_for(triage_repo, "semgrep", "myrepo", "sast")
+            run_id, _batch_for(triage_repo, seed_run_id, "semgrep", "myrepo", "sast")
         )
         with factory.connect() as conn:
             row = dict(conn.execute("SELECT * FROM triage_batches LIMIT 1").fetchone())
@@ -157,9 +160,9 @@ class TestCreateTriageBatches:
             _make_sast_finding(file_path="src/a.py", risk_type="sqli", line_start=i)
             for i in range(1, 4)
         ]
-        _seed_findings(run_repo, finding_repo, findings, factory)
+        seed_run_id = _seed_findings(run_repo, finding_repo, findings, factory)
         triage_repo.create_batches(
-            run_id, _batch_for(triage_repo, "semgrep", "myrepo", "sast")
+            run_id, _batch_for(triage_repo, seed_run_id, "semgrep", "myrepo", "sast")
         )
         with factory.connect() as conn:
             row = dict(conn.execute("SELECT * FROM triage_batches LIMIT 1").fetchone())
@@ -170,9 +173,11 @@ class TestCreateTriageBatches:
     def test_started_at_completed_at_null(self, tmp_path: Path) -> None:
         factory, run_repo, finding_repo, triage_repo = _make_repos(tmp_path)
         run_id = run_repo.create_run({})
-        _seed_findings(run_repo, finding_repo, [_make_sast_finding()], factory)
+        seed_run_id = _seed_findings(
+            run_repo, finding_repo, [_make_sast_finding()], factory
+        )
         triage_repo.create_batches(
-            run_id, _batch_for(triage_repo, "semgrep", "myrepo", "sast")
+            run_id, _batch_for(triage_repo, seed_run_id, "semgrep", "myrepo", "sast")
         )
         with factory.connect() as conn:
             row = dict(conn.execute("SELECT * FROM triage_batches LIMIT 1").fetchone())
@@ -186,12 +191,12 @@ class TestCreateTriageBatches:
             _make_sast_finding(file_path="src/a.py", risk_type="sqli", line_start=1),
             _make_sast_finding(file_path="src/a.py", risk_type="sqli", line_start=2),
         ]
-        _seed_findings(run_repo, finding_repo, findings, factory)
+        seed_run_id = _seed_findings(run_repo, finding_repo, findings, factory)
         triage_repo.create_batches(
-            run_id, _batch_for(triage_repo, "semgrep", "myrepo", "sast")
+            run_id, _batch_for(triage_repo, seed_run_id, "semgrep", "myrepo", "sast")
         )
         triage_repo.create_batches(
-            run_id, _batch_for(triage_repo, "semgrep", "myrepo", "sast")
+            run_id, _batch_for(triage_repo, seed_run_id, "semgrep", "myrepo", "sast")
         )
         with factory.connect() as conn:
             row_count = conn.execute("SELECT COUNT(*) FROM triage_batches").fetchone()[
@@ -202,8 +207,9 @@ class TestCreateTriageBatches:
     def test_empty_findings_writes_nothing(self, tmp_path: Path) -> None:
         factory, run_repo, _, triage_repo = _make_repos(tmp_path)
         run_id = run_repo.create_run({})
+        seed_run_id = run_repo.create_run({})
         count = triage_repo.create_batches(
-            run_id, _batch_for(triage_repo, "semgrep", "myrepo", "sast")
+            run_id, _batch_for(triage_repo, seed_run_id, "semgrep", "myrepo", "sast")
         )
         assert count == 0
         with factory.connect() as conn:
@@ -219,8 +225,8 @@ class TestCreateTriageBatches:
             _make_api_finding(url="http://example.com/api/login", risk_type="xss"),
             _make_api_finding(url="http://example.com/api/search", risk_type="sqli"),
         ]
-        _seed_findings(run_repo, finding_repo, findings, factory)
+        seed_run_id = _seed_findings(run_repo, finding_repo, findings, factory)
         count = triage_repo.create_batches(
-            run_id, _batch_for(triage_repo, "zap", "myrepo", "web")
+            run_id, _batch_for(triage_repo, seed_run_id, "zap", "myrepo", "web")
         )
         assert count >= 1

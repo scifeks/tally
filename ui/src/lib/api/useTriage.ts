@@ -21,7 +21,7 @@ import { apiEventSource } from './sse'
 import { REST_ENDPOINTS, SSE_ENDPOINTS } from './config'
 import { useUI } from '../store'
 
-// ─── Wire-format types ──────────────────────────────────────────────────────
+// Wire-format types
 
 interface TriageBatchApi {
   id: number
@@ -92,7 +92,7 @@ interface TriageSnapshotApi {
   active_scan_run_ids?: number[]
 }
 
-// ─── Mappers ────────────────────────────────────────────────────────────────
+// Mappers
 
 export function mapTriageBatch(api: TriageBatchApi): TriageBatch {
   return {
@@ -169,7 +169,7 @@ function mapSnapshot(data: TriageSnapshotApi): TriageSnapshotPayload {
   }
 }
 
-// ─── History (paginated) ────────────────────────────────────────────────────
+// History (paginated)────
 
 export interface UseTriageHistoryOptions {
   limit?: number
@@ -233,7 +233,7 @@ export function useTriageHistory(projectId: number, options?: UseTriageHistoryOp
   }
 }
 
-// ─── Active / Latest / Detail ───────────────────────────────────────────────
+// Active / Latest / Detail
 
 export function useActiveTriage(projectId: number) {
   return useQuery({
@@ -313,7 +313,7 @@ export function useTriageRun(
   })
 }
 
-// ─── Mutations ──────────────────────────────────────────────────────────────
+// Mutations
 
 export interface StartTriageOptions {
   /**
@@ -321,6 +321,11 @@ export interface StartTriageOptions {
    * backend triages every untriaged finding from the latest scan_run.
    */
   findingIds?: number[]
+  /**
+   * Optional scan run ID to triage findings from. When omitted, the backend
+   * triages findings from the latest scan run.
+   */
+  scanRunId?: number
 }
 
 function toErrorPayload(err: ApiError): ApiErrorPayload {
@@ -343,6 +348,9 @@ export function useStartTriage() {
       }
       if (options?.findingIds && options.findingIds.length > 0) {
         body.finding_ids = options.findingIds
+      }
+      if (options?.scanRunId != null) {
+        body.scan_run_id = options.scanRunId
       }
       const data = await apiFetch<TriageRunSummaryApi>(REST_ENDPOINTS.startTriage(projectId), {
         method: 'POST',
@@ -401,7 +409,7 @@ export function useResumeTriage() {
   })
 }
 
-// ─── SSE consumer ───────────────────────────────────────────────────────────
+// SSE consumer
 
 const TRIAGE_EVENT_TYPES: readonly TriageLogEventType[] = [
   'run_started',
