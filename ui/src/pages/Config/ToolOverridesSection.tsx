@@ -73,7 +73,7 @@ export function ToolOverridesSection({
         setArgsMode(existing.argsMode ?? 'stock')
       } else {
         const tool = catalog.find(t => t.id === selectedToolId)
-        const defaultArgs = tool?.requiresArgProfile ? 'custom' : 'stock'
+        const defaultArgs = 'stock'
         setForm({
           toolId: selectedToolId,
           argsMode: defaultArgs,
@@ -81,9 +81,6 @@ export function ToolOverridesSection({
           location: tool?.supportsLocal ? 'local' : 'docker',
         })
         setArgsMode(defaultArgs)
-        if (tool?.requiresArgProfile) {
-          setTemplatesExpanded(true)
-        }
       }
       setIsDirty(false)
       setTemplatesExpanded(false)
@@ -265,13 +262,10 @@ export function ToolOverridesSection({
             )}
           </div>
 
-          {(selectedTool.requiresBaseUrls ||
-            selectedTool.requiresUrlInventory ||
-            selectedTool.requiresArgProfile) && (
+          {(selectedTool.requiresBaseUrls || selectedTool.requiresUrlInventory) && (
             <div className="space-y-1 text-xs text-yellow-600 dark:text-yellow-400">
               {selectedTool.requiresBaseUrls && <div>Requires base URLs</div>}
               {selectedTool.requiresUrlInventory && <div>Requires URL discovery</div>}
-              {selectedTool.requiresArgProfile && <div>Requires argument profile</div>}
             </div>
           )}
 
@@ -335,10 +329,7 @@ export function ToolOverridesSection({
                 Args
               </div>
               <div className="flex gap-1">
-                {(selectedTool?.requiresArgProfile
-                  ? (['custom'] as ArgsMode[])
-                  : (['stock', 'custom'] as ArgsMode[])
-                ).map(mode => (
+                {(['stock', 'custom'] as ArgsMode[]).map(mode => (
                   <button
                     key={mode}
                     onClick={() => {

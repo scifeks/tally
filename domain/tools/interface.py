@@ -155,19 +155,3 @@ class ToolInterface(ABC):
     def display_fields(self) -> list[str]:
         """Optional ordered list of field names to show in result tables."""
         return []
-
-    @property
-    def requires_arg_profile(self) -> bool:
-        """True if this tool cannot run without a user-configured arg profile."""
-        return False
-
-    def get_managed_args(
-        self, context: ExecutionContext
-    ) -> tuple[list[str], Path | None]:
-        """Return wrapper-controlled flags and optional output file path.
-
-        Called when a custom arg profile is active. Returned flags are
-        appended to the profile's CLI args. The output path is tracked
-        by the executor so parse_output can locate the results file.
-        """
-        return [], None

@@ -39,8 +39,6 @@ class GlobalConfig(BaseModel):
                 value = data.pop(old_key)
                 if value:
                     data[new_key] = {"provider": value}
-        data.pop("ffuf_wordlist_path", None)
-        data.pop("ffuf_wordlist_paths", None)
         return data
 
     triage_agent_provider: Literal["", "claude_code", "open_code"] = ""

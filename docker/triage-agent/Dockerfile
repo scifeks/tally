@@ -31,6 +31,8 @@ RUN git config --global --add safe.directory '*'
 
 USER root
 COPY opencode-permissions.json /etc/opencode/permissions.json
+COPY triage-relay.sh /usr/local/bin/triage-relay
+RUN chmod +x /usr/local/bin/triage-relay
 USER agent
 
 WORKDIR /workspace

@@ -130,11 +130,6 @@ export default function Scans() {
     return new Set(configuredTools.filter(t => selectedDomains.has(t.segment)).map(t => t.id))
   }, [configuredTools, selectedDomains])
 
-  const toolsWithProfiles = useMemo(
-    () => new Set(toolArgProfiles.map(p => p.toolName)),
-    [toolArgProfiles]
-  )
-
   // Drop selected/skip tools that fall outside the currently compatible set
   // when the domain selection changes. The size guard avoids a render when
   // no pruning is needed.
@@ -784,13 +779,11 @@ export default function Scans() {
                     configuredTools.map(t => {
                       const isSelected = selectedTools.has(t.id)
                       const isCompatible = compatibleToolIds.has(t.id)
-                      const needsProfile = t.requiresArgProfile && !toolsWithProfiles.has(t.id)
-                      const isDisabled = !isCompatible || needsProfile
+                      const isDisabled = !isCompatible
                       return (
                         <button
                           key={t.id}
                           disabled={isDisabled}
-                          title={needsProfile ? 'Create an argument profile first' : undefined}
                           onClick={() => {
                             const next = new Set(selectedTools)
                             if (isSelected) next.delete(t.id)
@@ -821,7 +814,7 @@ export default function Scans() {
                               isDisabled ? 'text-muted-foreground font-bold' : 'text-dim'
                             )}
                           >
-                            {needsProfile ? 'unconfigured' : t.segment}
+                            {t.segment}
                           </span>
                         </button>
                       )

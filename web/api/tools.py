@@ -150,7 +150,6 @@ def get_tools_catalog(request: Request) -> ToolCatalogResponse:
             description=tool.description,
             requires_base_urls=tool.requires_base_urls,
             requires_url_inventory=_needs_url_inventory(tool),
-            requires_arg_profile=tool.requires_arg_profile,
         )
         for tool in tools
     ]
@@ -166,7 +165,6 @@ def get_tools_catalog(request: Request) -> ToolCatalogResponse:
                     supports_docker=_supports_docker(tool_name),
                     description="",
                     requires_base_urls=False,
-                    requires_arg_profile=False,
                     requires_url_inventory=(tool_name in _URL_INVENTORY_TOOLS),
                 )
             )

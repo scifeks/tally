@@ -248,7 +248,7 @@ def _stub_repos_service(
 
 
 def _stub_tool_registry(names: tuple[str, ...] = ("semgrep", "gitleaks")) -> Any:
-    wrappers = {n: SimpleNamespace(name=n, requires_arg_profile=False) for n in names}
+    wrappers = {n: SimpleNamespace(name=n) for n in names}
     return SimpleNamespace(
         get_all_tools=lambda: list(wrappers.values()),
         get_tool=lambda name: wrappers.get(name),

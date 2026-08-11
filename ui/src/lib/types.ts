@@ -194,7 +194,6 @@ export interface ConfiguredTool {
   segment: Segment
   /** Whether this tool is enabled by default for scans */
   enabled: boolean
-  requiresArgProfile: boolean
 }
 
 /** Scan options passed to the backend when starting a scan. */
@@ -773,7 +772,6 @@ export interface ToolCatalogEntry {
   supportsDocker: boolean
   requiresBaseUrls: boolean
   requiresUrlInventory: boolean
-  requiresArgProfile: boolean
 }
 
 /**

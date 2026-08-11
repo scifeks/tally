@@ -358,7 +358,6 @@ class ToolCatalogItem(BaseModel):
     description: str
     requires_base_urls: bool = False
     requires_url_inventory: bool = False
-    requires_arg_profile: bool = False
 
 
 class ToolCatalogResponse(BaseModel):
@@ -512,7 +511,6 @@ class ScanConfigTool(BaseModel):
     name: str
     domain: str
     enabled: bool = True
-    requires_arg_profile: bool = False
 
 
 class ScanConfigResponse(BaseModel):

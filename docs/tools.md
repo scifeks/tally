@@ -5,7 +5,6 @@
 | Tool | Category | What it does |
 |---|---|---|
 | Antares | SAST | CWE vulnerability localization using LLM agent investigation. Identifies files likely to contain specific CWE weaknesses by exploring the codebase with a small language model. Requires endpoint configuration; see [docs/antares-shim.md](antares-shim.md) |
-| ffuf | DAST | Fast web fuzzer for discovering hidden files, directories, and parameters via wordlist-based brute-force |
 | Nuclei | DAST | Template-based vulnerability scanner; known CVE fingerprinting, misconfiguration detection, and DAST fuzzing |
 | OWASP ZAP | DAST | Dynamic web/API security scanning |
 | XSStrike | DAST | XSS-focused dynamic scanner; context-aware payload generation and WAF evasion to complement ZAP |
@@ -90,21 +89,6 @@ Choose a provider based on your needs:
 - **Claude API.** Higher accuracy on complex endpoint patterns and modern frameworks. Requires Anthropic API key. Set `api_key` in the `claude` provider config and reference it in `endpoint_extraction_inference`.
 
 See [docs/configuration.md](configuration.md) for examples of enabling endpoint extraction with each provider.
-
----
-
-## ffuf
-
-ffuf is a fast web fuzzer written in Go that discovers hidden files, directories, vhosts, and parameters by brute-forcing HTTP requests with a wordlist. It runs in the `web` scan segment against configured `base_urls`.
-
-### Requirements
-
-- **ffuf binary.** Install from `https://github.com/ffuf/ffuf` or via your package manager (`go install github.com/ffuf/ffuf/v2@latest`). The binary must be on `$PATH` or configured in `config/commands.json`.
-- **A wordlist.** ffuf needs a wordlist for brute-force discovery. Set the `FFUF_WORDLIST` environment variable to the path of your preferred wordlist, or install SecLists (`/usr/share/seclists/`). Without a wordlist, ffuf is skipped automatically.
-
-### How it works
-
-ffuf appends `/FUZZ` to each configured `base_url` and sends one HTTP request per wordlist entry, filtering responses by status code (200, 201, 301, 302, 307, 401, 403, 405, 500). Each discovered path becomes an "exposure" finding with its HTTP status, response length, and content type.
 
 ---
 
@@ -285,19 +269,6 @@ Run `search --show-fields --tool=<tool>` to see all available fields for a tool.
 | `poc` | Proof of concept URL |
 | `severity` | Severity level (low, medium, high, critical) |
 | `url` | URL where the vulnerability was found |
-
-### ffuf
-
-| Field | Description |
-|---|---|
-| `content_type` | Response content type |
-| `finding_type` | Type of finding (exposure) |
-| `host` | Target host |
-| `length` | Response body length in bytes |
-| `redirect_location` | Redirect target URL (for 3xx responses) |
-| `severity` | Severity level (informational, low) |
-| `status` | HTTP response status code |
-| `url` | Discovered URL |
 
 ### garak
 

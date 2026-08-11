@@ -105,7 +105,6 @@ interface ToolCatalogItemApi {
   description: string
   requires_base_urls: boolean
   requires_url_inventory: boolean
-  requires_arg_profile: boolean
 }
 
 interface ToolCatalogResponseApi {
@@ -268,7 +267,6 @@ function mapToolCatalog(api: ToolCatalogItemApi): ToolCatalogEntry {
     supportsDocker: api.supports_docker,
     requiresBaseUrls: api.requires_base_urls,
     requiresUrlInventory: api.requires_url_inventory,
-    requiresArgProfile: api.requires_arg_profile,
   }
 }
 

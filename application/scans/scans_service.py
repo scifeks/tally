@@ -239,26 +239,6 @@ class ScansService:
                         )
                     )
 
-        profiled_tools: set[str] = set()
-        for pid in arg_profile_ids:
-            profile = profiles_repo.get(pid)
-            if profile is not None:
-                profiled_tools.add(profile.tool_name)
-
-        for tid in tool_ids:
-            tw = tool_registry.get_tool(tid)
-            if tw is None:
-                continue
-            if getattr(tw, "requires_arg_profile", False) and (
-                tid not in profiled_tools
-            ):
-                errors.append(
-                    FieldError(
-                        field="toolIds",
-                        issue=(f"{tid} requires an argument profile"),
-                    )
-                )
-
         if errors:
             raise ScanValidationError(errors)
 

@@ -168,7 +168,6 @@ class TestToolsCatalog:
         assert item["description"] == "Python security linter"
         assert isinstance(item["requires_base_urls"], bool)
         assert isinstance(item["requires_url_inventory"], bool)
-        assert isinstance(item["requires_arg_profile"], bool)
 
     async def test_catalog_with_empty_registry_only_has_disk_tools(
         self, app_client

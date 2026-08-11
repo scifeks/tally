@@ -78,8 +78,6 @@ class TestExecuteToolPassesSnapshot:
 
         mock_tool = MagicMock()
         mock_tool.name = "zap"
-        mock_tool.requires_arg_profile = False
-        mock_tool.get_managed_args = MagicMock(return_value=([], None))
         mock_tool.build_execution_passes = MagicMock(
             side_effect=Exception("should not be called")
         )
@@ -227,8 +225,6 @@ class TestExecuteToolPassesSnapshot:
 
         mock_tool = MagicMock()
         mock_tool.name = "tool"
-        mock_tool.requires_arg_profile = False
-        mock_tool.get_managed_args = MagicMock(return_value=([], None))
 
         mock_result = self._make_tool_result()
         mock_executor = MagicMock()

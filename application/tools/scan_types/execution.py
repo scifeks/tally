@@ -115,49 +115,6 @@ def make_context(
     )
 
 
-# Flags that the wrapper always controls when managed args are active.
-_MANAGED_FLAG_NAMES = frozenset({"-of", "-o", "-s"})
-
-
-def _merge_managed_args(
-    profile_args: list[str],
-    managed_flags: list[str],
-) -> list[str]:
-    """Combine user profile args with wrapper-managed flags."""
-    cleaned: list[str] = []
-    skip_next = False
-    for i, arg in enumerate(profile_args):
-        if skip_next:
-            skip_next = False
-            continue
-        if arg in _MANAGED_FLAG_NAMES:
-            if arg != "-s" and i + 1 < len(profile_args):
-                skip_next = True
-            continue
-        cleaned.append(arg)
-
-    profile_flags = {a for a in profile_args if a.startswith("-")}
-    skip_default = False
-    for i, flag in enumerate(managed_flags):
-        if skip_default:
-            skip_default = False
-            continue
-        if (
-            flag.startswith("-")
-            and flag not in _MANAGED_FLAG_NAMES
-            and flag in profile_flags
-        ):
-            has_value = i + 1 < len(managed_flags) and not managed_flags[
-                i + 1
-            ].startswith("-")
-            if has_value:
-                skip_default = True
-            continue
-        cleaned.append(flag)
-
-    return cleaned
-
-
 def _build_raw_command(
     tool_name: str,
     command_config: Any,
@@ -215,9 +172,6 @@ def execute_tool_passes(
             )
             cli_args = None
         if cli_args is not None:
-            managed_flags, output_path = tool.get_managed_args(context)
-            if managed_flags:
-                cli_args = _merge_managed_args(cli_args, managed_flags)
             svc = context.service
             workdir = getattr(svc, "docker_path", None) if svc else None
             try:
@@ -235,7 +189,7 @@ def execute_tool_passes(
                     "Tool %s: using custom arg profile",
                     tool.name,
                 )
-                return executor.run_raw(raw_cmd, tool, output_path=output_path)
+                return executor.run_raw(raw_cmd, tool)
 
     passes = tool.build_execution_passes(context)
     if not passes:
