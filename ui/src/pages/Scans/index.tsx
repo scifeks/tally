@@ -130,6 +130,11 @@ export default function Scans() {
     return new Set(configuredTools.filter(t => selectedDomains.has(t.segment)).map(t => t.id))
   }, [configuredTools, selectedDomains])
 
+  const toolsWithProfiles = useMemo(
+    () => new Set(toolArgProfiles.map(p => p.toolName)),
+    [toolArgProfiles]
+  )
+
   // Drop selected/skip tools that fall outside the currently compatible set
   // when the domain selection changes. The size guard avoids a render when
   // no pruning is needed.
@@ -779,10 +784,13 @@ export default function Scans() {
                     configuredTools.map(t => {
                       const isSelected = selectedTools.has(t.id)
                       const isCompatible = compatibleToolIds.has(t.id)
+                      const needsProfile = t.requiresArgProfile && !toolsWithProfiles.has(t.id)
+                      const isDisabled = !isCompatible || needsProfile
                       return (
                         <button
                           key={t.id}
-                          disabled={!isCompatible}
+                          disabled={isDisabled}
+                          title={needsProfile ? 'Create an argument profile first' : undefined}
                           onClick={() => {
                             const next = new Set(selectedTools)
                             if (isSelected) next.delete(t.id)
@@ -791,8 +799,8 @@ export default function Scans() {
                           }}
                           className={cn(
                             'w-full flex items-center justify-between px-2 h-6 text-[10px] transition-colors',
-                            !isCompatible && 'opacity-40 cursor-not-allowed',
-                            isCompatible &&
+                            isDisabled && 'opacity-40 cursor-not-allowed',
+                            !isDisabled &&
                               (isSelected
                                 ? 'bg-accent/20 text-accent'
                                 : 'hover:bg-muted/30 text-muted-foreground')
@@ -810,10 +818,10 @@ export default function Scans() {
                           <span
                             className={cn(
                               'uppercase text-[9px]',
-                              !isCompatible ? 'text-muted-foreground font-bold' : 'text-dim'
+                              isDisabled ? 'text-muted-foreground font-bold' : 'text-dim'
                             )}
                           >
-                            {t.segment}
+                            {needsProfile ? 'unconfigured' : t.segment}
                           </span>
                         </button>
                       )

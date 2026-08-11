@@ -25,7 +25,7 @@ class GlobalConfig(BaseModel):
     @model_validator(mode="before")
     @classmethod
     def _migrate_legacy_keys(cls, data: dict) -> dict:  # type: ignore[override]
-        """Convert old flat ``*_llm_provider`` keys and ``ffuf_wordlist_path``."""
+        """Convert old flat ``*_llm_provider`` keys."""
         if not isinstance(data, dict):
             return data
         _LEGACY = {
@@ -39,9 +39,8 @@ class GlobalConfig(BaseModel):
                 value = data.pop(old_key)
                 if value:
                     data[new_key] = {"provider": value}
-        if "ffuf_wordlist_path" in data and "ffuf_wordlist_paths" not in data:
-            value = data.pop("ffuf_wordlist_path")
-            data["ffuf_wordlist_paths"] = [value] if value else []
+        data.pop("ffuf_wordlist_path", None)
+        data.pop("ffuf_wordlist_paths", None)
         return data
 
     triage_agent_provider: Literal["", "claude_code", "open_code"] = ""
@@ -97,14 +96,6 @@ class GlobalConfig(BaseModel):
         description=(
             "Blind XSS callback URL. Passed to Dalfox via -b and "
             "enables XSStrike --blind mode when non-empty."
-        ),
-    )
-
-    ffuf_wordlist_paths: list[str] = Field(
-        default_factory=list,
-        description=(
-            "Paths to wordlist files for ffuf. Checked before "
-            "FFUF_WORDLIST env var and system paths."
         ),
     )
 

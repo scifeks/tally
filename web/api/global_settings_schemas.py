@@ -2,23 +2,7 @@
 
 from __future__ import annotations
 
-from pydantic import AliasChoices, BaseModel, ConfigDict, Field
-
-
-class ToolSettingsResponse(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
-
-    ffuf_wordlist_paths: list[str] = Field(
-        serialization_alias="ffufWordlistPaths",
-    )
-
-
-class UpdateToolSettingsRequest(BaseModel):
-    model_config = ConfigDict(populate_by_name=True, extra="ignore")
-
-    ffuf_wordlist_paths: list[str] = Field(
-        validation_alias=AliasChoices("ffufWordlistPaths", "ffuf_wordlist_paths"),
-    )
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class FileSystemEntry(BaseModel):

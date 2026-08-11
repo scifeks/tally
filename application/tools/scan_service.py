@@ -119,6 +119,16 @@ class ScanService:
             effective = _resolve_effective_tools(
                 tool_registry, tool_ids, domains, skip_tool_ids
             )
+            effective = [
+                t
+                for t in effective
+                if not getattr(
+                    tool_registry.get_tool(t),
+                    "requires_arg_profile",
+                    False,
+                )
+                or t in snapshots
+            ]
             if since_commit is not None:
                 if run_args is None:
                     run_args = {}

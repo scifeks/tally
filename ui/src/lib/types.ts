@@ -194,6 +194,7 @@ export interface ConfiguredTool {
   segment: Segment
   /** Whether this tool is enabled by default for scans */
   enabled: boolean
+  requiresArgProfile: boolean
 }
 
 /** Scan options passed to the backend when starting a scan. */
@@ -772,7 +773,7 @@ export interface ToolCatalogEntry {
   supportsDocker: boolean
   requiresBaseUrls: boolean
   requiresUrlInventory: boolean
-  requiresWordlist: boolean
+  requiresArgProfile: boolean
 }
 
 /**
@@ -791,11 +792,6 @@ export interface ToolOverrideConfig {
     name: string
     toolPath: string
   }
-}
-
-/** Global tool settings (cross-project). */
-export interface GlobalToolSettings {
-  ffufWordlistPaths: string[]
 }
 
 /** Single filesystem entry from the browse API. */

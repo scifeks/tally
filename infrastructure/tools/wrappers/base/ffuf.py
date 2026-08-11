@@ -2,39 +2,11 @@
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 from typing import Any
 
 from domain.tools.base import ToolResult
 from domain.tools.interface import ExecutionContext, ExecutionPass, ToolInterface
-
-
-def resolve_wordlists(configured_paths: list[str]) -> list[str]:
-    """Return valid wordlist paths from config, env, or system defaults.
-
-    If any configured path exists on disk, return only the valid
-    configured paths. Otherwise fall back to FFUF_WORDLIST env var,
-    then common system locations.
-    """
-    valid = [p for p in configured_paths if p and Path(p).exists()]
-    if valid:
-        return valid
-
-    env_wordlist = os.environ.get("FFUF_WORDLIST")
-    if env_wordlist and Path(env_wordlist).exists():
-        return [env_wordlist]
-
-    common_paths = [
-        "/usr/share/seclists/Discovery/Web-Content/directory-list-2.3-medium.txt",
-        "/usr/share/wordlists/dirb/common.txt",
-        "/usr/share/wordlists/dirbuster/directory-list-2.3-medium.txt",
-    ]
-    for path_str in common_paths:
-        if Path(path_str).exists():
-            return [path_str]
-
-    return []
 
 
 class BaseFFufTool(ToolInterface):
@@ -102,38 +74,32 @@ class BaseFFufTool(ToolInterface):
     def supported_languages(self) -> list[str] | None:
         return self.language_gates or None
 
-    def build_execution_passes(self, context: ExecutionContext) -> list[ExecutionPass]:
-        assert context.repo is not None
-        assert context.service is not None
+    @property
+    def requires_arg_profile(self) -> bool:
+        return True
 
-        wordlists = resolve_wordlists(context.tool_config.ffuf_wordlist_paths)
-        if not wordlists:
-            import logging
-
-            logger = logging.getLogger(__name__)
-            logger.warning(
-                "ffuf: no wordlist found; install SecLists or set FFUF_WORDLIST"
-            )
-            return []
-
+    def get_managed_args(
+        self, context: ExecutionContext
+    ) -> tuple[list[str], Path | None]:
+        """Return flags controlled by the ffuf wrapper and output path."""
+        output_path = self._get_output_file(context)
         base_url = context.service.base_urls[0]
-        passes: list[ExecutionPass] = []
+        target_url = base_url.rstrip("/") + "/FUZZ"
 
-        for wordlist in wordlists:
-            wl_name = Path(wordlist).stem
-            output_file = self._get_output_file(context)
-            passes.append(
-                ExecutionPass(
-                    label_suffix=f"{context.repo.name}_{wl_name}",
-                    kwargs={
-                        "base_url": base_url,
-                        "wordlist": wordlist,
-                        "output_file": output_file,
-                    },
-                ),
-            )
+        managed_args = [
+            "-u",
+            target_url,
+            "-of",
+            "json",
+            "-o",
+            output_path,
+            "-s",
+        ]
 
-        return passes
+        return managed_args, Path(output_path)
+
+    def build_execution_passes(self, context: ExecutionContext) -> list[ExecutionPass]:
+        return []
 
     @staticmethod
     def _get_output_file(context: ExecutionContext) -> str:

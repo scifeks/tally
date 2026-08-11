@@ -19,7 +19,6 @@ import { ConfigPanel } from './ConfigPanel'
 import { ProjectInfoSection } from './ProjectInfoSection'
 import { RepositorySection } from './RepositorySection'
 import { ToolOverridesSection } from './ToolOverridesSection'
-import { GlobalToolSettingsSection } from './GlobalToolSettingsSection'
 import { DocumentsSection } from './DocumentsSection'
 import { SectionHeader } from './shared'
 import { NoProjectSelectedState } from '@/components/NoProjectSelectedState'
@@ -150,8 +149,6 @@ export default function Config() {
           </Panel>
         )}
       </div>
-
-      <GlobalToolSettingsSection />
 
       <DocumentsSection projectId={projectId} />
 

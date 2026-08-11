@@ -240,7 +240,7 @@ class TestExecutorReporterWiring:
             False,
             frozenset({1}),
         )
-        assert reporter.messages == ["    ✗ Failed  (command not found)"]
+        assert reporter.messages == ["    FAIL (command not found)"]
 
     def test_timeout_routes_through_reporter(self, tmp_path: Path) -> None:
         reporter = _RecordingReporter()
@@ -253,4 +253,4 @@ class TestExecutorReporterWiring:
             reporter=reporter,
         )
         executor._timeout_result("mytool", "ts", perf_counter() - 1.0, 300)
-        assert reporter.messages == ["    ✗ Failed  (timeout after 300s)"]
+        assert reporter.messages == ["    FAIL (timeout after 300s)"]

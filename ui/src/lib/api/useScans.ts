@@ -31,6 +31,7 @@ interface ScanConfigToolApi {
   name: string
   domain: string
   enabled: boolean
+  requires_arg_profile: boolean
 }
 
 interface ScanConfigResponseApi {
@@ -54,6 +55,7 @@ function mapTool(api: ScanConfigToolApi): ConfiguredTool {
     name: api.name,
     segment: api.domain,
     enabled: api.enabled,
+    requiresArgProfile: api.requires_arg_profile,
   }
 }
 

@@ -8,7 +8,7 @@ configuration types.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 
@@ -24,5 +24,4 @@ class ToolExecutionConfig:
     noir_provider: NoirProviderSnapshot | None
     blind_xss_callback_url: str = ""
     antares_config: Any = None
-    ffuf_wordlist_paths: list[str] = field(default_factory=list)
     endpoint_extraction_enabled: bool = False

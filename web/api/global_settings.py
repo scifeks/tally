@@ -1,58 +1,18 @@
-"""Global settings API: tool config and filesystem browsing."""
+"""Global settings API: filesystem browsing."""
 
 from __future__ import annotations
 
-import logging
 import stat
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, HTTPException, Query
 
-from core.config.manager import ConfigManager
 from web.api.global_settings_schemas import (
     FileSystemBrowseResponse,
     FileSystemEntry,
-    ToolSettingsResponse,
-    UpdateToolSettingsRequest,
 )
-
-logger = logging.getLogger(__name__)
 
 router = APIRouter()
-
-
-@router.get(
-    "/tool-config",
-    response_model=ToolSettingsResponse,
-)
-def get_tool_settings(request: Request):
-    base_path: str = request.app.state.base_path
-    cm = ConfigManager(base_path)
-    return ToolSettingsResponse(
-        ffuf_wordlist_paths=cm.global_config.ffuf_wordlist_paths,
-    )
-
-
-@router.put(
-    "/tool-config",
-    response_model=ToolSettingsResponse,
-)
-def update_tool_settings(
-    request: Request,
-    body: UpdateToolSettingsRequest,
-):
-    base_path: str = request.app.state.base_path
-    cm = ConfigManager(base_path)
-    with cm.locked_global_config():
-        gc = cm.load_global_config()
-        data = gc.model_dump()
-        data["ffuf_wordlist_paths"] = body.ffuf_wordlist_paths
-        updated = type(gc)(**data)
-        cm.save_global_config(updated)
-
-    return ToolSettingsResponse(
-        ffuf_wordlist_paths=updated.ffuf_wordlist_paths,
-    )
 
 
 @router.get(

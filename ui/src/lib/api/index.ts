@@ -174,8 +174,4 @@ export type {
 } from './useToolArgProfiles'
 
 // Global settings hooks
-export {
-  useGlobalToolSettings,
-  useUpdateGlobalToolSettings,
-  useBrowseFilesystem,
-} from './useGlobalSettings'
+export { useBrowseFilesystem } from './useGlobalSettings'

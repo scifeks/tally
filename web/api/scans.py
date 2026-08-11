@@ -186,6 +186,7 @@ async def get_scans_config(
                 name=tw.name.replace("_", " ").replace("-", " ").title(),
                 domain=getattr(tw, "category", "") or "",
                 enabled=True,
+                requires_arg_profile=getattr(tw, "requires_arg_profile", False),
             )
         )
 
