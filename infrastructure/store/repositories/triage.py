@@ -82,34 +82,36 @@ class TriageBatchRepository(TriageBatchRepositoryPort):
             rows = conn.execute(sql, params).fetchall()
         return [dict(row) for row in rows]
 
-    def create_batches(self, run_id: int, batches: list[list[dict[str, Any]]]) -> int:
+    def create_batches(
+        self, run_id: int, batches: list[list[dict[str, Any]]]
+    ) -> list[tuple[int, int]]:
         """Persist pre-built triage *batches* for *run_id*.
 
-        Each batch is a list of finding dicts (as produced by
-        ``application.triage.batching.compute_batches``). Returns the
-        number of rows inserted.
+        Returns ``[(batch_id, finding_count), ...]`` for each inserted
+        row.
         """
         if not batches:
-            return 0
+            return []
 
-        insert_rows = [
-            (
-                run_id,
-                json.dumps([f["id"] for f in batch]),
-                json.dumps(batch),
-                "pending",
-                0,
-            )
-            for batch in batches
-        ]
+        result: list[tuple[int, int]] = []
         with self._factory.connect() as conn:
-            conn.executemany(
-                "INSERT INTO triage_batches"
-                " (run_id, finding_ids, batch_data, status, run_attempts)"
-                " VALUES (?, ?, ?, ?, ?)",
-                insert_rows,
-            )
-        return len(batches)
+            for batch in batches:
+                cur = conn.execute(
+                    "INSERT INTO triage_batches"
+                    " (run_id, finding_ids, batch_data, status,"
+                    " run_attempts)"
+                    " VALUES (?, ?, ?, ?, ?)",
+                    (
+                        run_id,
+                        json.dumps([f["id"] for f in batch]),
+                        json.dumps(batch),
+                        "pending",
+                        0,
+                    ),
+                )
+                batch_id: int = cur.lastrowid  # type: ignore[assignment]
+                result.append((batch_id, len(batch)))
+        return result
 
     def claim_batch(self, run_id: int) -> TriageBatchRow | None:
         """Atomically claim the next pending batch for *run_id*.
@@ -222,13 +224,24 @@ class TriageBatchRepository(TriageBatchRepositoryPort):
             ).fetchall()
         return [int(r["run_id"]) for r in rows], int(total)
 
-    def list_for_run(self, run_id: int) -> list[TriageBatchRow]:
-        """Return all triage_batches rows for *run_id*, ordered by id."""
+    def list_for_run(
+        self, run_id: int, *, include_cancelled: bool = False
+    ) -> list[TriageBatchRow]:
+        """Return triage_batches rows for *run_id*, ordered by id.
+
+        Cancelled batches are excluded by default because they are
+        stale relics from a previous attempt on the same run_id.
+        """
+        if include_cancelled:
+            sql = "SELECT * FROM triage_batches WHERE run_id = ? ORDER BY id ASC"
+        else:
+            sql = (
+                "SELECT * FROM triage_batches"
+                " WHERE run_id = ? AND status != 'cancelled'"
+                " ORDER BY id ASC"
+            )
         with self._factory.connect() as conn:
-            rows = conn.execute(
-                "SELECT * FROM triage_batches WHERE run_id = ? ORDER BY id ASC",
-                (run_id,),
-            ).fetchall()
+            rows = conn.execute(sql, (run_id,)).fetchall()
         return [_row_to_triage_batch(r) for r in rows]
 
     def summarize_for_run(self, run_id: int) -> TriageRunSummary | None:
@@ -249,7 +262,7 @@ class TriageBatchRepository(TriageBatchRepositoryPort):
           status is in (``'completed'``, ``'failed'``,
           ``'cancelled'``).
         """
-        rows = self.list_for_run(run_id)
+        rows = self.list_for_run(run_id, include_cancelled=True)
         if not rows:
             return None
 

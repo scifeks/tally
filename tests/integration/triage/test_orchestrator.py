@@ -357,7 +357,7 @@ def test_create_triage_batches_called_per_combo(
         patch(
             "infrastructure.store.repositories.triage"
             ".TriageBatchRepository.create_batches",
-            return_value=1,
+            return_value=[(1, 1)],
         ),
         patch("application.triage.factory.TriageAgentFactory") as mock_factory,
     ):
@@ -439,7 +439,7 @@ def test_batch_count_reported(project_db) -> None:
         patch(
             "infrastructure.store.repositories.triage"
             ".TriageBatchRepository.create_batches",
-            return_value=3,
+            return_value=[(1, 1), (2, 1), (3, 1)],
         ),
         patch("application.triage.factory.TriageAgentFactory") as mock_factory,
     ):
@@ -458,6 +458,6 @@ def test_batch_count_reported(project_db) -> None:
         )
 
     batch_events = [e for e in collected if isinstance(e, BatchCreated)]
-    assert len(batch_events) == 1
-    assert batch_events[0].findings_count == 3
-    assert "semgrep" in batch_events[0].message
+    assert len(batch_events) == 3
+    assert all(e.findings_count == 1 for e in batch_events)
+    assert all("semgrep" in e.message for e in batch_events)

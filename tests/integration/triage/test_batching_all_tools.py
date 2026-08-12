@@ -289,8 +289,8 @@ class TestBatchingAllTools:
                 run_id, tool, repo, segment
             )
             batches = compute_batches(fetched)
-            count = triage_repo.create_batches(run_id, batches)
-            batch_counts[f"{tool}/{segment}"] = count
+            created = triage_repo.create_batches(run_id, batches)
+            batch_counts[f"{tool}/{segment}"] = len(created)
 
         assert batch_counts["semgrep/sast"] >= 1
         assert batch_counts["graphql-cop/web"] >= 1

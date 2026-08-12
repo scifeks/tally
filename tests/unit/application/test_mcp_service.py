@@ -105,7 +105,7 @@ class TestFetchBatch:
             {"id": 202, "tool": "semgrep", "file": "app.py", "severity": "low"},
         ]
         triage_repo.fetch_active_findings_for_batching.return_value = findings
-        triage_repo.create_batches.return_value = 2
+        triage_repo.create_batches.return_value = [(1, 1), (2, 1)]
 
         summary = TriageRunSummary(
             scan_run_id=1,

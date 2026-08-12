@@ -5,7 +5,6 @@ from __future__ import annotations
 import sys
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
@@ -181,7 +180,7 @@ def test_batch_calls_create_per_combo(tmp_path: Path) -> None:
         ("zap", "repo1", "web"),
     ]
     store.fetch_active_findings_for_batching.return_value = []
-    store.create_batches.return_value = 2
+    store.create_batches.return_value = [(100, 3), (101, 2)]
 
     run_id, total = runner.batch()
 
@@ -193,7 +192,7 @@ def test_batch_calls_create_per_combo(tmp_path: Path) -> None:
     assert store.create_batches.call_count == 2
     for call in store.create_batches.call_args_list:
         assert call.args[0] == run_id
-    assert total == 4  # 2 + 2
+    assert total == 4  # 2 batches per combo
 
 
 def test_batch_passes_skip_tools_to_store(
@@ -416,60 +415,6 @@ def test_non_parse_error_not_retried(
 
     assert outcome == "failed"
     assert len(agent.calls) == 1
-
-
-# _read_source_file()
-
-
-def test_read_source_file_returns_contents(
-    tmp_path: Path,
-) -> None:
-    repo_dir = tmp_path / "myrepo"
-    repo_dir.mkdir()
-    src = repo_dir / "src" / "app.py"
-    src.parent.mkdir(parents=True)
-    src.write_text("print('hello')")
-
-    runner, _, _ = _make_runner(tmp_path, repo_paths={"myrepo": repo_dir})
-    finding: dict[str, Any] = {
-        "repo": "myrepo",
-        "file": "src/app.py",
-    }
-
-    assert runner._read_source_file(finding) == "print('hello')"
-
-
-def test_read_source_file_missing_repo(
-    tmp_path: Path,
-) -> None:
-    runner, _, _ = _make_runner(tmp_path, repo_paths={})
-    finding: dict[str, Any] = {
-        "repo": "missing",
-        "file": "a.py",
-    }
-
-    assert runner._read_source_file(finding) == ""
-
-
-def test_read_source_file_missing_file(
-    tmp_path: Path,
-) -> None:
-    runner, _, _ = _make_runner(tmp_path, repo_paths={"r": tmp_path})
-    finding: dict[str, Any] = {
-        "repo": "r",
-        "file": "nonexistent.py",
-    }
-
-    assert runner._read_source_file(finding) == ""
-
-
-def test_read_source_file_no_file_field(
-    tmp_path: Path,
-) -> None:
-    runner, _, _ = _make_runner(tmp_path, repo_paths={"r": tmp_path})
-    finding: dict[str, Any] = {"repo": "r"}
-
-    assert runner._read_source_file(finding) == ""
 
 
 # run()

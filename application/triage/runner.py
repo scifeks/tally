@@ -164,28 +164,29 @@ class TriageRunner:
                     findings,
                     max_findings_per_batch=self._max_findings_per_batch,
                 )
-                count = self._triage_repo.create_batches(run_id, batches)
+                created = self._triage_repo.create_batches(run_id, batches)
                 _log.info(
                     "Created %d batches: tool=%s repo=%s segment=%s",
-                    count,
+                    len(created),
                     tool,
                     repo,
                     segment,
                 )
-                if count > 0:
+                for batch_id, finding_count in created:
                     self._emit(
                         BatchCreated(
                             scan_run_id=run_id,
                             project_id=self._project_id,
-                            batch_id=0,
+                            batch_id=batch_id,
                             segment=segment,
-                            findings_count=count,
+                            findings_count=finding_count,
                             message=(
-                                f"Batched {count} batch(es) for {tool}/{repo}/{segment}"
+                                f"Batched {finding_count} finding(s)"
+                                f" for {tool}/{repo}/{segment}"
                             ),
                         )
                     )
-                total += count
+                total += len(created)
             except Exception as exc:
                 raise RuntimeError(
                     f"Batching failed for {tool}/{repo}/{segment}: {exc}"
@@ -557,19 +558,6 @@ class TriageRunner:
         path = log_dir / f"{batch_id}-{finding_id}-{ts}.log"
         path.write_text(raw_output, encoding="utf-8")
         _log.debug("Triage debug log written to %s", path)
-
-    def _read_source_file(self, finding: dict[str, Any]) -> str:
-        repo_name = finding.get("repo", "")
-        file_path = finding.get("file") or finding.get("url", "")
-        if not file_path or not repo_name:
-            return ""
-        repo_root = self._repo_paths.get(repo_name)
-        if repo_root is None:
-            return ""
-        full_path = repo_root / file_path
-        if not full_path.is_file():
-            return ""
-        return full_path.read_text(errors="replace")
 
     def _write_verdict(self, verdict: Verdict, segment: str) -> None:
         if self._finding_repo is None:

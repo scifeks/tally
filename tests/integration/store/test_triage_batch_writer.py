@@ -126,10 +126,10 @@ class TestCreateTriageBatches:
             _make_sast_finding(file_path="src/b.py", risk_type="xss", line_start=2),
         ]
         seed_run_id = _seed_findings(run_repo, finding_repo, findings, factory)
-        count = triage_repo.create_batches(
+        created = triage_repo.create_batches(
             run_id, _batch_for(triage_repo, seed_run_id, "semgrep", "myrepo", "sast")
         )
-        assert count == 2
+        assert len(created) == 2
         with factory.connect() as conn:
             row_count = conn.execute("SELECT COUNT(*) FROM triage_batches").fetchone()[
                 0
@@ -208,10 +208,10 @@ class TestCreateTriageBatches:
         factory, run_repo, _, triage_repo = _make_repos(tmp_path)
         run_id = run_repo.create_run({})
         seed_run_id = run_repo.create_run({})
-        count = triage_repo.create_batches(
+        created = triage_repo.create_batches(
             run_id, _batch_for(triage_repo, seed_run_id, "semgrep", "myrepo", "sast")
         )
-        assert count == 0
+        assert len(created) == 0
         with factory.connect() as conn:
             row_count = conn.execute("SELECT COUNT(*) FROM triage_batches").fetchone()[
                 0
@@ -226,7 +226,7 @@ class TestCreateTriageBatches:
             _make_api_finding(url="http://example.com/api/search", risk_type="sqli"),
         ]
         seed_run_id = _seed_findings(run_repo, finding_repo, findings, factory)
-        count = triage_repo.create_batches(
+        created = triage_repo.create_batches(
             run_id, _batch_for(triage_repo, seed_run_id, "zap", "myrepo", "web")
         )
-        assert count >= 1
+        assert len(created) >= 1

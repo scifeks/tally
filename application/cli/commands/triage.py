@@ -172,6 +172,9 @@ def _full_triage_mode(
     project_name: str,
 ) -> int:
     """Run full triage with Docker containers."""
+    repos = load_active_repos(str(base_path), project_name)
+    repo_paths = {r.name: Path(r.path) for r in repos if r.path}
+
     try:
         ensure_triage_image(Path(base_path))
     except DockerNotAvailableError:
@@ -185,7 +188,7 @@ def _full_triage_mode(
         return GENERAL_ERROR
 
     try:
-        ensure_triage_containers(Path(base_path), project_name)
+        ensure_triage_containers(Path(base_path), project_name, repo_paths=repo_paths)
     except DockerNotAvailableError:
         print(
             "Error: Docker is not installed or not running.",
@@ -197,7 +200,11 @@ def _full_triage_mode(
         return GENERAL_ERROR
 
     try:
-        service = create_triage_service(project_registry, project_id)
+        service = create_triage_service(
+            project_registry,
+            project_id,
+            repo_paths=repo_paths,
+        )
     except ProjectNotFound:
         print(
             f"Error: project {project_name!r} not found",

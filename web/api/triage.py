@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections.abc import AsyncIterator
+from pathlib import Path
 
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import StreamingResponse
@@ -19,7 +20,11 @@ from application.triage.triage_service import (
 from domain.pipeline.bus_event import EOS
 from domain.triage.entry import TriageBatchRow
 from domain.triage.entry import TriageRunSummary as TriageRunSummaryRow
-from factories.persistence import ProjectNotFound, create_triage_service
+from factories.persistence import (
+    ProjectNotFound,
+    create_triage_service,
+    load_active_repos,
+)
 from web.adapters.event_bus_triage_sink import EventBusTriageSink
 from web.api._errors import Conflict, JobBusyError, NotFound, ValidationError
 from web.api._project_resolver import _resolve_project
@@ -40,10 +45,19 @@ logger = logging.getLogger("tally.web.triage")
 v1_router = APIRouter()
 
 
-def _service(request: Request, project_id: int) -> TriageService:
+def _service(
+    request: Request,
+    project_id: int,
+    *,
+    repo_paths: dict[str, Path] | None = None,
+) -> TriageService:
     """Build a TriageService for *project_id* or raise 404."""
     try:
-        return create_triage_service(request.app.state.project_registry, project_id)
+        return create_triage_service(
+            request.app.state.project_registry,
+            project_id,
+            repo_paths=repo_paths,
+        )
     except ProjectNotFound as exc:
         raise NotFound(f"project {project_id} not found") from exc
 
@@ -280,7 +294,9 @@ async def start_triage(
     project_name: str = row.name
     base_path: str = request.app.state.base_path
 
-    service = _service(request, project_id)
+    repos = load_active_repos(base_path, project_name)
+    repo_paths = {r.name: Path(r.path) for r in repos if r.path}
+    service = _service(request, project_id, repo_paths=repo_paths)
     sink = EventBusTriageSink(request.app.state.event_bus)
     finding_ids = tuple(body.finding_ids) if body.finding_ids else None
     try:
@@ -390,7 +406,9 @@ async def resume_triage(
     project_name: str = row.name
     base_path: str = request.app.state.base_path
 
-    service = _service(request, project_id)
+    repos = load_active_repos(base_path, project_name)
+    repo_paths = {r.name: Path(r.path) for r in repos if r.path}
+    service = _service(request, project_id, repo_paths=repo_paths)
     sink = EventBusTriageSink(request.app.state.event_bus)
     try:
         await asyncio.to_thread(
