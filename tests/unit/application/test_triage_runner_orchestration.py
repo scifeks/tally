@@ -334,7 +334,7 @@ def test_run_completes_batch_and_emits_events(
     result = runner.run()
 
     assert result.success == 1
-    store.complete_batch.assert_called_once_with(1, "success")
+    store.complete_batch.assert_called_once_with(1, "completed")
 
     event_types = [type(e).__name__ for e in sink.events]
     assert event_types[0] == "RunStarted"

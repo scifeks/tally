@@ -414,6 +414,44 @@ class TestLlmEndpointExtractor:
 
             assert count == 0
 
+    def test_extract_keeps_successful_batches_when_one_fails(self) -> None:
+        # A mid-loop batch failure must not discard endpoints collected
+        # from earlier successful batches.
+        with tempfile.TemporaryDirectory() as tmpdir:
+            controller_dir = Path(tmpdir) / "controllers"
+            controller_dir.mkdir()
+            (controller_dir / "Controller1.py").write_text("x" * 100)
+            (controller_dir / "Controller2.py").write_text("y" * 100)
+            (controller_dir / "Controller3.py").write_text("z" * 100)
+
+            mock_llm = MagicMock()
+            mock_llm.complete.side_effect = [
+                '{"endpoints": [{"method": "GET", "path": "/a"}]}',
+                Exception("LLM error on batch 2"),
+                '{"endpoints": [{"method": "POST", "path": "/c"}]}',
+            ]
+
+            mock_repo = MagicMock()
+            mock_repo.insert_many.return_value = 2
+
+            extractor = LlmEndpointExtractor(
+                mock_llm, mock_repo, max_chars_per_batch=150
+            )
+            count = extractor.extract_for_repo(
+                repo_path=tmpdir,
+                repo_id=1,
+                run_id=None,
+                host="localhost",
+                port=8000,
+                protocol="http",
+            )
+
+            assert count == 2
+            assert mock_llm.complete.call_count == 3
+            inserted = list(mock_repo.insert_many.call_args[0][0])
+            paths = sorted(f.path for f in inserted)
+            assert paths == ["/a", "/c"]
+
     def test_extract_deduplicates_endpoints(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             controller_dir = Path(tmpdir) / "controllers"

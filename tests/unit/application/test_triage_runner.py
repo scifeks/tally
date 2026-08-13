@@ -476,7 +476,7 @@ def test_run_skips_skip_strategy_tools(
         result = runner.run()
 
     assert result.sessions_run == 0
-    store.complete_batch.assert_called_once_with(1, "success")
+    store.complete_batch.assert_called_once_with(1, "completed")
 
 
 def test_run_uses_agent_prepared_session_context(
@@ -530,8 +530,8 @@ def test_run_dry_run_marks_all_batches_success(
         runner.run_dry_run()
 
     assert store.complete_batch.call_count == 2
-    store.complete_batch.assert_any_call(10, "success")
-    store.complete_batch.assert_any_call(11, "success")
+    store.complete_batch.assert_any_call(10, "completed")
+    store.complete_batch.assert_any_call(11, "completed")
 
 
 def test_run_dry_run_no_pending_remain(
@@ -552,7 +552,7 @@ def test_run_dry_run_no_pending_remain(
         runner.run_dry_run()
 
     calls = [c.args for c in store.complete_batch.call_args_list]
-    assert all(status == "success" for _, status in calls)
+    assert all(status == "completed" for _, status in calls)
 
 
 def test_run_dry_run_prompt_logged(
@@ -628,7 +628,7 @@ def test_run_batch_loop_skip_completes_without_handler(
         result = runner._run_batch_loop(1, handler)
 
     handler.assert_not_called()
-    store.complete_batch.assert_called_once_with(1, "success")
+    store.complete_batch.assert_called_once_with(1, "completed")
     assert result.sessions_run == 0
     assert result.success == 0
 

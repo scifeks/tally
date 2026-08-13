@@ -394,7 +394,7 @@ class TriageRunner:
             )
 
             if tool_obj is None or tool_obj.skip:
-                self._triage_repo.complete_batch(batch_id, "success")
+                self._triage_repo.complete_batch(batch_id, "completed")
                 continue
 
             segment = tool_obj.scan_segment
@@ -414,7 +414,8 @@ class TriageRunner:
                     outcome = handler(batch_id, batch_data, segment)
             else:
                 outcome = handler(batch_id, batch_data, segment)
-            self._triage_repo.complete_batch(batch_id, outcome)
+            db_status = "failed" if outcome == "failed" else "completed"
+            self._triage_repo.complete_batch(batch_id, db_status)
 
             if outcome == "success":
                 success += 1

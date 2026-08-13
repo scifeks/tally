@@ -184,7 +184,7 @@ class LlmEndpointExtractor:
         seen_endpoints: set[tuple[str, str]] = set()
         total_prompt_chars = 0
 
-        for batch in batches:
+        for batch_idx, batch in enumerate(batches):
             try:
                 prompt = build_extraction_prompt(batch)
                 total_prompt_chars += len(prompt)
@@ -200,8 +200,17 @@ class LlmEndpointExtractor:
                         seen_endpoints.add(key)
                         all_endpoints.append(endpoint)
             except Exception as e:
-                _logger.error("LLM extraction failed for batch: %s", e)
-                return 0
+                # Skip this batch and keep going; a single flake (Ollama
+                # timeout, oversized prompt) should not discard endpoints
+                # already collected from earlier batches.
+                _logger.error(
+                    "LLM extraction failed for batch %d/%d (%d files): %s",
+                    batch_idx + 1,
+                    len(batches),
+                    len(batch),
+                    e,
+                )
+                continue
 
         if not all_endpoints:
             _logger.info("No endpoints extracted from %s", repo_path)
