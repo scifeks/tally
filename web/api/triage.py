@@ -29,6 +29,7 @@ from web.adapters.event_bus_triage_sink import EventBusTriageSink
 from web.api._errors import Conflict, JobBusyError, NotFound, ValidationError
 from web.api._project_resolver import _resolve_project
 from web.api.schemas import (
+    MaxBatchIdResponse,
     TriageBatchItem,
     TriageCancelResponse,
     TriageDetailResponse,
@@ -75,6 +76,7 @@ def _segment_for(batch: TriageBatchRow) -> str | None:
 def _summary_to_response(
     summary: TriageRunSummaryRow,
     project_id: int,
+    previous_max_batch_id: int | None = None,
 ) -> TriageRunSummary:
     return TriageRunSummary(
         scan_run_id=summary.scan_run_id,
@@ -84,6 +86,7 @@ def _summary_to_response(
         finished_at=summary.finished_at,
         total_findings=summary.total_findings,
         processed_findings=summary.processed_findings,
+        previous_max_batch_id=previous_max_batch_id,
     )
 
 
@@ -187,8 +190,9 @@ async def get_latest_triage(
 ) -> TriageRunSummary:
     """Return the most recent triage run summary for *project_id*.
 
-    404 when the project has zero triage history or when a newer
-    scan exists (the old triage is stale).
+    404 when the project has no triage history, when a newer scan
+    exists (the old triage is stale), or when the latest triage has
+    reached a terminal state (done, cancelled, or failed).
     """
     service = _service(request, project_id)
     triage_repo = service.triage_repo
@@ -213,6 +217,10 @@ async def get_latest_triage(
         raise NotFound(
             f"project {project_id} has no triage history",
         )
+    if summary.status in ("done", "cancelled", "failed"):
+        raise NotFound(
+            f"project {project_id} has no active triage",
+        )
     return _summary_to_response(summary, project_id)
 
 
@@ -220,20 +228,28 @@ async def get_latest_triage(
 async def triage_events(
     project_id: int,
     request: Request,
-    scan_run_id: int | None = Query(default=None),
+    scan_run_id: int = Query(
+        ...,
+        description="Required. SSE subscription must be scoped to a run.",
+    ),
+    after_batch_id: int | None = Query(default=None),
 ) -> StreamingResponse:
-    """SSE stream emitting triage lifecycle events for *project_id*.
+    """SSE stream emitting triage lifecycle events for one run.
 
-    Optional ``scan_run_id`` query param filters to a single triage.
-    On connect emits a ``snapshot`` event built from the current
-    triage state so the SPA can sync without waiting for the next live
-    tick.
+    ``scan_run_id`` is required so that the frontend never opens a
+    project-wide subscription that leaks events between runs. The
+    connect frame is a run-scoped ``snapshot`` (batches + summary) so
+    the SPA can seed without waiting for the next live tick.
+    ``after_batch_id`` optionally filters batches to exclude those with
+    id <= the given value (supports pagination across reset attempts).
     """
     service = _service(request, project_id)
     bus = request.app.state.event_bus
     sub_id, queue = await bus.subscribe("triage")
 
-    snapshot_event = await service.build_snapshot_event(project_id, scan_run_id)
+    snapshot_event = await service.build_snapshot_event(
+        project_id, scan_run_id, after_batch_id=after_batch_id
+    )
 
     async def stream() -> AsyncIterator[str]:
         try:
@@ -251,9 +267,13 @@ async def triage_events(
                 payload = item.payload
                 if payload.get("project_id") != project_id:
                     continue
+                if payload.get("scan_run_id") != scan_run_id:
+                    continue
+                batch_id = payload.get("batch_id")
                 if (
-                    scan_run_id is not None
-                    and payload.get("scan_run_id") != scan_run_id
+                    after_batch_id is not None
+                    and isinstance(batch_id, int)
+                    and batch_id <= after_batch_id
                 ):
                     continue
                 yield format_sse_frame(item)
@@ -297,6 +317,25 @@ async def start_triage(
     repos = load_active_repos(base_path, project_name)
     repo_paths = {r.name: Path(r.path) for r in repos if r.path}
     service = _service(request, project_id, repo_paths=repo_paths)
+
+    # Resolve scan_run_id up front so we can capture the max batch id
+    # BEFORE the worker starts (avoiding the race condition where the
+    # worker's batch inserts would be included in previous_max_batch_id).
+    scan_run_id_to_use = body.scan_run_id
+    if scan_run_id_to_use is None:
+        scan_run_id_to_use = await asyncio.to_thread(
+            service.run_repo.latest_run_id,
+        )
+    if scan_run_id_to_use is None:
+        raise NotFound(
+            f"project {project_name!r} has no scan runs; run a scan before triage",
+        )
+
+    # Capture the boundary BEFORE dispatching the worker.
+    previous_max = await asyncio.to_thread(
+        service.triage_repo.max_batch_id_for_run, scan_run_id_to_use
+    )
+
     sink = EventBusTriageSink(request.app.state.event_bus)
     finding_ids = tuple(body.finding_ids) if body.finding_ids else None
     try:
@@ -308,7 +347,7 @@ async def start_triage(
             tool_registry=request.app.state.tool_registry,
             event_sink=sink,
             finding_ids=finding_ids,
-            scan_run_id=body.scan_run_id,
+            scan_run_id=scan_run_id_to_use,
         )
     except NoScanRunError as exc:
         raise NotFound(
@@ -330,11 +369,35 @@ async def start_triage(
             finished_at=None,
             total_findings=0,
             processed_findings=0,
+            previous_max_batch_id=previous_max,
         )
-    return _summary_to_response(summary, project_id)
+    return _summary_to_response(summary, project_id, previous_max_batch_id=previous_max)
 
 
 # Parameterized: /{project_id}/triage/{scan_run_id}/...
+# Literal-segment routes (e.g., max-batch-id) must be registered before
+# the catch-all {scan_run_id} parameterized route.
+
+
+@v1_router.get(
+    "/{project_id}/triage/{scan_run_id}/max-batch-id",
+    response_model=MaxBatchIdResponse,
+)
+async def get_triage_max_batch_id(
+    project_id: int,
+    scan_run_id: int,
+    request: Request,
+) -> MaxBatchIdResponse:
+    """Return the current MAX(id) across triage_batches for the run.
+
+    The client calls this before a Reset or Start to capture the
+    per-attempt boundary used by ``?after_batch_id=`` on subsequent
+    detail / SSE requests.
+    """
+    service = _service(request, project_id)
+    triage_repo = service.triage_repo
+    max_id = await asyncio.to_thread(triage_repo.max_batch_id_for_run, scan_run_id)
+    return MaxBatchIdResponse(max_batch_id=max_id)
 
 
 @v1_router.post(
@@ -409,6 +472,12 @@ async def resume_triage(
     repos = load_active_repos(base_path, project_name)
     repo_paths = {r.name: Path(r.path) for r in repos if r.path}
     service = _service(request, project_id, repo_paths=repo_paths)
+
+    # Capture the boundary BEFORE dispatching the worker.
+    previous_max = await asyncio.to_thread(
+        service.triage_repo.max_batch_id_for_run, scan_run_id
+    )
+
     sink = EventBusTriageSink(request.app.state.event_bus)
     try:
         await asyncio.to_thread(
@@ -446,8 +515,11 @@ async def resume_triage(
             finished_at=None,
             total_findings=0,
             processed_findings=0,
+            previous_max_batch_id=previous_max,
         )
-    return _summary_to_response(refreshed, project_id)
+    return _summary_to_response(
+        refreshed, project_id, previous_max_batch_id=previous_max
+    )
 
 
 @v1_router.get(
@@ -458,11 +530,20 @@ async def get_triage(
     project_id: int,
     scan_run_id: int,
     request: Request,
+    after_batch_id: int | None = Query(default=None),
 ) -> TriageDetailResponse:
-    """Full triage detail with batches."""
+    """Full triage detail with batches.
+
+    Optionally filter by after_batch_id to exclude batches with id <= the
+    given value. This supports client-side pagination across reset attempts.
+    """
     service = _service(request, project_id)
     triage_repo = service.triage_repo
-    summary = await asyncio.to_thread(triage_repo.summarize_for_run, scan_run_id)
+    summary = await asyncio.to_thread(
+        triage_repo.summarize_for_run,
+        scan_run_id,
+        after_batch_id=after_batch_id,
+    )
     if summary is None:
         handle = get_triage_run_registry().get(scan_run_id)
         if handle is None or handle.project_id != project_id:
@@ -479,7 +560,12 @@ async def get_triage(
             processed_findings=0,
             batches=[],
         )
-    batches = await asyncio.to_thread(triage_repo.list_for_run, scan_run_id)
+    batches = await asyncio.to_thread(
+        triage_repo.list_for_run,
+        scan_run_id,
+        include_cancelled=True,
+        after_batch_id=after_batch_id,
+    )
     return TriageDetailResponse(
         scan_run_id=scan_run_id,
         project_id=project_id,

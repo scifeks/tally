@@ -8,7 +8,6 @@ import {
   useProjects,
   useFindingsCounts,
   useActiveTriage,
-  useLatestTriage,
   useTriageRun,
   useStartTriage,
   useCancelTriage,
@@ -17,6 +16,7 @@ import {
   useRuntimeDependencies,
   useCapabilities,
   useScanHistory,
+  fetchTriageMaxBatchId,
 } from '@/lib/api'
 import type {
   TriageBatch,
@@ -65,6 +65,10 @@ export default function Triage() {
   const activeProjectId = useUI(s => s.activeProjectId)
   const setTriageRunStatus = useUI(s => s.setTriageRunStatus)
   const triageInjectionAcked = useUI(s => s.triageInjectionAcked)
+  const viewedTriageRunId = useUI(s => s.viewedTriageRunId)
+  const setViewedTriageRunId = useUI(s => s.setViewedTriageRunId)
+  const triageAttemptBoundary = useUI(s => s.triageAttemptBoundary)
+  const setTriageAttemptBoundary = useUI(s => s.setTriageAttemptBoundary)
   const projectIdNum = activeProjectId ?? 0
   const queryClient = useQueryClient()
 
@@ -77,17 +81,17 @@ export default function Triage() {
   )
   const eligibleCount = counts?.byStatus?.active ?? 0
 
-  // Current triage state: prefer the in-flight run; fall back to the latest
-  // historical run so the page can resume from a failed/completed view.
   const { data: activeRun } = useActiveTriage(projectIdNum)
-  const { data: latestRun } = useLatestTriage(projectIdNum)
-  const currentRun = activeRun ?? latestRun ?? null
-  const currentScanRunId = currentRun?.scanRunId ?? null
+  const displayedRunId = activeRun?.scanRunId ?? viewedTriageRunId ?? null
 
-  // Pull batches for the current run (the active/latest endpoints are summary
-  // shape and do not include batches).
-  const { data: detailRun } = useTriageRun(projectIdNum, currentScanRunId, {
-    enabled: projectIdNum > 0 && currentScanRunId !== null,
+  const currentBoundary =
+    projectIdNum > 0 && displayedRunId !== null
+      ? (triageAttemptBoundary[`${projectIdNum}:${displayedRunId}`] ?? null)
+      : null
+
+  const { data: detailRun, refetch: refetchDetail } = useTriageRun(projectIdNum, displayedRunId, {
+    enabled: projectIdNum > 0 && displayedRunId !== null,
+    afterBatchId: currentBoundary,
   })
 
   // Mutations
@@ -110,6 +114,7 @@ export default function Triage() {
   const [showInjectionWarning, setShowInjectionWarning] = useState(false)
   const [elapsedSec, setElapsedSec] = useState(0)
   const [selectedScanRunId, setSelectedScanRunId] = useState<number | null>(null)
+  const [completedStatus, setCompletedStatus] = useState<TriageRunStatus | null>(null)
   const [showRunDropdown, setShowRunDropdown] = useState(false)
   const runDropdownRef = useRef<HTMLDivElement>(null)
 
@@ -129,6 +134,11 @@ export default function Triage() {
     setBatches(next)
   }, [detailRun])
 
+  useEffect(() => {
+    setBatches(new Map())
+    setLogs([])
+  }, [displayedRunId])
+
   // Reset transient page state when the active project changes.
   useEffect(() => {
     setBatches(new Map())
@@ -136,23 +146,33 @@ export default function Triage() {
     setResume(null)
     setExpandedBatches(new Set())
     setElapsedSec(0)
-  }, [activeProjectId])
+    setCompletedStatus(null)
+    setViewedTriageRunId(null)
+  }, [activeProjectId, setViewedTriageRunId])
 
   // Sync the global page-status flag (used by ProjectSwitchModal to gate
   // project switches mid-run).
-  const pageStatus = toPageStatus(currentRun?.status ?? null)
+  const pageStatus = toPageStatus(activeRun?.status ?? null)
   useEffect(() => {
     setTriageRunStatus(pageStatus)
   }, [pageStatus, setTriageRunStatus])
 
   // SSE is the source of truth for terminal transitions: once a
-  // triage_failed event has been observed, the page treats the run as no
-  // longer running even if the cached active/latest queries haven't
-  // refetched yet.
+  // completed/cancelled/failed event has been observed, the page treats
+  // the run as no longer running even if the cached active query hasn't
+  // refetched yet. The `run_started`-seen clause covers the reverse
+  // window: the SSE snapshot has told us a run is live before the
+  // active-run cache is refreshed with the same fact.
+  const sawRunStarted = logs.some(l => l.type === 'run_started')
   const isRunning =
-    resume === null && currentRun !== null && RUNNING_STATUSES.has(currentRun.status)
+    resume === null &&
+    completedStatus === null &&
+    (isStartPending ||
+      isResumePending ||
+      (activeRun != null && RUNNING_STATUSES.has(activeRun.status)) ||
+      (displayedRunId !== null && sawRunStarted))
   useEffect(() => {
-    if (!isRunning || !currentRun?.startedAt) {
+    if (!isRunning || !activeRun?.startedAt) {
       if (timerRef.current) {
         clearInterval(timerRef.current)
         timerRef.current = null
@@ -160,7 +180,7 @@ export default function Triage() {
       setElapsedSec(0)
       return
     }
-    const startedMs = toEpoch(currentRun.startedAt)
+    const startedMs = toEpoch(activeRun.startedAt)
     const tick = () => setElapsedSec(Math.max(0, Math.floor((Date.now() - startedMs) / 1000)))
     tick()
     timerRef.current = setInterval(tick, 1000)
@@ -170,12 +190,11 @@ export default function Triage() {
         timerRef.current = null
       }
     }
-  }, [isRunning, currentRun?.startedAt])
+  }, [isRunning, activeRun?.startedAt])
 
   // SSE handlers: snapshot rebuilds the batches map; typed events update it
   // in place. Progress events go to a per-batch slot, never the log array.
   const handleSnapshot = useCallback((snap: TriageSnapshotPayload) => {
-    if (snap.scanRunId === null) return
     const next = new Map<number, BatchDisplay>()
     for (const batch of snap.batches) {
       next.set(batch.id, batchToDisplay(batch))
@@ -185,26 +204,53 @@ export default function Triage() {
 
   const handleEvent = useCallback(
     (event: TriageLogEvent) => {
+      // Ignore anything that isn't for the run this page is watching.
+      // Defense in depth: the SSE stream is already run-scoped on the
+      // backend; this gate keeps the map safe across the brief window
+      // where the subscription is transitioning to a new run id.
+      if (displayedRunId === null || event.scanRunId !== displayedRunId) {
+        return
+      }
+      // Defense in depth against the attempt-boundary axis: the backend
+      // filter already drops these, but keep the client from surfacing
+      // events for batches that belong to a prior attempt.
+      if (
+        currentBoundary !== null &&
+        event.batchId !== undefined &&
+        event.batchId <= currentBoundary
+      ) {
+        return
+      }
       // batch_progress is high-frequency; only the latest value matters so
-      // it never goes into the log array. The summary endpoint already
-      // exposes the run-level processed/total fields the page reads.
+      // it never goes into the log array.
       if (event.type === 'batch_progress') return
+
+      if (event.type === 'run_started') {
+        setViewedTriageRunId(event.scanRunId)
+      }
 
       setLogs(prev => [...prev, event])
 
       if (event.type === 'triage_failed') {
+        setCompletedStatus('failed')
         setResume({
           scanRunId: event.scanRunId,
           error: event.error ?? 'triage failed',
           failedAtFindingId: event.failedAtFindingId ?? null,
         })
         queryClient.invalidateQueries({ queryKey: ['triage', projectIdNum] })
+        void refetchDetail()
         return
       }
 
       if (event.type === 'run_completed' || event.type === 'run_cancelled') {
+        setCompletedStatus(event.type === 'run_completed' ? 'done' : 'cancelled')
         setResume(null)
         queryClient.invalidateQueries({ queryKey: ['triage', projectIdNum] })
+        // Force-refetch the detail so the map reseeds from the true DB
+        // state (including canceled batches), rather than relying on
+        // useEffect firing off an unchanged react-query object.
+        void refetchDetail()
         return
       }
 
@@ -246,11 +292,20 @@ export default function Triage() {
         return next
       })
     },
-    [queryClient, projectIdNum]
+    [
+      queryClient,
+      projectIdNum,
+      displayedRunId,
+      setViewedTriageRunId,
+      refetchDetail,
+      currentBoundary,
+    ]
   )
 
   useTriageEvents(projectIdNum, handleEvent, {
-    enabled: projectIdNum > 0,
+    enabled: projectIdNum > 0 && displayedRunId !== null,
+    scanRunId: displayedRunId,
+    afterBatchId: currentBoundary,
     onSnapshot: handleSnapshot,
   })
 
@@ -261,16 +316,24 @@ export default function Triage() {
     setLogs([])
     setBatches(new Map())
     setResume(null)
-    startTriageMutation({
-      projectId: projectIdNum,
-      options: { scanRunId: selectedScanRunId ?? undefined },
-    })
-  }, [projectIdNum, startTriageMutation, selectedScanRunId])
+    setCompletedStatus(null)
+    startTriageMutation(
+      {
+        projectId: projectIdNum,
+        options: { scanRunId: selectedScanRunId ?? undefined },
+      },
+      {
+        onSuccess: run => setViewedTriageRunId(run.scanRunId),
+      }
+    )
+  }, [projectIdNum, startTriageMutation, selectedScanRunId, setViewedTriageRunId])
 
   const fireResume = useCallback(() => {
     if (projectIdNum === 0 || resume === null) return
+    setCompletedStatus(null)
+    setViewedTriageRunId(resume.scanRunId)
     resumeTriageMutation({ projectId: projectIdNum, scanRunId: resume.scanRunId })
-  }, [projectIdNum, resume, resumeTriageMutation])
+  }, [projectIdNum, resume, resumeTriageMutation, setViewedTriageRunId])
 
   const handleStartClick = useCallback(() => {
     if (!triageInjectionAcked) {
@@ -291,16 +354,30 @@ export default function Triage() {
   }, [triageInjectionAcked, fireResume])
 
   const handleStop = useCallback(() => {
-    if (projectIdNum === 0 || currentScanRunId === null) return
-    cancelTriageMutation({ projectId: projectIdNum, scanRunId: currentScanRunId })
-  }, [projectIdNum, currentScanRunId, cancelTriageMutation])
+    if (projectIdNum === 0 || activeRun?.scanRunId == null) return
+    cancelTriageMutation({ projectId: projectIdNum, scanRunId: activeRun.scanRunId })
+  }, [projectIdNum, activeRun?.scanRunId, cancelTriageMutation])
 
-  const handleReset = useCallback(() => {
+  const handleReset = useCallback(async () => {
+    if (projectIdNum > 0 && displayedRunId !== null) {
+      try {
+        const max = await fetchTriageMaxBatchId(projectIdNum, displayedRunId)
+        setTriageAttemptBoundary(projectIdNum, displayedRunId, max ?? 0)
+      } catch {
+        // If the fetch fails, fall back to a boundary of 0 so the local
+        // clear still happens and future queries won't be filtered
+        // incorrectly. The next Start will overwrite this from the
+        // mutation response.
+        setTriageAttemptBoundary(projectIdNum, displayedRunId, 0)
+      }
+    }
     setLogs([])
     setBatches(new Map())
     setResume(null)
     setElapsedSec(0)
-  }, [])
+    setCompletedStatus(null)
+    setViewedTriageRunId(null)
+  }, [projectIdNum, displayedRunId, setTriageAttemptBoundary, setViewedTriageRunId])
 
   const handleAcceptInjectionWarning = useCallback(() => {
     setShowInjectionWarning(false)
@@ -342,8 +419,10 @@ export default function Triage() {
   const batchList = useMemo(() => Array.from(batches.values()), [batches])
   const completedBatches = batchList.filter(b => b.status === 'completed').length
   const failedBatches = batchList.filter(b => b.status === 'failed').length
-  const totalProcessed = currentRun?.processedFindings ?? 0
-  const totalFindings = currentRun?.totalFindings ?? 0
+  const totalProcessed = batchList
+    .filter(b => b.status === 'completed')
+    .reduce((sum, b) => sum + b.findingCount, 0)
+  const totalFindings = batchList.reduce((sum, b) => sum + b.findingCount, 0)
   const progress =
     totalFindings > 0 ? Math.min(100, Math.floor((totalProcessed / totalFindings) * 100)) : 0
 
@@ -351,13 +430,12 @@ export default function Triage() {
   const startBusy = isStartPending || isResumePending
   const startDisabled =
     startBusy || claudeMissing || isRunning || (eligibleCount === 0 && !showResumeAffordance)
-  const stopDisabled = isCancelPending || currentRun?.status === 'cancelling'
-  const showResetButton =
-    !isRunning &&
-    currentRun !== null &&
-    (currentRun.status === 'done' ||
-      currentRun.status === 'cancelled' ||
-      currentRun.status === 'failed')
+  const stopDisabled = isCancelPending || activeRun?.status === 'cancelling'
+  const showResetButton = !isRunning && batchList.length > 0
+
+  const detailStatus = detailRun?.batches?.length ? (detailRun.status as TriageRunStatus) : null
+  const effectiveStatus = activeRun?.status ?? completedStatus ?? detailStatus ?? null
+  const hasVisibleRun = isRunning || batchList.length > 0
 
   const formatElapsed = (sec: number) => {
     const m = Math.floor(sec / 60)
@@ -374,7 +452,7 @@ export default function Triage() {
     })
   }
 
-  const statusLabel = currentRun?.status ?? 'idle'
+  const statusLabel = effectiveStatus ?? 'idle'
   const statusClass = cn(
     'text-sm font-bold uppercase tracking-wider',
     statusLabel === 'queued' && 'text-muted-foreground',
@@ -441,7 +519,7 @@ export default function Triage() {
             </div>
 
             {/* Progress bar */}
-            {currentRun !== null && (
+            {hasVisibleRun && (
               <div className="h-2 bg-muted border border-border w-full max-w-md">
                 <div
                   className="h-full bg-accent transition-all duration-300"
@@ -513,7 +591,7 @@ export default function Triage() {
                       ? `Triage Run #${selectedScanRunId}`
                       : 'Start Triage'}
                   </button>
-                  {scanRuns.length > 1 && (
+                  {scanRuns.length > 0 && (
                     <button
                       onClick={() => setShowRunDropdown(s => !s)}
                       disabled={startDisabled}
@@ -529,7 +607,7 @@ export default function Triage() {
                       <ChevronDown className="h-4 w-4" />
                     </button>
                   )}
-                  {showRunDropdown && scanRuns.length > 1 && (
+                  {showRunDropdown && scanRuns.length > 0 && (
                     <div className="absolute top-full left-0 mt-1 w-72 border border-border bg-background z-50 shadow-lg isolate">
                       <div className="px-3 py-1.5 text-[10px] uppercase tracking-[0.2em] text-dim border-b border-border">
                         [ scan runs ]
@@ -539,6 +617,8 @@ export default function Triage() {
                           key={scan.id}
                           onClick={() => {
                             setSelectedScanRunId(scan.id)
+                            setViewedTriageRunId(scan.id)
+                            setLogs([])
                             setShowRunDropdown(false)
                           }}
                           className={cn(
@@ -578,6 +658,7 @@ export default function Triage() {
               {showResetButton && (
                 <button
                   onClick={handleReset}
+                  data-testid="triage-reset-button"
                   className="flex items-center gap-2 px-4 h-9 border border-border text-muted-foreground font-bold text-xs uppercase tracking-wider hover:border-primary/50 hover:text-foreground transition-colors"
                 >
                   <RotateCcw className="h-4 w-4" />
@@ -587,7 +668,7 @@ export default function Triage() {
             </div>
 
             {/* Summary stats */}
-            {currentRun !== null && (
+            {hasVisibleRun && (
               <div className="flex items-center gap-6 text-xs">
                 <div className="flex items-center gap-2">
                   <span className="text-muted-foreground uppercase tracking-wider">Batches:</span>

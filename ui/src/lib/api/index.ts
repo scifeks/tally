@@ -47,6 +47,7 @@ export {
   useCancelTriage,
   useResumeTriage,
   useTriageEvents,
+  fetchTriageMaxBatchId,
   mapTriageRun,
   mapTriageBatch,
 } from './useTriage'

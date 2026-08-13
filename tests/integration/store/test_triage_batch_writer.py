@@ -218,7 +218,7 @@ class TestCreateTriageBatches:
             ]
         assert row_count == 0
 
-    def test_web_segment_uses_url_query(self, tmp_path: Path) -> None:
+    def test_web_segment_excluded_from_batching(self, tmp_path: Path) -> None:
         factory, run_repo, finding_repo, triage_repo = _make_repos(tmp_path)
         run_id = run_repo.create_run({})
         findings = [
@@ -229,4 +229,126 @@ class TestCreateTriageBatches:
         created = triage_repo.create_batches(
             run_id, _batch_for(triage_repo, seed_run_id, "zap", "myrepo", "web")
         )
-        assert len(created) >= 1
+        assert created == []
+
+
+class TestListForRunCancelledSemantics:
+    """Pin the two-mode contract of list_for_run.
+
+    The default (``include_cancelled=False``) is only for the resume
+    path, which treats canceled rows as stale prior-attempt relics.
+    Every display-time surface (SSE snapshot, detail endpoint) must
+    pass ``include_cancelled=True`` to render the true state.
+    """
+
+    def test_default_excludes_cancelled_rows(self, tmp_path: Path) -> None:
+        _, run_repo, _, triage_repo = _make_repos(tmp_path)
+        run_id = run_repo.create_run({})
+        triage_repo.create_batches(
+            run_id,
+            [
+                [{"id": 1, "tool": "semgrep", "segment": "sast"}],
+                [{"id": 2, "tool": "semgrep", "segment": "sast"}],
+                [{"id": 3, "tool": "semgrep", "segment": "sast"}],
+            ],
+        )
+        triage_repo.complete_batch(1, "completed")
+        triage_repo.cancel_remaining(run_id)
+
+        rows = triage_repo.list_for_run(run_id)
+        assert [r.status for r in rows] == ["completed"]
+
+    def test_include_cancelled_returns_all_rows(self, tmp_path: Path) -> None:
+        _, run_repo, _, triage_repo = _make_repos(tmp_path)
+        run_id = run_repo.create_run({})
+        triage_repo.create_batches(
+            run_id,
+            [
+                [{"id": 1, "tool": "semgrep", "segment": "sast"}],
+                [{"id": 2, "tool": "semgrep", "segment": "sast"}],
+                [{"id": 3, "tool": "semgrep", "segment": "sast"}],
+            ],
+        )
+        triage_repo.complete_batch(1, "completed")
+        triage_repo.cancel_remaining(run_id)
+
+        rows = triage_repo.list_for_run(run_id, include_cancelled=True)
+        assert sorted(r.status for r in rows) == [
+            "cancelled",
+            "cancelled",
+            "completed",
+        ]
+
+
+class TestListForRunAfterBatchIdFilter:
+    """Pin the after_batch_id filter contract for display-time reads."""
+
+    def test_after_batch_id_hides_earlier_rows(self, tmp_path: Path) -> None:
+        _, run_repo, _, triage_repo = _make_repos(tmp_path)
+        run_id = run_repo.create_run({})
+        created = triage_repo.create_batches(
+            run_id,
+            [
+                [{"id": 1, "tool": "semgrep", "segment": "sast"}],
+                [{"id": 2, "tool": "semgrep", "segment": "sast"}],
+                [{"id": 3, "tool": "semgrep", "segment": "sast"}],
+            ],
+        )
+        first_batch_id = created[0][0]
+        rows = triage_repo.list_for_run(
+            run_id,
+            include_cancelled=True,
+            after_batch_id=first_batch_id,
+        )
+        assert [r.id for r in rows] == [first_batch_id + 1, first_batch_id + 2]
+
+    def test_after_batch_id_none_returns_all(self, tmp_path: Path) -> None:
+        _, run_repo, _, triage_repo = _make_repos(tmp_path)
+        run_id = run_repo.create_run({})
+        triage_repo.create_batches(
+            run_id,
+            [
+                [{"id": 1, "tool": "semgrep", "segment": "sast"}],
+                [{"id": 2, "tool": "semgrep", "segment": "sast"}],
+            ],
+        )
+        assert len(triage_repo.list_for_run(run_id, after_batch_id=None)) == 2
+
+
+class TestSummarizeForRunAfterBatchIdFilter:
+    def test_summary_counts_only_batches_after_boundary(self, tmp_path: Path) -> None:
+        _, run_repo, _, triage_repo = _make_repos(tmp_path)
+        run_id = run_repo.create_run({})
+        created = triage_repo.create_batches(
+            run_id,
+            [
+                [{"id": 1, "tool": "semgrep", "segment": "sast"}],
+                [{"id": 2, "tool": "semgrep", "segment": "sast"}],
+                [{"id": 3, "tool": "semgrep", "segment": "sast"}],
+            ],
+        )
+        boundary = created[0][0]
+        triage_repo.complete_batch(created[1][0], "completed")
+        summary = triage_repo.summarize_for_run(run_id, after_batch_id=boundary)
+        assert summary is not None
+        assert summary.total_batches == 2
+        assert summary.processed_findings == 1
+
+
+class TestMaxBatchIdForRun:
+    def test_returns_none_when_no_batches(self, tmp_path: Path) -> None:
+        _, run_repo, _, triage_repo = _make_repos(tmp_path)
+        run_id = run_repo.create_run({})
+        assert triage_repo.max_batch_id_for_run(run_id) is None
+
+    def test_returns_max_id(self, tmp_path: Path) -> None:
+        _, run_repo, _, triage_repo = _make_repos(tmp_path)
+        run_id = run_repo.create_run({})
+        created = triage_repo.create_batches(
+            run_id,
+            [
+                [{"id": 1, "tool": "semgrep", "segment": "sast"}],
+                [{"id": 2, "tool": "semgrep", "segment": "sast"}],
+            ],
+        )
+        assert triage_repo.max_batch_id_for_run(run_id) == created[-1][0]

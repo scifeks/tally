@@ -44,6 +44,7 @@ interface TriageRunSummaryApi {
   finished_at: string | null
   total_findings: number
   processed_findings: number
+  previous_max_batch_id?: number | null
 }
 
 interface TriageRunDetailApi extends TriageRunSummaryApi {
@@ -82,14 +83,13 @@ interface TriageEventPayloadApi {
 
 interface TriageSnapshotApi {
   project_id: number
-  scan_run_id: number | null
+  scan_run_id: number
   status?: string
   total_findings?: number
   processed_findings?: number
   started_at?: string | null
   finished_at?: string | null
   batches?: TriageBatchApi[]
-  active_scan_run_ids?: number[]
 }
 
 // Mappers
@@ -122,6 +122,9 @@ export function mapTriageRun(api: TriageRunSummaryApi | TriageRunDetailApi): Tri
   if ('batches' in api && api.batches) {
     base.batches = api.batches.map(mapTriageBatch)
   }
+  if ('previous_max_batch_id' in api && api.previous_max_batch_id !== undefined) {
+    base.previousMaxBatchId = api.previous_max_batch_id
+  }
   return base
 }
 
@@ -150,13 +153,6 @@ function mapTriageEvent(type: TriageLogEventType, data: TriageEventPayloadApi): 
 }
 
 function mapSnapshot(data: TriageSnapshotApi): TriageSnapshotPayload {
-  if (data.scan_run_id === null) {
-    return {
-      projectId: data.project_id,
-      scanRunId: null,
-      activeScanRunIds: data.active_scan_run_ids ?? [],
-    }
-  }
   return {
     projectId: data.project_id,
     scanRunId: data.scan_run_id,
@@ -246,7 +242,10 @@ export function useActiveTriage(projectId: number) {
     },
     enabled: Boolean(projectId),
     staleTime: 5_000,
-    refetchInterval: query => (query.state.data != null ? 3_000 : false),
+    // Poll unconditionally: a run can start via the REPL or another
+    // tab, and if the previous refetch happened to see `null` we still
+    // need to notice when the next run appears.
+    refetchInterval: 5_000,
   })
 }
 
@@ -278,15 +277,16 @@ export function useLatestTriage(projectId: number) {
 export function useTriageRun(
   projectId: number,
   scanRunId: number | null,
-  options?: { enabled?: boolean }
+  options?: { enabled?: boolean; afterBatchId?: number | null }
 ) {
+  const afterBatchId = options?.afterBatchId ?? null
   return useQuery({
-    queryKey: ['triage', projectId, 'detail', scanRunId],
+    queryKey: ['triage', projectId, 'detail', scanRunId, afterBatchId],
     queryFn: async (): Promise<TriageRun> => {
+      const base = REST_ENDPOINTS.triageRun(projectId, scanRunId as number)
+      const url = afterBatchId !== null ? `${base}?after_batch_id=${afterBatchId}` : base
       try {
-        const data = await apiFetch<TriageRunDetailApi>(
-          REST_ENDPOINTS.triageRun(projectId, scanRunId as number)
-        )
+        const data = await apiFetch<TriageRunDetailApi>(url)
         return mapTriageRun(data)
       } catch (err) {
         if (err instanceof ApiError && err.status === 404) {
@@ -359,8 +359,12 @@ export function useStartTriage() {
       return mapTriageRun(data)
     },
     onError: err => setError(toErrorPayload(err)),
-    onSuccess: (_, { projectId }) => {
+    onSuccess: (run, { projectId }) => {
+      queryClient.setQueryData<TriageRun | null>(['triage', projectId, 'active'], run)
       queryClient.invalidateQueries({ queryKey: ['triage', projectId] })
+      if (run.previousMaxBatchId != null && run.scanRunId != null) {
+        useUI.getState().setTriageAttemptBoundary(projectId, run.scanRunId, run.previousMaxBatchId)
+      }
     },
   })
 }
@@ -403,10 +407,25 @@ export function useResumeTriage() {
       return mapTriageRun(data)
     },
     onError: err => setError(toErrorPayload(err)),
-    onSuccess: (_, { projectId }) => {
+    onSuccess: (run, { projectId }) => {
+      queryClient.setQueryData<TriageRun | null>(['triage', projectId, 'active'], run)
       queryClient.invalidateQueries({ queryKey: ['triage', projectId] })
+      if (run.previousMaxBatchId != null && run.scanRunId != null) {
+        useUI.getState().setTriageAttemptBoundary(projectId, run.scanRunId, run.previousMaxBatchId)
+      }
     },
   })
+}
+
+// Helpers
+
+export async function fetchTriageMaxBatchId(
+  projectId: number,
+  scanRunId: number
+): Promise<number | null> {
+  const url = REST_ENDPOINTS.triageMaxBatchId(projectId, scanRunId)
+  const data = await apiFetch<{ max_batch_id: number | null }>(url)
+  return data.max_batch_id
 }
 
 // SSE consumer
@@ -427,11 +446,17 @@ const TRIAGE_EVENT_TYPES: readonly TriageLogEventType[] = [
 export interface UseTriageEventsOptions {
   enabled?: boolean
   /**
-   * Optional scan_run_id query param. When set, the snapshot frame on
-   * connect is the run-scoped variant (with batches); otherwise it's the
-   * project-scoped variant (with `activeScanRunIds`).
+   * Scan-run scope for the subscription. When `null` the SSE
+   * connection is not opened at all. The backend rejects unscoped
+   * subscriptions so a project-wide stream cannot leak across runs.
    */
   scanRunId?: number | null
+  /**
+   * Per-attempt boundary. When set, the backend drops both the
+   * snapshot batches and streamed batch events whose id is <= this
+   * value, hiding prior attempts on the same scan_run.
+   */
+  afterBatchId?: number | null
   onSnapshot?: (snap: TriageSnapshotPayload) => void
 }
 
@@ -442,16 +467,17 @@ export function useTriageEvents(
 ) {
   const enabled = options?.enabled ?? true
   const scanRunId = options?.scanRunId ?? null
+  const afterBatchId = options?.afterBatchId ?? null
   const onEventRef = useRef(onEvent)
   const onSnapshotRef = useRef(options?.onSnapshot)
   onEventRef.current = onEvent
   onSnapshotRef.current = options?.onSnapshot
 
   useEffect(() => {
-    if (!enabled || !projectId) return
-    let url = SSE_ENDPOINTS.triageEvents(projectId)
-    if (scanRunId !== null) {
-      url = `${url}?scan_run_id=${scanRunId}`
+    if (!enabled || !projectId || scanRunId === null) return
+    let url = `${SSE_ENDPOINTS.triageEvents(projectId)}?scan_run_id=${scanRunId}`
+    if (afterBatchId !== null) {
+      url = `${url}&after_batch_id=${afterBatchId}`
     }
     const handle = apiEventSource(url, {
       eventTypes: ['snapshot', ...TRIAGE_EVENT_TYPES],
@@ -468,5 +494,5 @@ export function useTriageEvents(
       },
     })
     return () => handle.close()
-  }, [projectId, enabled, scanRunId])
+  }, [projectId, enabled, scanRunId, afterBatchId])
 }

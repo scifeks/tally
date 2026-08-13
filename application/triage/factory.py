@@ -137,10 +137,14 @@ class TriageAgentFactory:
             OpenCodeTriageAgent,
         )
 
+        verdict_out_path = (
+            self._app_root / "logs" / "triage" / "verdicts" / "verdict.json"
+        )
         return OpenCodeTriageAgent(
             compose_path=compose_path,
             model=resolved.model,
             provider_name=resolved.provider_name,
+            verdict_out_path=verdict_out_path,
         )
 
 

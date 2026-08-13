@@ -32,31 +32,12 @@ class TriageBatchRepository(TriageBatchRepositoryPort):
     ) -> list[dict[str, Any]]:
         """Return the active findings for *tool*/*repo*/*segment* in batching order.
 
-        Only ``web`` and ``sast`` segments produce rows; other segments
-        return an empty list. Row shape varies by segment to surface the
-        fields the batching algorithm uses.
+        Only the ``sast`` segment produces rows; every other segment
+        returns an empty list. Web/API findings are intentionally excluded
+        because the agentic trace is not cost-effective on that segment.
         """
         params = (run_id, segment, tool, repo)
-        if segment == "web":
-            sql = """
-                SELECT
-                    f.id, r.name AS repo, f.url, f.tool,
-                    f.severity, f.confidence, f.description,
-                    json_extract(f.meta, '$.remediation') AS remediation,
-                    json_extract(f.meta, '$.method') AS method,
-                    json_extract(f.meta, '$.param') AS param,
-                    json_extract(f.meta, '$.evidence') AS evidence,
-                    json_extract(f.meta, '$.risk_type') AS risk_type,
-                    json_extract(f.meta, '$.cwe_id') AS cwe_id,
-                    json_extract(f.meta, '$.alert_name') AS alert_name
-                FROM findings f
-                JOIN repositories r ON f.repo_id = r.id
-                WHERE f.run_id = ? AND f.segment = ? AND f.tool = ? AND r.name = ?
-                  AND f.status = 'active'
-                ORDER BY f.severity ASC, f.url,
-                         json_extract(f.meta, '$.risk_type')
-            """
-        elif segment == "sast":
+        if segment == "sast":
             sql = """
                 SELECT
                     f.id, r.name AS repo, f.file, f.tool,
@@ -225,26 +206,42 @@ class TriageBatchRepository(TriageBatchRepositoryPort):
         return [int(r["run_id"]) for r in rows], int(total)
 
     def list_for_run(
-        self, run_id: int, *, include_cancelled: bool = False
+        self,
+        run_id: int,
+        *,
+        include_cancelled: bool = False,
+        after_batch_id: int | None = None,
     ) -> list[TriageBatchRow]:
         """Return triage_batches rows for *run_id*, ordered by id.
 
-        Cancelled batches are excluded by default because they are
-        stale relics from a previous attempt on the same run_id.
+        Canceled batches are excluded by default. That shape is only
+        useful to the resume path, which treats canceled rows as
+        prior-attempt relics. Display-time callers must pass
+        ``include_cancelled=True`` to see the true state of the run.
+
+        ``after_batch_id`` narrows the view to a single triage attempt:
+        the client captures ``MAX(id)`` at Reset/Start time and later
+        reads only batches with ``id > after_batch_id``.
         """
-        if include_cancelled:
-            sql = "SELECT * FROM triage_batches WHERE run_id = ? ORDER BY id ASC"
-        else:
-            sql = (
-                "SELECT * FROM triage_batches"
-                " WHERE run_id = ? AND status != 'cancelled'"
-                " ORDER BY id ASC"
-            )
+        clauses = ["run_id = ?"]
+        params: list[object] = [run_id]
+        if not include_cancelled:
+            clauses.append("status != 'cancelled'")
+        if after_batch_id is not None:
+            clauses.append("id > ?")
+            params.append(after_batch_id)
+        sql = (
+            "SELECT * FROM triage_batches"
+            f" WHERE {' AND '.join(clauses)}"
+            " ORDER BY id ASC"
+        )
         with self._factory.connect() as conn:
-            rows = conn.execute(sql, (run_id,)).fetchall()
+            rows = conn.execute(sql, tuple(params)).fetchall()
         return [_row_to_triage_batch(r) for r in rows]
 
-    def summarize_for_run(self, run_id: int) -> TriageRunSummary | None:
+    def summarize_for_run(
+        self, run_id: int, *, after_batch_id: int | None = None
+    ) -> TriageRunSummary | None:
         """Aggregate view of a triage run derived from its batches.
 
         Returns ``None`` if no triage_batches rows exist for *run_id*.
@@ -259,10 +256,13 @@ class TriageBatchRepository(TriageBatchRepositoryPort):
         - total_findings: sum of ``len(finding_ids)`` across all
           batches for this run.
         - processed_findings: same sum but only over batches whose
-          status is in (``'completed'``, ``'failed'``,
-          ``'cancelled'``).
+          status is ``'completed'``.
+
+        See ``list_for_run`` for what ``after_batch_id`` means.
         """
-        rows = self.list_for_run(run_id, include_cancelled=True)
+        rows = self.list_for_run(
+            run_id, include_cancelled=True, after_batch_id=after_batch_id
+        )
         if not rows:
             return None
 
@@ -274,7 +274,7 @@ class TriageBatchRepository(TriageBatchRepositoryPort):
         for r in rows:
             counts[r.status] = counts.get(r.status, 0) + 1
             total_findings += len(r.finding_ids)
-            if r.status in ("completed", "failed", "cancelled"):
+            if r.status == "completed":
                 processed_findings += len(r.finding_ids)
             if r.started_at:
                 started_candidates.append(r.started_at)
@@ -306,6 +306,21 @@ class TriageBatchRepository(TriageBatchRepositoryPort):
             total_batches=len(rows),
             counts_by_status=counts,
         )
+
+    def max_batch_id_for_run(self, run_id: int) -> int | None:
+        """Return ``MAX(id)`` across all triage_batches rows for *run_id*.
+
+        ``None`` when no rows exist yet. Used by the Reset/Start path
+        so the client can capture a per-attempt boundary.
+        """
+        with self._factory.connect() as conn:
+            row = conn.execute(
+                "SELECT MAX(id) AS max_id FROM triage_batches WHERE run_id = ?",
+                (run_id,),
+            ).fetchone()
+        if row is None or row["max_id"] is None:
+            return None
+        return int(row["max_id"])
 
 
 def _row_to_triage_batch(row: Any) -> TriageBatchRow:

@@ -339,6 +339,8 @@ export interface TriageRun {
   processedFindings: number
   /** Present on detail / snapshot; absent on summary list rows. */
   batches?: TriageBatch[]
+  /** Only populated on the response to `POST /triage` and `POST /triage/{id}/resume`. */
+  previousMaxBatchId?: number | null
 }
 
 export type TriageLogEventType =
@@ -376,26 +378,19 @@ export interface TriageLogEvent {
 }
 
 /**
- * Discriminated union for SSE `snapshot` payloads. The backend emits the
- * run-scoped variant when the consumer subscribed with `?scan_run_id=<id>`,
- * and the project-scoped variant otherwise.
+ * SSE `snapshot` payload. The subscription is always run-scoped so
+ * this always carries the batches for one run.
  */
-export type TriageSnapshotPayload =
-  | {
-      projectId: number
-      scanRunId: number
-      status: TriageRunStatus
-      totalFindings: number
-      processedFindings: number
-      startedAt: string | null
-      finishedAt: string | null
-      batches: TriageBatch[]
-    }
-  | {
-      projectId: number
-      scanRunId: null
-      activeScanRunIds: number[]
-    }
+export interface TriageSnapshotPayload {
+  projectId: number
+  scanRunId: number
+  status: TriageRunStatus
+  totalFindings: number
+  processedFindings: number
+  startedAt: string | null
+  finishedAt: string | null
+  batches: TriageBatch[]
+}
 
 // ─── Runtime Dependencies / Installed Tools ─────────────────────────────────
 

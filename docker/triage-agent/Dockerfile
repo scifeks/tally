@@ -30,6 +30,9 @@ RUN mkdir -p /home/agent/.local/share/opencode \
 RUN git config --global --add safe.directory '*'
 
 USER root
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ripgrep \
+    && rm -rf /var/lib/apt/lists/*
 COPY opencode-permissions.json /etc/opencode/permissions.json
 COPY triage-relay.sh /usr/local/bin/triage-relay
 RUN chmod +x /usr/local/bin/triage-relay

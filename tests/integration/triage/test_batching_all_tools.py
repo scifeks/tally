@@ -206,7 +206,7 @@ class TestBatchingAllTools:
         all_ids = [f["id"] for b in batches for f in b]
         assert len(all_ids) == 3
 
-    def test_web_batches_produced(self, tmp_path: Path) -> None:
+    def test_web_batches_excluded(self, tmp_path: Path) -> None:
         factory, run_repo, finding_repo, triage_repo = _make_repos(tmp_path)
         findings = [
             _make_web_finding(
@@ -222,9 +222,7 @@ class TestBatchingAllTools:
 
         batches = _batch_for(triage_repo, run_id, "graphql-cop", "myrepo", "web")
 
-        assert len(batches) >= 1
-        all_ids = [f["id"] for b in batches for f in b]
-        assert len(all_ids) == 2
+        assert batches == []
 
     @pytest.mark.parametrize(
         ("tool", "segment", "builder"),
@@ -293,8 +291,8 @@ class TestBatchingAllTools:
             batch_counts[f"{tool}/{segment}"] = len(created)
 
         assert batch_counts["semgrep/sast"] >= 1
-        assert batch_counts["graphql-cop/web"] >= 1
-        assert batch_counts["zap/web"] >= 1
+        assert batch_counts["graphql-cop/web"] == 0
+        assert batch_counts["zap/web"] == 0
         assert batch_counts["gitleaks/secrets"] == 0
         assert batch_counts["composer-audit/sca"] == 0
 
@@ -302,4 +300,4 @@ class TestBatchingAllTools:
             total = conn.execute("SELECT COUNT(*) FROM triage_batches").fetchone()[0]
         expected = sum(batch_counts.values())
         assert total == expected
-        assert total >= 3
+        assert total >= 1

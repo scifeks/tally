@@ -109,6 +109,22 @@ def _build_source_section(
         "vulnerability. You must explain the concrete "
         "attack scenario against this specific code.",
         "",
+        "When the flagged behavior is controlled by a "
+        "third-party library's defaults (query depth, "
+        "alias limits, batch limits, complexity caps, "
+        "introspection, security headers, CORS), the "
+        "question is whether the application configures "
+        "an override at the point it constructs the "
+        "library. Locate that construction site in the "
+        "application's own source (typically a Server, "
+        "ServerConfig, middleware wire-up, or bootstrap "
+        "file) and inspect the options passed. Do NOT "
+        "read the library's implementation under "
+        "`vendor/` to understand its internals; treat "
+        "the library's documented defaults as the "
+        "baseline and answer from what the application "
+        "does or does not override.",
+        "",
         "If you cannot complete steps 1-3, return a "
         "source_not_examined error instead of a "
         "verdict.",
@@ -206,8 +222,12 @@ def _output_schema(finding_id: int) -> str:
     return f"""\
 ## Output
 
-Emit ONE strict JSON object on a single line. No code fences. No prose
-before or after. No markdown. No leading whitespace. Schema:
+When your verdict is ready, use the write tool to write the JSON object to
+`/workspace/out/verdict.json`. The file MUST contain only the JSON object -
+no markdown fences, no commentary, no leading or trailing whitespace.
+Anything you say in chat is ignored; only the file contents are read.
+
+Schema for verdict.json:
 
 {{"finding_id": {finding_id}, "confidence": "<confirmed|probable\
 |potential|false_positive>", "finding_type": "<vulnerability|weakness\

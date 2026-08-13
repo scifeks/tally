@@ -669,6 +669,7 @@ class TriageRunSummary(BaseModel):
     finished_at: str | None
     total_findings: int
     processed_findings: int
+    previous_max_batch_id: int | None = None
 
 
 class TriagesListResponse(BaseModel):
@@ -705,6 +706,10 @@ class TriageDetailResponse(BaseModel):
 class TriageCancelResponse(BaseModel):
     scan_run_id: int
     status: str
+
+
+class MaxBatchIdResponse(BaseModel):
+    max_batch_id: int | None
 
 
 class ReportGenerateRequest(BaseModel):

@@ -11,6 +11,15 @@ if TYPE_CHECKING:
     from application.triage.verdict import Verdict
 
 
+class TriageBackendUnavailable(RuntimeError):
+    """Backend transport is gone and further calls in this run will fail.
+
+    Adapters raise this when their persistent process (relay, MCP host,
+    etc.) has died. The runner catches it, aborts the whole triage run,
+    and leaves remaining batches ``pending`` so a resume can retry them.
+    """
+
+
 @dataclass(frozen=True)
 class TriageSessionResult:
     """Outcome of one triage-agent session.

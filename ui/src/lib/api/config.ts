@@ -147,6 +147,9 @@ export const REST_ENDPOINTS = {
   /** POST: resume a failed/stranded triage run. Body must include `acknowledge_injection_risk: true`. */
   resumeTriage: (projectId: number, scanRunId: number) =>
     `${API_BASE_URL}/projects/${projectId}/triage/${scanRunId}/resume`,
+  /** GET: retrieve the max batch id for a triage run. Used to calculate attempt boundaries. */
+  triageMaxBatchId: (projectId: number, scanRunId: number) =>
+    `${API_BASE_URL}/projects/${projectId}/triage/${scanRunId}/max-batch-id`,
 
   // ─── Runtime / Tools (cross-project) ────────────────────────────────────────
   /** GET: probe status for each registered runtime dependency */
