@@ -193,7 +193,7 @@ class McpTriageService:
                         user_interaction=verdict.user_interaction,
                     ),
                     strategy=segment,
-                    triage_provider="anthropic",
+                    triage_provider="mcp",
                     triaged_by="mcp_triage",
                     source="mcp_triage",
                 )
