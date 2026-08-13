@@ -135,7 +135,7 @@ class McpTriageService:
         """Process and persist a list of verdict dicts for a batch.
 
         Each verdict is validated and persisted. Returns per-finding results
-        and final batch status (completed, failed, or in_progress).
+        and final batch status (completed or failed).
         """
         results = []
         accepted_count = 0
@@ -228,18 +228,18 @@ class McpTriageService:
                 )
                 rejected_count += 1
 
-        # Determine batch status
+        # Determine batch status. Rejected verdicts here are parse/persist
+        # failures, not "false positive" outcomes; the affected findings stay
+        # untriaged and re-batch on the next fetch. The batch itself is done
+        # from the server's perspective in every branch, so persist a
+        # terminal status in every branch too.
         if accepted_count > 0 and rejected_count == 0:
-            # All accepted
             batch_status = "completed"
-            self._triage_repo.complete_batch(batch_id, batch_status)
         elif accepted_count == 0 and rejected_count > 0:
-            # All rejected
             batch_status = "failed"
-            self._triage_repo.complete_batch(batch_id, batch_status)
         else:
-            # Mixed: some accepted, some rejected
-            batch_status = "in_progress"
+            batch_status = "completed"
+        self._triage_repo.complete_batch(batch_id, batch_status)
 
         return {
             "results": results,

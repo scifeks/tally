@@ -278,7 +278,8 @@ class TestSubmitVerdicts:
         assert result["results"][0]["status"] == "accepted"
         assert result["results"][1]["status"] == "rejected"
         assert "error" in result["results"][1]
-        assert result["batch_status"] == "in_progress"
+        assert result["batch_status"] == "completed"
+        triage_repo.complete_batch.assert_called_once_with(1, "completed")
 
     def test_submit_verdicts_all_rejected(self) -> None:
         """All invalid, batch completed as failed."""

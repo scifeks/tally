@@ -10,7 +10,7 @@ class TestTriageConstants:
         assert isinstance(TRIAGE_PROVIDERS, frozenset)
 
     def test_triage_providers_contains_expected_values(self) -> None:
-        assert TRIAGE_PROVIDERS == {"anthropic", "opencode", "openai"}
+        assert TRIAGE_PROVIDERS == {"anthropic", "opencode", "openai", "mcp"}
 
     def test_triage_modes_is_frozen(self) -> None:
         assert isinstance(TRIAGE_MODES, frozenset)
