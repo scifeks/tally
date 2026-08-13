@@ -8,14 +8,19 @@
         "baseURL": "http://10.1.20.101:11434/v1"
       },
       "models": {
-        "qwen3.6:27b": {
-          "name": "qwen3.6:27b"
+        "qwen3.5:9b": {
+          "name": "qwen3.5:9b",
+          "limit": {
+            "context": 32768,
+            "output": 4096
+          },
+          "reasoningEffort": "none"
         }
       }
     }
   },
   "permission": {
-    "edit": "deny",
+    "edit": "allow",
     "bash": {
       "*": "deny"
     },
@@ -24,7 +29,10 @@
       "*": "allow"
     },
     "write": {
-      "*": "deny"
-    }
+      "*": "deny",
+      "/workspace/out/verdict.json": "allow"
+    },
+    "task": "deny",
+    "todowrite": "deny"
   }
 }

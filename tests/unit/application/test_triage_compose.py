@@ -226,7 +226,18 @@ class TestBuildOpenCodeConfig:
             model="gemma3:27b",
         )
         cfg = json.loads(content)
-        assert cfg["permission"]["edit"] == "deny"
+        assert cfg["permission"] == {
+            "edit": "allow",
+            "bash": {"*": "deny"},
+            "webfetch": "deny",
+            "read": {"*": "allow"},
+            "write": {
+                "*": "deny",
+                "/workspace/out/verdict.json": "allow",
+            },
+            "task": "deny",
+            "todowrite": "deny",
+        }
 
 
 # -- build_claude_settings -------------------------------------------
