@@ -69,7 +69,7 @@ Project name: acme-security-audit
   Company Name: Acme Corp
   Department Name (optional):
   Abbreviation (max 3 chars, used as finding prefix e.g. FOO-001, optional): ACM
-✓ Project created: acme-security-audit
+PASS Project created: acme-security-audit
 [acme-security-audit]>
 ```
 
@@ -130,7 +130,7 @@ Repository #1:
   Note: without a dependencies file, pip-audit will be skipped for this repository.
   Python dependencies file (local path, e.g. requirements.txt, optional): requirements.txt
   Base URLs (comma-separated, optional):
-✓ Repository 'api-server' added to project 'acme-security-audit'
+PASS Repository 'api-server' added to project 'acme-security-audit'
 ```
 
 **Docker mode.** The tool runs via `docker exec` inside a running container.
@@ -149,7 +149,7 @@ Repository #1:
   Note: if no dependencies file is provided, pip-audit will scan all packages installed in the container environment.
   Python dependencies file (container path, e.g. /app/requirements.txt, optional): /app/requirements.txt
   Base URLs (comma-separated, optional):
-✓ Repository 'api-server' added to project 'acme-security-audit'
+PASS Repository 'api-server' added to project 'acme-security-audit'
 ```
 
 ### Node.js repositories and Noir
@@ -285,7 +285,7 @@ Full Scan: acme-security-audit
 SAST
   [*] Running semgrep (api-server)...
 Run semgrep? [y/N]: y
-  ✓ semgrep/api-server      | 7 findings    | 45.1s
+  PASS semgrep/api-server      | 7 findings    | 45.1s
 ...
 
 Scan complete: 5 passed, 0 failed, 2 skipped | 28 findings ingested | 89.4s total
@@ -577,7 +577,7 @@ Reports aggregate all findings currently in the knowledge base.
 Output:
 
 ```
-✓ Report saved: projects/acme-security-audit/reports/report_2024-01-15_103422.md
+PASS Report saved: projects/acme-security-audit/reports/report_2024-01-15_103422.md
 ```
 
 The Markdown report contains:
@@ -646,12 +646,12 @@ Triage agent image rebuilt.
 [acme-security-audit]> project list
 
  Name          | Created    | Repositories | Active
- → acme-security-audit| 2024-01-14 | 2            | ✓
+ -> acme-security-audit| 2024-01-14 | 2            | PASS
  corp-audit    | 2024-01-10 | 1            |
 
 # Switch to a different project
 [acme-security-audit]> project switch corp-audit
-✓ Switched to project: corp-audit
+PASS Switched to project: corp-audit
 [corp-audit]>
 
 # View active project details
@@ -719,7 +719,7 @@ Editing project 'acme-security-audit' (press Enter to keep current value)...
   Department Name (optional) [Engineering]:
   Abbreviation [current: ACM, enter --clear to remove]:
 
-✓ Project 'acme-security-audit' updated
+PASS Project 'acme-security-audit' updated
 ```
 
 To clear the abbreviation (reverting to the global prefix), enter `--clear` at the abbreviation prompt.

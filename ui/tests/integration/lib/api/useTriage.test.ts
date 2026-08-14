@@ -47,7 +47,7 @@ afterEach(() => {
   server.resetHandlers()
 })
 
-// ─── useTriageHistory ───────────────────────────────────────────────────────
+// --- useTriageHistory ---
 
 describe('useTriageHistory', () => {
   it('resolves with the project-1 fixture (3 runs)', async () => {
@@ -93,7 +93,7 @@ describe('useTriageHistory', () => {
   })
 })
 
-// ─── useActiveTriage ────────────────────────────────────────────────────────
+// --- useActiveTriage ---
 
 describe('useActiveTriage', () => {
   it('resolves with the running fixture for project 1', async () => {
@@ -112,7 +112,7 @@ describe('useActiveTriage', () => {
   })
 })
 
-// ─── useLatestTriage ────────────────────────────────────────────────────────
+// --- useLatestTriage ---
 
 describe('useLatestTriage', () => {
   it('resolves with the latest fixture for project 1', async () => {
@@ -131,7 +131,7 @@ describe('useLatestTriage', () => {
   })
 })
 
-// ─── useTriageRun (detail) ──────────────────────────────────────────────────
+// --- useTriageRun (detail) ---
 
 describe('useTriageRun', () => {
   it('resolves with batches for an existing run', async () => {
@@ -170,7 +170,7 @@ describe('useTriageRun', () => {
   })
 })
 
-// ─── useStartTriage ─────────────────────────────────────────────────────────
+// --- useStartTriage ---
 
 describe('useStartTriage', () => {
   it('always sends acknowledge_injection_risk: true in the body', async () => {
@@ -294,7 +294,7 @@ describe('useStartTriage', () => {
   })
 })
 
-// ─── useCancelTriage ────────────────────────────────────────────────────────
+// --- useCancelTriage ---
 
 describe('useCancelTriage', () => {
   it('POSTs to the cancel endpoint and returns the cancelling status', async () => {
@@ -346,7 +346,7 @@ describe('useCancelTriage', () => {
   })
 })
 
-// ─── useResumeTriage ────────────────────────────────────────────────────────
+// --- useResumeTriage ---
 
 describe('useResumeTriage', () => {
   it('always sends acknowledge_injection_risk: true in the body', async () => {
@@ -394,7 +394,7 @@ describe('useResumeTriage', () => {
   })
 })
 
-// ─── useTriageEvents ────────────────────────────────────────────────────────
+// --- useTriageEvents ---
 
 describe('useTriageEvents', () => {
   it('opens an EventSource scoped to the given scan_run_id', () => {

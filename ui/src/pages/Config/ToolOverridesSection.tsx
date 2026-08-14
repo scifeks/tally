@@ -28,8 +28,6 @@ function collectFreshFiles(template: ArgumentTemplate): Record<string, File> {
   return out
 }
 
-// ─── Tool Overrides Section ───────────────────────────────────────────────────
-
 export function ToolOverridesSection({
   catalog,
   overrides,

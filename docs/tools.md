@@ -146,7 +146,7 @@ the URL seed mode:
 
 | Mode | Description | Default when |
 |------|-------------|--------------|
-| `provided` | Generate seeds from the user-supplied endpoint file (`oas3_path` → URL list) | `oas3_path` is set |
+| `provided` | Generate seeds from the user-supplied endpoint file (`oas3_path` -> URL list) | `oas3_path` is set |
 | `noir` | Generate seeds from the most recent Noir OAS3 output for the repository | No endpoint file |
 | `crawl` | XSStrike spiders from `base_url` directly | Fallback / third option |
 

@@ -372,7 +372,7 @@ Stores project metadata. The `repositories` list is kept in sync with `repositor
 | `created` | string | yes | ISO 8601 timestamp of when the project was created. |
 | `company_name` | string | no | Client company name shown in the report confidentiality blurb. Set during `project add` or `project edit`. |
 | `department_name` | string | no | Optional department or team name, stored for reference. |
-| `abbreviation` | string | no | Short prefix (max 3 chars) used for finding IDs (e.g. `ACM` → `ACM-001`). Overrides `report_finding_prefix` in `global.json` for this project. |
+| `abbreviation` | string | no | Short prefix (max 3 chars) used for finding IDs (e.g. `ACM` -> `ACM-001`). Overrides `report_finding_prefix` in `global.json` for this project. |
 | `defectdojo` | object | no | Optional DefectDojo overrides for this project. See [DefectDojo Project Fields](#defectdojo-project-fields). |
 | `repositories` | array | no | List of repository objects (mirrors repositories.json). |
 
@@ -425,9 +425,9 @@ Stores the list of repositories configured for the project.
 | `auth` | object | no | Optional authentication configuration for this repository. Supports form-based login or header-based injection. See [Authentication (Optional)](#authentication-optional) for details. |
 
 Supported language values for SCA tool selection:
-- `python` → pip-audit
-- `javascript`, `typescript`, `node` → npm-audit
-- `php` → composer-audit
+- `python` -> pip-audit
+- `javascript`, `typescript`, `node` -> npm-audit
+- `php` -> composer-audit
 
 #### Example
 

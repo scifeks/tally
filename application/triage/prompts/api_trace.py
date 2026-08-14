@@ -42,7 +42,7 @@ def render(
     return "\n\n".join(sections)
 
 
-# -- private helpers --------------------------------------------------
+# Private helpers
 
 
 def _format_metadata(finding: dict[str, Any]) -> str:
@@ -133,7 +133,7 @@ def _build_source_section(
     return "## Source Investigation\n\n" + fence(body, "source_investigation")
 
 
-# -- static prompt text -----------------------------------------------
+# Static prompt text
 
 _PREAMBLE = """\
 You are a web application security analyst performing \

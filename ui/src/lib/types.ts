@@ -168,12 +168,12 @@ export interface Scan {
   skipEnrichment: boolean
 }
 
-// ─── Detailed Scan Run Types ────────────────────────────────────────────────
+// Detailed Scan Run Types
 // Used by the Scans page for the live log stream and history view.
 
 export type ScanRunStatus = 'idle' | 'running' | 'completed' | 'cancelling' | 'cancelled' | 'failed'
 
-// ─── Scan Configuration Types ───────────────────────────────────────────────
+// Scan Configuration Types
 // Used by the Scans page for advanced scan options.
 
 /** A repository configured for scanning in the project. */
@@ -282,7 +282,7 @@ export interface ScanLogEvent {
   duration?: number
 }
 
-// ─── Triage Types ───────────────────────────────────────────────────────────
+// Triage Types
 // Used by the Triage page for batch monitoring and AI pipeline status.
 
 /**
@@ -392,7 +392,7 @@ export interface TriageSnapshotPayload {
   batches: TriageBatch[]
 }
 
-// ─── Runtime Dependencies / Installed Tools ─────────────────────────────────
+// Runtime Dependencies / Installed Tools
 
 export interface RuntimeDependency {
   name: string
@@ -412,7 +412,7 @@ export interface InstalledToolsResponse {
   installed: string[]
 }
 
-// ─── Report Types ───────────────────────────────────────────────────────────
+// Report Types
 // Used by the Reports page for draft management and report generation.
 
 export type ReportFormat = 'pdf' | 'markdown' | 'html' | 'json'
@@ -523,7 +523,7 @@ export interface ReportDraftSnapshotPayload {
   inFlight: ReportDraftSection[]
 }
 
-// ─── Chat Types ─────────────────────────────────────────────────────────────
+// Chat Types
 // Used by the Chat page for RAG-powered LLM conversations.
 
 /**
@@ -648,7 +648,7 @@ export interface ChatCancelResponse {
   cancelledMessageId: null
 }
 
-// ─── Document Types ──────────────────────────────────────────────────────────
+// Document Types
 // Used by the Config page for document management.
 
 export interface DocumentSource {
@@ -658,7 +658,7 @@ export interface DocumentSource {
 
 export type ChatMode = 'findings' | 'documents' | 'all'
 
-// ─── Configuration Types ────────────────────────────────────────────────────
+// Configuration Types
 // Used by the Config page for project, repository, and tool override management.
 
 /** Repository type. Library is mutually exclusive with api/ui. */
@@ -859,7 +859,7 @@ export interface RepositoryAuthUpdate {
   }>
 }
 
-// ─── Saved Scans & Tool Argument Profiles ────────────────────────────────────
+// Saved Scans & Tool Argument Profiles
 
 /** Whether an argument carries no value, a string value, or a file path. */
 export type ArgValueType = 'none' | 'string' | 'file'

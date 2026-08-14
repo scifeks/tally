@@ -386,7 +386,7 @@ class InteractiveProjectWizard:
 
             count = len(interview_results)
             repo_str = f"{count} {'repository' if count == 1 else 'repositories'}"
-            print(f"\n✓ Project '{name}' created with {repo_str}")
+            print(f"\nProject '{name}' created with {repo_str}")
 
             return name
 
@@ -424,9 +424,7 @@ class InteractiveProjectWizard:
                     paths=paths,
                 )
                 persisted = self._service.get(project_id, persisted.id)
-            print(
-                f"\n✓ Repository '{persisted.name}' added to project '{project_name}'"
-            )
+            print(f"\nRepository '{persisted.name}' added to project '{project_name}'")
             return persisted
         except KeyboardInterrupt:
             print("\n\n[Canceled]")
@@ -857,7 +855,7 @@ class InteractiveProjectWizard:
             base_url=base_url,
         )
         self._service.record_seed_file(project_id, repo_id, str(target))
-        print(f"\n  ✓ Endpoint file ingested: {target}")
+        print(f"\nEndpoint file ingested: {target}")
 
     def _interview_company_name(self) -> str:
         """Prompt for company name."""
@@ -966,7 +964,7 @@ class InteractiveProjectWizard:
                 fresh.department_name = department_name
                 fresh.abbreviation = abbreviation
                 self._manager.config.save_project_config(project_name, fresh)
-            print(f"\n✓ Project '{project_name}' updated")
+            print(f"\nProject '{project_name}' updated")
             return True
 
         except KeyboardInterrupt:

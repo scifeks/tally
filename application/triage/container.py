@@ -29,7 +29,7 @@ class TriageContainerStartError(RuntimeError):
     """Triage compose services failed to start."""
 
 
-# -- image lifecycle --
+# Image lifecycle
 
 
 def _resolve_image_port() -> TriageImagePort:
@@ -65,7 +65,7 @@ def rebuild_triage_image(app_root: Path) -> None:
     build_triage_image(app_root)
 
 
-# -- compose service lifecycle --
+# Compose service lifecycle
 
 
 def _resolve_container_port() -> TriageContainerPort:

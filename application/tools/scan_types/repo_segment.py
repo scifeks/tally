@@ -455,7 +455,7 @@ class RepoSegmentScan(ScanType):
                             )
                             if tool_name == "noir" and findings == 0:
                                 resources.display.print_status(
-                                    "    [yellow]⚠ noir found 0 endpoints. "
+                                    "    [yellow]noir found 0 endpoints. "
                                     "Framework not supported by noir.[/yellow]"
                                 )
                                 resources.display.print_status(
