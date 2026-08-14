@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
-from mcp.server import FastMCP
+from mcp.server.fastmcp import FastMCP
 
 from application.mcp.service import McpTriageService
 from core.project_paths import ProjectPaths
