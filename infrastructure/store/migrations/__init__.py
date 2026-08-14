@@ -11,6 +11,7 @@ from infrastructure.store.migrations import (
     m0003_graphql_cop_headers,
     m0004_psalm_stubs,
     m0005_chat_session_mode,
+    m0006_triage_provider,
 )
 from infrastructure.store.migrations._helpers import (
     add_column_if_missing,
@@ -29,6 +30,7 @@ MIGRATIONS: list[ModuleType] = [
     m0003_graphql_cop_headers,
     m0004_psalm_stubs,
     m0005_chat_session_mode,
+    m0006_triage_provider,
 ]
 
 

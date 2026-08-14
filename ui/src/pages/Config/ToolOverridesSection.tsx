@@ -28,8 +28,6 @@ function collectFreshFiles(template: ArgumentTemplate): Record<string, File> {
   return out
 }
 
-// ─── Tool Overrides Section ───────────────────────────────────────────────────
-
 export function ToolOverridesSection({
   catalog,
   overrides,
@@ -73,13 +71,14 @@ export function ToolOverridesSection({
         setArgsMode(existing.argsMode ?? 'stock')
       } else {
         const tool = catalog.find(t => t.id === selectedToolId)
+        const defaultArgs = 'stock'
         setForm({
           toolId: selectedToolId,
-          argsMode: 'stock',
+          argsMode: defaultArgs,
           type: 'repo',
           location: tool?.supportsLocal ? 'local' : 'docker',
         })
-        setArgsMode('stock')
+        setArgsMode(defaultArgs)
       }
       setIsDirty(false)
       setTemplatesExpanded(false)
@@ -260,6 +259,13 @@ export function ToolOverridesSection({
               </span>
             )}
           </div>
+
+          {(selectedTool.requiresBaseUrls || selectedTool.requiresUrlInventory) && (
+            <div className="space-y-1 text-xs text-yellow-600 dark:text-yellow-400">
+              {selectedTool.requiresBaseUrls && <div>Requires base URLs</div>}
+              {selectedTool.requiresUrlInventory && <div>Requires URL discovery</div>}
+            </div>
+          )}
 
           {/* Type / Location / Args row */}
           <div className="grid grid-cols-3 gap-4">

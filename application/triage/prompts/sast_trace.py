@@ -42,7 +42,7 @@ def render(
     return "\n\n".join(sections)
 
 
-# -- private helpers --------------------------------------------------
+# Private helpers
 
 
 def _format_metadata(finding: dict[str, Any]) -> str:
@@ -116,7 +116,7 @@ def _build_source_section(
     return "## Source File\n\n" + fence(body, "source_file")
 
 
-# -- static prompt text -----------------------------------------------
+# Static prompt text
 
 _PREAMBLE = """\
 You are a web application security analyst performing automated triage.
@@ -193,8 +193,12 @@ def _output_schema(finding_id: int) -> str:
     return f"""\
 ## Output
 
-Emit ONE strict JSON object on a single line. No code fences. No prose
-before or after. No markdown. No leading whitespace. Schema:
+When your verdict is ready, use the write tool to write the JSON object to
+`/workspace/out/verdict.json`. The file MUST contain only the JSON object -
+no markdown fences, no commentary, no leading or trailing whitespace.
+Anything you say in chat is ignored; only the file contents are read.
+
+Schema for verdict.json:
 
 {{"finding_id": {finding_id}, "confidence": "<confirmed|probable\
 |potential|false_positive>", "finding_type": "<vulnerability|weakness\

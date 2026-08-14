@@ -10,7 +10,7 @@ from pathlib import Path
 
 
 def _migrate_repositories_to_services(conn: sqlite3.Connection) -> None:
-    """Collapse flat repo columns into services_json for pre-TAL-143 databases."""
+    """Collapse flat repo columns into services_json for legacy databases."""
     cursor = conn.cursor()
     table_info = cursor.execute("PRAGMA table_info(repositories)").fetchall()
     column_names = {row[1] for row in table_info}
@@ -156,6 +156,7 @@ class ConnectionFactory:
                     status           TEXT,
                     triaged_at       TEXT,
                     triaged_by       TEXT,
+                    triage_provider  TEXT,
                     should_report    INTEGER NOT NULL DEFAULT 0,
                     business_impact  TEXT,
                     tal_id           TEXT,
@@ -386,7 +387,7 @@ class ConnectionFactory:
                     ),
                     CHECK (
                         (source = 'scan' AND tool IS NOT NULL
-                         AND tool IN ('katana', 'noir'))
+                         AND tool IN ('katana', 'noir', 'llm'))
                         OR (source = 'user' AND tool IS NULL)
                     ),
                     FOREIGN KEY (repo_id) REFERENCES repositories(id)

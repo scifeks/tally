@@ -55,11 +55,13 @@ class _FakeTool:
         category: str,
         description: str,
         installed: bool = True,
+        requires_base_urls: bool = False,
     ) -> None:
         self.name = name
         self.category = category
         self.description = description
         self._installed = installed
+        self.requires_base_urls = requires_base_urls
 
     def check_available(self) -> bool:
         return self._installed
@@ -164,6 +166,8 @@ class TestToolsCatalog:
         assert isinstance(item["supports_local"], bool)
         assert isinstance(item["supports_docker"], bool)
         assert item["description"] == "Python security linter"
+        assert isinstance(item["requires_base_urls"], bool)
+        assert isinstance(item["requires_url_inventory"], bool)
 
     async def test_catalog_with_empty_registry_only_has_disk_tools(
         self, app_client

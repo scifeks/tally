@@ -19,6 +19,7 @@ from application.runtime import build_runtime_dependency_probes
 from application.runtime.dependency_service import RuntimeDependencyService
 from application.tools.registry import ToolRegistry
 from application.triage.readiness import compute_triage_readiness
+from core.config import ConfigManager
 from infrastructure.events.bus import EventBus
 from infrastructure.system.installed_tools_probe import InstalledToolsProbe
 from web.api._errors import install_error_handlers
@@ -29,6 +30,7 @@ from web.api.chat import v1_router as chat_projects_v1_router
 from web.api.config import router as config_router
 from web.api.documents import v1_router as documents_v1_router
 from web.api.findings import v1_router as findings_v1_router
+from web.api.global_settings import router as global_settings_v1_router
 from web.api.locks import router as locks_router
 from web.api.platform import platform_v1_router
 from web.api.projects import v1_router as projects_v1_router
@@ -111,9 +113,16 @@ def create_app(
         build_runtime_dependency_probes(base_path=base_path)
     )
 
+    try:
+        cfg = ConfigManager(base_path).global_config
+        claude_api_key = cfg.claude.api_key if cfg.claude else ""
+    except (FileNotFoundError, PermissionError):
+        claude_api_key = ""
+
     triage_readiness = compute_triage_readiness(
         base_path=base_path,
         docker_available=app.state.runtime_dependency_service.is_installed("docker"),
+        claude_api_key=claude_api_key,
     )
     app.state.capabilities_service = CapabilitiesService(
         base_path=base_path,
@@ -122,6 +131,7 @@ def create_app(
 
     app.include_router(auth_router, prefix="/api/v1/auth")
     app.include_router(config_router, prefix="/api/v1/config")
+    app.include_router(global_settings_v1_router, prefix="/api/v1/global-settings")
     app.include_router(documents_v1_router, prefix="/api/v1/projects")
     app.include_router(findings_v1_router, prefix="/api/v1/projects")
     app.include_router(locks_router, prefix="/api/v1/projects")

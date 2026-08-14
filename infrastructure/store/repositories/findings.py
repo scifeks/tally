@@ -317,7 +317,8 @@ class FindingRepository(FindingRepositoryPort):
         triage_meta: dict,
         strategy: str,
         *,
-        triaged_by: str = "claudecode",
+        triage_provider: str | None = None,
+        triaged_by: str,
         source: str = "auto_triage",
     ) -> bool:
         """Update enrichment fields on a finding row.
@@ -336,6 +337,7 @@ class FindingRepository(FindingRepositoryPort):
             **triage_meta,
             "previous_confidence": previous_confidence,
             "triaged_by": triaged_by,
+            "triage_provider": triage_provider,
             "triaged_at": now_iso,
             "strategy": strategy,
         }
@@ -352,6 +354,7 @@ class FindingRepository(FindingRepositoryPort):
                 "    last_seen = ?, "
                 "    triaged_at = ?, "
                 "    triaged_by = ?, "
+                "    triage_provider = ?, "
                 "    should_report = ?, "
                 "    meta = ? "
                 "WHERE id = ?",
@@ -362,6 +365,7 @@ class FindingRepository(FindingRepositoryPort):
                     now_iso,
                     now_iso,
                     triaged_by,
+                    triage_provider,
                     should_report,
                     updated_meta,
                     finding_id,

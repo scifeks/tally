@@ -168,12 +168,12 @@ export interface Scan {
   skipEnrichment: boolean
 }
 
-// ─── Detailed Scan Run Types ────────────────────────────────────────────────
+// Detailed Scan Run Types
 // Used by the Scans page for the live log stream and history view.
 
 export type ScanRunStatus = 'idle' | 'running' | 'completed' | 'cancelling' | 'cancelled' | 'failed'
 
-// ─── Scan Configuration Types ───────────────────────────────────────────────
+// Scan Configuration Types
 // Used by the Scans page for advanced scan options.
 
 /** A repository configured for scanning in the project. */
@@ -282,7 +282,7 @@ export interface ScanLogEvent {
   duration?: number
 }
 
-// ─── Triage Types ───────────────────────────────────────────────────────────
+// Triage Types
 // Used by the Triage page for batch monitoring and AI pipeline status.
 
 /**
@@ -339,6 +339,8 @@ export interface TriageRun {
   processedFindings: number
   /** Present on detail / snapshot; absent on summary list rows. */
   batches?: TriageBatch[]
+  /** Only populated on the response to `POST /triage` and `POST /triage/{id}/resume`. */
+  previousMaxBatchId?: number | null
 }
 
 export type TriageLogEventType =
@@ -376,28 +378,21 @@ export interface TriageLogEvent {
 }
 
 /**
- * Discriminated union for SSE `snapshot` payloads. The backend emits the
- * run-scoped variant when the consumer subscribed with `?scan_run_id=<id>`,
- * and the project-scoped variant otherwise.
+ * SSE `snapshot` payload. The subscription is always run-scoped so
+ * this always carries the batches for one run.
  */
-export type TriageSnapshotPayload =
-  | {
-      projectId: number
-      scanRunId: number
-      status: TriageRunStatus
-      totalFindings: number
-      processedFindings: number
-      startedAt: string | null
-      finishedAt: string | null
-      batches: TriageBatch[]
-    }
-  | {
-      projectId: number
-      scanRunId: null
-      activeScanRunIds: number[]
-    }
+export interface TriageSnapshotPayload {
+  projectId: number
+  scanRunId: number
+  status: TriageRunStatus
+  totalFindings: number
+  processedFindings: number
+  startedAt: string | null
+  finishedAt: string | null
+  batches: TriageBatch[]
+}
 
-// ─── Runtime Dependencies / Installed Tools ─────────────────────────────────
+// Runtime Dependencies / Installed Tools
 
 export interface RuntimeDependency {
   name: string
@@ -417,7 +412,7 @@ export interface InstalledToolsResponse {
   installed: string[]
 }
 
-// ─── Report Types ───────────────────────────────────────────────────────────
+// Report Types
 // Used by the Reports page for draft management and report generation.
 
 export type ReportFormat = 'pdf' | 'markdown' | 'html' | 'json'
@@ -528,7 +523,7 @@ export interface ReportDraftSnapshotPayload {
   inFlight: ReportDraftSection[]
 }
 
-// ─── Chat Types ─────────────────────────────────────────────────────────────
+// Chat Types
 // Used by the Chat page for RAG-powered LLM conversations.
 
 /**
@@ -653,7 +648,7 @@ export interface ChatCancelResponse {
   cancelledMessageId: null
 }
 
-// ─── Document Types ──────────────────────────────────────────────────────────
+// Document Types
 // Used by the Config page for document management.
 
 export interface DocumentSource {
@@ -663,7 +658,7 @@ export interface DocumentSource {
 
 export type ChatMode = 'findings' | 'documents' | 'all'
 
-// ─── Configuration Types ────────────────────────────────────────────────────
+// Configuration Types
 // Used by the Config page for project, repository, and tool override management.
 
 /** Repository type. Library is mutually exclusive with api/ui. */
@@ -770,6 +765,8 @@ export interface ToolCatalogEntry {
   name: string
   supportsLocal: boolean
   supportsDocker: boolean
+  requiresBaseUrls: boolean
+  requiresUrlInventory: boolean
 }
 
 /**
@@ -788,6 +785,20 @@ export interface ToolOverrideConfig {
     name: string
     toolPath: string
   }
+}
+
+/** Single filesystem entry from the browse API. */
+export interface FileSystemEntry {
+  name: string
+  path: string
+  isDir: boolean
+  sizeBytes: number | null
+}
+
+/** Response from the filesystem browse API. */
+export interface FileSystemBrowseResult {
+  currentPath: string
+  entries: FileSystemEntry[]
 }
 
 /**
@@ -848,7 +859,7 @@ export interface RepositoryAuthUpdate {
   }>
 }
 
-// ─── Saved Scans & Tool Argument Profiles ────────────────────────────────────
+// Saved Scans & Tool Argument Profiles
 
 /** Whether an argument carries no value, a string value, or a file path. */
 export type ArgValueType = 'none' | 'string' | 'file'

@@ -1,0 +1,21 @@
+"""Pydantic request/response models for global settings."""
+
+from __future__ import annotations
+
+from pydantic import BaseModel, ConfigDict, Field
+
+
+class FileSystemEntry(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    name: str
+    path: str
+    is_dir: bool = Field(serialization_alias="isDir")
+    size_bytes: int | None = Field(default=None, serialization_alias="sizeBytes")
+
+
+class FileSystemBrowseResponse(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    current_path: str = Field(serialization_alias="currentPath")
+    entries: list[FileSystemEntry]

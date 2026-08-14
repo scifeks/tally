@@ -48,10 +48,13 @@ def _build_tool_execution_config(
         except (ValueError, Exception):
             pass
 
+    extraction_enabled = gc.endpoint_extraction_inference is not None
+
     return ToolExecutionConfig(
         noir_provider=noir_snapshot,
         blind_xss_callback_url=gc.blind_xss_callback_url,
         antares_config=antares_config,
+        endpoint_extraction_enabled=extraction_enabled,
     )
 
 

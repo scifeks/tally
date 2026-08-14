@@ -4,7 +4,12 @@ import { EditableText, EditableSelect } from '@/components/Editable'
 import { cn, formatRelative } from '@/lib/utils'
 import type { Finding, Severity, Status } from '@/lib/types'
 import { useUI } from '@/lib/store'
-import { useStartTriage, useRuntimeDependencies, useDeleteFinding } from '@/lib/api'
+import {
+  useStartTriage,
+  useRuntimeDependencies,
+  useDeleteFinding,
+  useCapabilities,
+} from '@/lib/api'
 import { TriagePromptInjectionWarningModal } from '@/components/TriagePromptInjectionWarningModal'
 import {
   SEV_ORDER,
@@ -59,6 +64,7 @@ export function FindingDetailPanel({
   const triageInjectionAcked = useUI(s => s.triageInjectionAcked)
   const { mutate: startTriageMutation, isPending: isTriagePending } = useStartTriage()
   const { data: runtimeDeps } = useRuntimeDependencies()
+  const { data: capabilities } = useCapabilities()
   const claudeDep = runtimeDeps?.dependencies.find(d => d.name === 'claude')
   const claudeMissing = claudeDep !== undefined && !claudeDep.installed
   const [showInjectionWarning, setShowInjectionWarning] = useState(false)
@@ -215,6 +221,7 @@ export function FindingDetailPanel({
 
         <TriagePromptInjectionWarningModal
           open={showInjectionWarning}
+          providerLabel={capabilities?.triageBackendLabel ?? null}
           onAccept={handleAcceptInjectionWarning}
           onCancel={() => setShowInjectionWarning(false)}
         />

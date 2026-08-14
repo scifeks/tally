@@ -17,6 +17,7 @@ describe('TriagePromptInjectionWarningModal', () => {
         open={false}
         onAccept={onAccept}
         onCancel={onCancel}
+        providerLabel="Claude Code"
       />
     )
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
@@ -28,6 +29,7 @@ describe('TriagePromptInjectionWarningModal', () => {
         open={true}
         onAccept={vi.fn()}
         onCancel={vi.fn()}
+        providerLabel="Claude Code"
       />
     )
     const dialog = screen.getByRole('dialog')
@@ -48,6 +50,7 @@ describe('TriagePromptInjectionWarningModal', () => {
         open={true}
         onAccept={onAccept}
         onCancel={onCancel}
+        providerLabel="Claude Code"
       />
     )
     await user.click(screen.getByRole('button', { name: /accept & continue/i }))
@@ -65,6 +68,7 @@ describe('TriagePromptInjectionWarningModal', () => {
         open={true}
         onAccept={onAccept}
         onCancel={onCancel}
+        providerLabel="Claude Code"
       />
     )
     await user.click(screen.getByRole('button', { name: /^cancel$/i }))
@@ -82,11 +86,36 @@ describe('TriagePromptInjectionWarningModal', () => {
         open={true}
         onAccept={onAccept}
         onCancel={onCancel}
+        providerLabel="Claude Code"
       />
     )
     await user.keyboard('{Escape}')
     expect(useUI.getState().triageInjectionAcked).toBe(false)
     expect(onCancel).toHaveBeenCalledTimes(1)
     expect(onAccept).not.toHaveBeenCalled()
+  })
+
+  it('renders the configured provider label in the warning text', () => {
+    render(
+      <TriagePromptInjectionWarningModal
+        open={true}
+        providerLabel="OpenCode (Ollama)"
+        onAccept={vi.fn()}
+        onCancel={vi.fn()}
+      />
+    )
+    expect(screen.getAllByText(/OpenCode \(Ollama\)/)).toHaveLength(2)
+  })
+
+  it('falls back to "the triage agent" when providerLabel is null', () => {
+    render(
+      <TriagePromptInjectionWarningModal
+        open={true}
+        providerLabel={null}
+        onAccept={vi.fn()}
+        onCancel={vi.fn()}
+      />
+    )
+    expect(screen.getAllByText(/the triage agent/)).toHaveLength(2)
   })
 })

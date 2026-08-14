@@ -15,7 +15,7 @@ This file must exist before Tally starts. If it is missing or invalid, Tally exi
 
 Tally uses a two-layer provider configuration system. Provider configs define connection profiles for Ollama, Llama.cpp, or Claude. Feature configs reference a provider and optionally override settings per feature.
 
-Each of five inference features can use a different provider independently:
+Each of six inference features can use a different provider independently:
 
 | Feature config | Used by |
 |---|---|
@@ -24,6 +24,7 @@ Each of five inference features can use a different provider independently:
 | `report_inference` | The `report` command |
 | `embedding_inference` | ChromaDB vector embeddings |
 | `noir_inference` | NOIR security API |
+| `endpoint_extraction_inference` | LLM-based endpoint extraction from source code |
 
 Triage uses the same feature-inference pattern through `triage_inference`. The `provider` field selects which provider block supplies the base URL and default model. Optional overrides like `model` work the same way as for other features.
 
@@ -41,6 +42,7 @@ Triage uses the same feature-inference pattern through `triage_inference`. The `
 | `report_inference` | object | Feature config for the `report` command. See [Feature Config Fields](#feature-config-fields). |
 | `embedding_inference` | object | Feature config for ChromaDB vector embeddings. See [Feature Config Fields](#feature-config-fields). |
 | `noir_inference` | object | Feature config for NOIR security API. See [Feature Config Fields](#feature-config-fields). |
+| `endpoint_extraction_inference` | object | Feature config for LLM-based endpoint extraction. See [Feature Config Fields](#feature-config-fields). |
 | `triage_inference` | object | Feature config for AI triage. Requires Docker. See [Feature Config Fields](#feature-config-fields) and [docs/triage.md](triage.md). |
 | `antares_inference` | object | Feature config for Antares CWE scanner LLM backend. See [Feature Config Fields](#feature-config-fields) and [docs/antares-shim.md](antares-shim.md). |
 | `defectdojo` | object | DefectDojo connection settings. See [DefectDojo Fields](#defectdojo-fields) and [docs/integrations/defect-dojo.md](integrations/defect-dojo.md). |
@@ -54,6 +56,7 @@ Triage uses the same feature-inference pattern through `triage_inference`. The `
 | `web_ui_port` | int | `8080` | TCP port for the FastAPI server started by `ui serve`. |
 | `web_ui_vite_port` | int | `3000` | TCP port for the Vite dev server started by `ui serve`. |
 | `web_ui_allowed_origins` | list\[string\] | derived | CORS allow-list for the Vite dev server. Defaults to `["https://<web_ui_host>:<web_ui_vite_port>"]` when absent or empty. Override only when running Vite under a different hostname. |
+| `mcp_port` | int | `8765` | TCP port for the MCP triage server started by `tally mcp serve`. |
 
 ### TLS Certificate Configuration
 
@@ -125,9 +128,9 @@ The `ollama` and `llama_cpp` provider configs share the same schema:
 
 ### Feature Config Fields
 
-Each of the five inference features (`chat_inference`, `enrichment_inference`,
-`report_inference`, `embedding_inference`, `noir_inference`) uses the same
-feature config schema:
+Each of the six inference features (`chat_inference`, `enrichment_inference`,
+`report_inference`, `embedding_inference`, `noir_inference`,
+`endpoint_extraction_inference`) uses the same feature config schema:
 
 #### Fields
 
@@ -227,6 +230,38 @@ See [docs/integrations/defect-dojo.md](integrations/defect-dojo.md) for entity m
 ```
 
 Leave `api_key` empty to have Tally read the key from the `ANTHROPIC_API_KEY` environment variable at startup.
+
+### Example: Enable LLM Endpoint Extraction with Ollama
+
+When configured, Tally uses the specified LLM to extract HTTP endpoints from controller source code. This runs automatically during scans when noir is skipped or returns no endpoints, and the URL inventory is empty. Extracted endpoints include query and form parameters, producing parameterized URLs for DAST tools.
+
+```json
+{
+  "ollama": {
+    "base_url": "http://localhost:11434",
+    "model": "qwen3:14b"
+  },
+  "endpoint_extraction_inference": {
+    "provider": "ollama"
+  }
+}
+```
+
+### Example: Enable LLM Endpoint Extraction with Claude
+
+Use Claude API for higher accuracy on complex endpoint patterns:
+
+```json
+{
+  "claude": {
+    "api_key": "",
+    "model": "claude-sonnet-5"
+  },
+  "endpoint_extraction_inference": {
+    "provider": "claude"
+  }
+}
+```
 
 ### Example: Enable Claude Code Triage
 
@@ -337,7 +372,7 @@ Stores project metadata. The `repositories` list is kept in sync with `repositor
 | `created` | string | yes | ISO 8601 timestamp of when the project was created. |
 | `company_name` | string | no | Client company name shown in the report confidentiality blurb. Set during `project add` or `project edit`. |
 | `department_name` | string | no | Optional department or team name, stored for reference. |
-| `abbreviation` | string | no | Short prefix (max 3 chars) used for finding IDs (e.g. `ACM` → `ACM-001`). Overrides `report_finding_prefix` in `global.json` for this project. |
+| `abbreviation` | string | no | Short prefix (max 3 chars) used for finding IDs (e.g. `ACM` -> `ACM-001`). Overrides `report_finding_prefix` in `global.json` for this project. |
 | `defectdojo` | object | no | Optional DefectDojo overrides for this project. See [DefectDojo Project Fields](#defectdojo-project-fields). |
 | `repositories` | array | no | List of repository objects (mirrors repositories.json). |
 
@@ -390,9 +425,9 @@ Stores the list of repositories configured for the project.
 | `auth` | object | no | Optional authentication configuration for this repository. Supports form-based login or header-based injection. See [Authentication (Optional)](#authentication-optional) for details. |
 
 Supported language values for SCA tool selection:
-- `python` → pip-audit
-- `javascript`, `typescript`, `node` → npm-audit
-- `php` → composer-audit
+- `python` -> pip-audit
+- `javascript`, `typescript`, `node` -> npm-audit
+- `php` -> composer-audit
 
 #### Example
 
@@ -438,6 +473,7 @@ For applications with HTML login forms, set `auth_type` to `"form"`. Tally perfo
 | `credentials_env` | string | no | | Environment variable containing credentials in `user:pass` format. Takes precedence over inline `username` and `password` when set. |
 | `username` | string | no | | Inline username. Used only if `credentials_env` is not set. |
 | `password` | string | no | | Inline password. Used only if `credentials_env` is not set. |
+| `verify_ssl` | bool | no | `true` | Verify TLS certificates. Set to `false` for self-signed certificates on local dev stacks. |
 
 #### Header-based Auth
 

@@ -24,8 +24,8 @@ class GlobalConfig(BaseModel):
 
     @model_validator(mode="before")
     @classmethod
-    def _migrate_legacy_llm_keys(cls, data: dict) -> dict:  # type: ignore[override]
-        """Convert old flat ``*_llm_provider`` keys to ``*_inference`` objects."""
+    def _migrate_legacy_keys(cls, data: dict) -> dict:  # type: ignore[override]
+        """Convert old flat ``*_llm_provider`` keys."""
         if not isinstance(data, dict):
             return data
         _LEGACY = {
@@ -56,6 +56,7 @@ class GlobalConfig(BaseModel):
     embedding_inference: FeatureInferenceConfig | None = None
     triage_inference: FeatureInferenceConfig | None = None
     antares_inference: FeatureInferenceConfig | None = None
+    endpoint_extraction_inference: FeatureInferenceConfig | None = None
     antares_sweep_config: dict[str, Any] | None = None
     projects_dir: str = Field(default="./projects")
     location_attestation_confirmed: bool = Field(default=False)
@@ -101,6 +102,9 @@ class GlobalConfig(BaseModel):
     web_ui_port: int = Field(default=8080)
     web_ui_vite_port: int = Field(default=3000)
     web_ui_allowed_origins: list[str] | None = None
+
+    # MCP server
+    mcp_port: int = Field(default=8765)
 
     @field_validator("blind_xss_callback_url")
     @classmethod

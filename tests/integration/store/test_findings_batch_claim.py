@@ -126,14 +126,14 @@ class TestAtomicBatchClaim:
         batch = triage_repo.claim_batch(run_id)
         assert batch is not None
 
-        triage_repo.complete_batch(batch.id, "success")
+        triage_repo.complete_batch(batch.id, "completed")
 
         with factory.connect() as conn:
             row = conn.execute(
                 "SELECT status, completed_at FROM triage_batches WHERE id = ?",
                 (batch.id,),
             ).fetchone()
-        assert row["status"] == "success"
+        assert row["status"] == "completed"
         assert row["completed_at"] is not None
 
     def test_complete_failed_sets_status_and_completed_at(

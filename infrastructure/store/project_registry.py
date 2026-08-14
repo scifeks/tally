@@ -69,6 +69,16 @@ class ProjectRegistryRepository(ProjectRegistryRepositoryPort):
                 CREATE INDEX IF NOT EXISTS idx_projects_archived
                     ON projects (archived_at);
             """)
+            conn.executescript("""
+                CREATE TABLE IF NOT EXISTS mcp_tokens (
+                    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name            TEXT NOT NULL UNIQUE,
+                    encrypted_token TEXT NOT NULL,
+                    created_at      TEXT NOT NULL DEFAULT (
+                        strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
+                    )
+                );
+            """)
 
     def list_active(self) -> list[ProjectRow]:
         with self._connect() as conn:

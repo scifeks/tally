@@ -101,6 +101,8 @@ class NucleiLocalTool(BaseNucleiTool):
             cmd.extend(["-t", f"{default_template_dir},{custom_template_dir}"])
         elif custom_template_dir:
             cmd.extend(["-t", str(custom_template_dir)])
+        elif default_template_dir:
+            cmd.extend(["-t", str(default_template_dir)])
 
         return cmd
 

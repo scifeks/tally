@@ -118,6 +118,7 @@ class TriageService:
         tool_registry: ToolRegistry,
         event_sink: TriageEventSink | None = None,
         finding_ids: tuple[int, ...] | None = None,
+        scan_run_id: int | None = None,
     ) -> TriageStartHandle:
         """Start a triage run against the latest scan_run for a project.
 
@@ -126,7 +127,8 @@ class TriageService:
         """
         del finding_ids  # finding-scoped triage is reserved for later
         ensure_triage_backend_configured(app_root=Path(base_path))
-        scan_run_id = self._run_repo.latest_run_id()
+        if scan_run_id is None:
+            scan_run_id = self._run_repo.latest_run_id()
         if scan_run_id is None:
             raise NoScanRunError(
                 f"No scan runs found for project {project_name!r}; "
@@ -240,6 +242,18 @@ class TriageService:
         sink = event_sink
         try:
             try:
+                from application.triage.container import (
+                    ensure_triage_containers,
+                    ensure_triage_image,
+                )
+
+                ensure_triage_image(Path(base_path))
+                ensure_triage_containers(
+                    Path(base_path),
+                    project_name,
+                    repo_paths=self._repo_paths,
+                )
+
                 if is_resume:
                     result = resume_triage_for_project(
                         project_name,
@@ -330,32 +344,36 @@ class TriageService:
     async def build_snapshot_event(
         self,
         project_id: int,
-        scan_run_id: int | None,
+        scan_run_id: int,
+        *,
+        after_batch_id: int | None = None,
     ) -> BusEvent:
-        """Build the on-connect snapshot for a triage SSE stream."""
+        """Build the on-connect snapshot for a run-scoped triage SSE stream."""
         payload: dict[str, Any] = {
             "project_id": project_id,
             "scan_run_id": scan_run_id,
+            "after_batch_id": after_batch_id,
         }
-        if scan_run_id is not None:
-            summary = await asyncio.to_thread(
-                self._triage_repo.summarize_for_run, scan_run_id
+        summary = await asyncio.to_thread(
+            self._triage_repo.summarize_for_run,
+            scan_run_id,
+            after_batch_id=after_batch_id,
+        )
+        if summary is not None:
+            batches = await asyncio.to_thread(
+                self._triage_repo.list_for_run,
+                scan_run_id,
+                include_cancelled=True,
+                after_batch_id=after_batch_id,
             )
-            if summary is not None:
-                batches = await asyncio.to_thread(
-                    self._triage_repo.list_for_run, scan_run_id
-                )
-                payload.update(
-                    status=summary.status,
-                    total_findings=summary.total_findings,
-                    processed_findings=summary.processed_findings,
-                    started_at=summary.started_at,
-                    finished_at=summary.finished_at,
-                    batches=[self._batch_to_dict(b) for b in batches],
-                )
-        else:
-            active = self._triage_run_registry.list_for_project(project_id)
-            payload["active_scan_run_ids"] = [h.scan_run_id for h in active]
+            payload.update(
+                status=summary.status,
+                total_findings=summary.total_findings,
+                processed_findings=summary.processed_findings,
+                started_at=summary.started_at,
+                finished_at=summary.finished_at,
+                batches=[self._batch_to_dict(b) for b in batches],
+            )
 
         return BusEvent(
             event_id=new_event_id(),

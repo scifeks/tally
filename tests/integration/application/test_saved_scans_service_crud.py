@@ -156,6 +156,22 @@ class TestSavedScansServiceIntegration:
                 arg_profile_ids=[],
             )
 
+    def test_create_with_only_skip_tool_names_succeeds(
+        self,
+        service: SavedScansService,
+    ) -> None:
+        result = service.create(
+            name="skip-only",
+            skip_enrichment=False,
+            repo_ids=[],
+            tool_names=[],
+            skip_tool_names=["gitleaks"],
+            segments=[],
+            arg_profile_ids=[],
+        )
+        assert result.saved_scan.name == "skip-only"
+        assert result.skip_tool_names == ["gitleaks"]
+
     def test_create_unknown_tool_name_raises(
         self,
         service: SavedScansService,

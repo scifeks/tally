@@ -72,6 +72,13 @@ class RepoAuth(BaseModel):
         default_factory=list,
         description="Header entries for header-based auth",
     )
+    verify_ssl: bool = Field(
+        default=True,
+        description=(
+            "Verify TLS certificates. Set to false for "
+            "self-signed certificates on local dev stacks."
+        ),
+    )
 
     @model_validator(mode="after")
     def validate_auth_type(self) -> "RepoAuth":

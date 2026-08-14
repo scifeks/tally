@@ -26,9 +26,9 @@ infrastructure/endpoints/converters/
   detector.py      # Format detection: FormatDetector
   service.py       # Orchestration: convert_endpoint_file()
   oas3.py          # OAS3 passthrough adapter
-  oas2.py          # OAS2/Swagger → OAS3 via swagger2openapi
-  postman.py       # Postman Collection → OAS3 via postman-to-openapi
-  har.py           # HAR → OAS3 (pure Python)
+  oas2.py          # OAS2/Swagger -> OAS3 via swagger2openapi
+  postman.py       # Postman Collection -> OAS3 via postman-to-openapi
+  har.py           # HAR -> OAS3 (pure Python)
 ```
 
 ### Public API

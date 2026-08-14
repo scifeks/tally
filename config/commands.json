@@ -17,11 +17,6 @@
     "location": "local",
     "path": "/usr/bin/dalfox"
   },
-  "ffuf": {
-    "type": "api",
-    "location": "local",
-    "path": "/usr/bin/ffuf"
-  },
   "garak": {
     "type": "repo",
     "location": "local",

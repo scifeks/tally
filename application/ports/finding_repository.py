@@ -46,7 +46,8 @@ class FindingRepositoryPort(Protocol):
         triage_meta: dict,
         strategy: str,
         *,
-        triaged_by: str = "claudecode",
+        triage_provider: str | None = None,
+        triaged_by: str,
         source: str = "auto_triage",
     ) -> bool: ...
     def get_reportable_findings(self) -> list[Finding]: ...

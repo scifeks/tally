@@ -147,6 +147,9 @@ export const REST_ENDPOINTS = {
   /** POST: resume a failed/stranded triage run. Body must include `acknowledge_injection_risk: true`. */
   resumeTriage: (projectId: number, scanRunId: number) =>
     `${API_BASE_URL}/projects/${projectId}/triage/${scanRunId}/resume`,
+  /** GET: retrieve the max batch id for a triage run. Used to calculate attempt boundaries. */
+  triageMaxBatchId: (projectId: number, scanRunId: number) =>
+    `${API_BASE_URL}/projects/${projectId}/triage/${scanRunId}/max-batch-id`,
 
   // ─── Runtime / Tools (cross-project) ────────────────────────────────────────
   /** GET: probe status for each registered runtime dependency */
@@ -216,6 +219,10 @@ export const REST_ENDPOINTS = {
   /** POST: cancel an in-flight assistant response stream. */
   cancelChatResponse: (projectId: number, sessionId: number) =>
     `${API_BASE_URL}/projects/${projectId}/chat/sessions/${sessionId}/cancel`,
+
+  // ─── Platform (cross-project) ──────────────────────────────────────────────
+  /** GET: platform capabilities (chat, triage, report retention) */
+  capabilities: `${API_BASE_URL}/capabilities`,
 
   // ─── Configuration ──────────────────────────────────────────────────────────
   /** GET: project info for config page */
@@ -296,4 +303,9 @@ export const REST_ENDPOINTS = {
   /** GET: stream bytes for a single file-type arg (used to populate editor state). */
   downloadArgProfileFile: (projectId: number, id: number, argName: string) =>
     `${API_BASE_URL}/projects/${projectId}/arg-profiles/${id}/files/${encodeURIComponent(argName)}`,
+
+  // ─── Global Settings ───────────────────────────────────────────────────────
+  /** GET: browse server filesystem for file selection */
+  fsBrowse: (path: string) =>
+    `${API_BASE_URL}/global-settings/fs-browse?path=${encodeURIComponent(path)}`,
 } as const

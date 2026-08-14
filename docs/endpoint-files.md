@@ -40,8 +40,8 @@ Enter the absolute or relative path to the file, or press Enter to skip.
 directory, and `oas3_path` is saved in `repositories.json`:
 
 ```
-  ✓ Endpoint file converted: /path/to/projects/<project>/config/endpoints/<repo>/seed.json
-✓ Repository '<name>' added to project '<project>'
+  PASS Endpoint file converted: /path/to/projects/<project>/config/endpoints/<repo>/seed.json
+PASS Repository '<name>' added to project '<project>'
 ```
 
 **On failure:** the error is printed and the repository is saved without an
@@ -50,7 +50,7 @@ endpoint file. You can configure one later with `repo edit`:
 ```
   Endpoint file conversion failed: <reason>
   Repository will be added without an endpoint file. You can add one later with 'repo edit'.
-✓ Repository '<name>' added to project '<project>'
+PASS Repository '<name>' added to project '<project>'
 ```
 
 ### repo edit
@@ -75,8 +75,8 @@ When no endpoint file is configured, the prompt is identical to `repo add`.
 **On success:**
 
 ```
-  ✓ Endpoint file converted: /path/to/projects/<project>/config/endpoints/<repo>/seed.json
-✓ Repository '<name>' updated
+  PASS Endpoint file converted: /path/to/projects/<project>/config/endpoints/<repo>/seed.json
+PASS Repository '<name>' updated
 ```
 
 **On failure:** the error is printed and the existing configuration is kept

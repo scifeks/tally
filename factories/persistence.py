@@ -363,6 +363,8 @@ def create_scans_service(
 def create_triage_service(
     registry: ProjectRegistryService,
     project_id: int,
+    *,
+    repo_paths: dict[str, Path] | None = None,
 ) -> TriageService:
     """Build a TriageService for a project."""
     from application.triage.triage_service import TriageService
@@ -374,6 +376,7 @@ def create_triage_service(
         triage_repo=TriageBatchRepository(factory),
         finding_repo=FindingRepository(factory),
         audit_repo=AuditRepository(factory),
+        repo_paths=repo_paths,
     )
 
 

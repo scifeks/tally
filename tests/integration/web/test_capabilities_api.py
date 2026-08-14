@@ -22,7 +22,7 @@ def _make_unauthed_app(tmp_path: Path):
 
 
 class TestCapabilities:
-    async def test_returns_four_fields(self, app_client) -> None:
+    async def test_returns_five_fields(self, app_client) -> None:
         client, *_ = app_client
         resp = await client.get("/api/v1/capabilities")
         assert resp.status_code == 200
@@ -32,6 +32,7 @@ class TestCapabilities:
             "triage_enabled",
             "report_retention_enabled",
             "max_report_history",
+            "triage_backend_label",
         }
 
     async def test_field_types(self, app_client) -> None:
@@ -43,6 +44,10 @@ class TestCapabilities:
         assert isinstance(data["triage_enabled"], bool)
         assert isinstance(data["report_retention_enabled"], bool)
         assert isinstance(data["max_report_history"], int)
+        assert (
+            isinstance(data["triage_backend_label"], str)
+            or data["triage_backend_label"] is None
+        )
 
     async def test_report_retention_enabled_is_false(self, app_client) -> None:
         """Hardcoded False until a retention sweep mechanism exists."""

@@ -86,7 +86,8 @@ def _make_runner_with_source_not_examined(
         tool_registry=MagicMock(),
         finding_repo=finding_repo,
         repo_paths={},
-        triaged_by="claudecode",
+        triage_provider="anthropic",
+        triaged_by="auto_triage",
     )
     return runner, finding_repo, agent  # type: ignore[return-value]
 

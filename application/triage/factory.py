@@ -137,10 +137,14 @@ class TriageAgentFactory:
             OpenCodeTriageAgent,
         )
 
+        verdict_out_path = (
+            self._app_root / "logs" / "triage" / "verdicts" / "verdict.json"
+        )
         return OpenCodeTriageAgent(
             compose_path=compose_path,
             model=resolved.model,
             provider_name=resolved.provider_name,
+            verdict_out_path=verdict_out_path,
         )
 
 
@@ -169,7 +173,8 @@ def build_triage_runner(
         triage_repo.reset_for_resume(reset_for_resume_scan_run_id)
 
     resolved = resolve_triage_config(app_root=app_root)
-    triaged_by = "claudecode" if resolved.provider_name == "claude" else "opencode"
+    triage_provider = "anthropic" if resolved.provider_name == "claude" else "opencode"
+    triaged_by = "auto_triage"
     max_batch = MAX_FINDINGS_PER_BATCH if resolved.provider_name == "claude" else 1
 
     agent_factory = TriageAgentFactory(app_root=app_root)
@@ -190,6 +195,7 @@ def build_triage_runner(
         tool_registry=tool_registry,
         finding_repo=finding_repo,
         repo_paths=repo_paths,
+        triage_provider=triage_provider,
         triaged_by=triaged_by,
         debug=resolved.debug,
         max_findings_per_batch=max_batch,

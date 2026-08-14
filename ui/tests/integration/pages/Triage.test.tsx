@@ -173,10 +173,13 @@ describe('Triage page - active run', () => {
 
     await waitFor(() => expect(MockEventSource.instances).toHaveLength(1))
     const es = MockEventSource.instances[0]
+    // Event's scan_run_id must match the run this page is watching (fixture
+    // seeds project 1 with scan_run_id=1); otherwise the run-scoped
+    // handleEvent gate drops it.
     act(() => {
       es.emitTyped('batch_completed', {
         id: 'evt-c-7002',
-        scan_run_id: 2010,
+        scan_run_id: 1,
         project_id: 1,
         timestamp: '2026-04-28T11:05:00Z',
         batch_id: 7002,
@@ -185,27 +188,145 @@ describe('Triage page - active run', () => {
       })
     })
 
-    // After the SSE event, batch 7002 transitions from "in progress" → "completed".
-    // The fixture already has B-7001 in completed state, so we expect ≥ 2
-    // batch rows to show "completed" and the log to show the new event message.
+    // After the SSE event, batch 7002 transitions from "in progress" to
+    // "completed". The fixture already has B-7001 completed, so we
+    // expect at least 2 batch rows to show "completed" and the log to
+    // show the new event message.
     await waitFor(() => {
       const completed = screen.getAllByText(/^completed$/i)
       expect(completed.length).toBeGreaterThanOrEqual(2)
     })
     expect(screen.getByText(/B-7002 complete/)).toBeInTheDocument()
   })
+
+  it('shows only new batches after Reset + Start (attempt boundary)', async () => {
+    useUI.setState({ activeProjectId: 1, triageInjectionAcked: true })
+
+    server.use(
+      http.get('/api/v1/capabilities', () =>
+        HttpResponse.json({ triageBackendLabel: 'ollama' })
+      ),
+      http.get('/api/v1/projects/1/triage/active', () =>
+        HttpResponse.json({
+          scan_run_id: 1,
+          project_id: 1,
+          status: 'done',
+          started_at: '2026-04-30T22:50:34.903973+00:00',
+          finished_at: '2026-04-30T23:02:16.579444+00:00',
+          total_findings: 572,
+          processed_findings: 142,
+        })
+      ),
+      http.get('/api/v1/projects/:projectId/triage/:scanRunId', ({ request }) => {
+        const url = new URL(request.url)
+        const after = url.searchParams.get('after_batch_id')
+        // When after_batch_id filter is set (Reset has been clicked), return
+        // only batches from the current attempt (none, since we're in queued state).
+        if (after) {
+          return HttpResponse.json({
+            scan_run_id: 1,
+            project_id: 1,
+            status: 'queued',
+            started_at: null,
+            finished_at: null,
+            total_findings: 0,
+            processed_findings: 0,
+            batches: [],
+          })
+        }
+        // Otherwise return batches from the prior completed attempt.
+        return HttpResponse.json({
+          scan_run_id: 1,
+          project_id: 1,
+          status: 'done',
+          started_at: '2026-04-30T22:50:34.903973+00:00',
+          finished_at: '2026-04-30T23:02:16.579444+00:00',
+          total_findings: 572,
+          processed_findings: 142,
+          batches: [
+            {
+              id: 7001,
+              scan_run_id: 1,
+              segment: 'sast',
+              finding_ids: [1, 2, 3, 4, 5],
+              status: 'completed',
+              attempts: 1,
+              started_at: '2026-04-30T22:50:34.903973+00:00',
+              finished_at: '2026-04-30T23:02:16.579444+00:00',
+              response_preview: 'Triaged 5 SAST findings; flagged 2 as false_positive.',
+              error: null,
+            },
+            {
+              id: 7002,
+              scan_run_id: 1,
+              segment: 'web',
+              finding_ids: [],
+              status: 'completed',
+              attempts: 1,
+              started_at: '2026-04-30T22:50:34.903973+00:00',
+              finished_at: '2026-04-30T23:02:16.579444+00:00',
+              response_preview: 'All 5 findings confirmed active; remediation suggested.',
+              error: null,
+            },
+          ],
+        })
+      }),
+      http.get('/api/v1/projects/:projectId/triage/:scanRunId/max-batch-id', () =>
+        HttpResponse.json({ max_batch_id: 7002 })
+      )
+    )
+
+    const user = userEvent.setup()
+    renderTriage()
+
+    // Historical batches show first (from prior attempt).
+    await screen.findByText(/B-7001/i)
+    expect(screen.getByText(/B-7002/i)).toBeInTheDocument()
+
+    // Reset clears the batches and sets the attempt boundary.
+    await user.click(screen.getByTestId('triage-reset-button'))
+
+    // After reset, historical batches should vanish.
+    await waitFor(() => {
+      expect(screen.queryByText(/B-7001/i)).not.toBeInTheDocument()
+      expect(screen.queryByText(/B-7002/i)).not.toBeInTheDocument()
+    })
+
+    // The SSE reconnection must carry the after_batch_id filter.
+    await waitFor(() => {
+      expect(MockEventSource.instances.length).toBeGreaterThanOrEqual(2)
+    })
+    const es = MockEventSource.instances[MockEventSource.instances.length - 1]
+    expect(es.url).toContain('after_batch_id=7002')
+  })
 })
 
 describe('Triage page - Resume swap on triage_failed', () => {
-  it('swaps Start → Resume on triage_failed { resumable: true } and renders the inline note', async () => {
+  // SSE is now run-scoped: the page only subscribes when a specific run
+  // is displayed. These tests seed project 2 with an active run so the
+  // Triage page derives a displayedRunId, opens SSE, and can receive
+  // triage_failed events whose scan_run_id matches.
+  const activeRunProject2 = {
+    scan_run_id: 2003,
+    project_id: 2,
+    status: 'running',
+    started_at: '2026-04-28T11:00:00Z',
+    finished_at: null,
+    total_findings: 23,
+    processed_findings: 7,
+  }
+
+  it('swaps to Resume on triage_failed { resumable: true } and renders the inline note', async () => {
     useUI.setState({ activeProjectId: 2, triageInjectionAcked: true })
+    server.use(
+      http.get('/api/v1/projects/2/triage/active', () =>
+        HttpResponse.json(activeRunProject2)
+      )
+    )
     renderTriage()
 
-    // Wait for the page to settle on the latest=done run for project 2 so
-    // the Start button is mounted.
-    await screen.findByTestId('triage-start-button')
-
     await waitFor(() => expect(MockEventSource.instances).toHaveLength(1))
+    expect(MockEventSource.instances[0].url).toContain('scan_run_id=2003')
     const es = MockEventSource.instances[0]
     act(() => {
       es.emitTyped('triage_failed', {
@@ -231,6 +352,9 @@ describe('Triage page - Resume swap on triage_failed', () => {
 
     let resumeBody: Record<string, unknown> | null = null
     server.use(
+      http.get('/api/v1/projects/2/triage/active', () =>
+        HttpResponse.json(activeRunProject2)
+      ),
       http.post('/api/v1/projects/2/triage/2003/resume', async ({ request }) => {
         resumeBody = (await request.json()) as Record<string, unknown>
         return HttpResponse.json(
@@ -250,7 +374,6 @@ describe('Triage page - Resume swap on triage_failed', () => {
 
     renderTriage()
 
-    await screen.findByTestId('triage-start-button')
     await waitFor(() => expect(MockEventSource.instances).toHaveLength(1))
     const es = MockEventSource.instances[0]
     act(() => {

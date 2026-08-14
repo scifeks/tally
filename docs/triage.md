@@ -280,6 +280,95 @@ for setup details.
 
 ---
 
+## MCP Triage Mode
+
+MCP triage mode allows you to run interactive triage through Claude Code. Each batch of findings is triaged by Claude, then presented to you for review and approval before the verdicts are saved to the project database.
+
+### How MCP triage differs from auto-triage
+
+**Auto-triage** (headless mode) runs the triage agent inside a Docker container and saves all verdicts automatically without user intervention. Findings are processed in configurable batch sizes.
+
+**MCP triage** (interactive mode) operates as an MCP server. An external client (Claude Code) connects, streams batches to the agent, and awaits your confirmation on each batch before persisting results. No Docker container runs on the host; the agent executes in Claude Code's environment. Use MCP triage when you want to review findings interactively before accepting triage verdicts.
+
+### Setup
+
+#### Step 1: Generate an MCP token
+
+Generate a bearer token for server authentication in the REPL:
+
+```
+[myproject]> mcp token create ci-agent
+MCP token created: tly_abc123...xyz
+Token name: ci-agent
+Warning: Copy this token now. It will not be shown again.
+```
+
+Save the token securely. You will pass it to Claude Code when configuring the MCP connection.
+
+#### Step 2: Start the MCP server
+
+Start the MCP triage server from the REPL:
+
+```
+[myproject]> tally mcp serve
+```
+
+The server starts on the configured `mcp_port` (default: `8765`). To use a different port:
+
+```
+[myproject]> tally mcp serve --port 9000
+```
+
+The server remains running and awaits connections from Claude Code.
+
+#### Step 3: Configure Claude Code
+
+In Claude Code, configure the MCP connection to your Tally instance:
+
+1. Open Claude Code settings
+2. Add an MCP server with:
+   - **Host:** localhost or your Tally server address
+   - **Port:** `8765` (or the port you specified in step 2)
+   - **Token:** paste the token from step 1
+
+#### Step 4: Invoke triage in Claude Code
+
+Use the `/tally-triage` slash command in Claude Code:
+
+```
+/tally-triage
+```
+
+Claude Code connects to the MCP server, retrieves untriaged findings, streams them through the triage agent, and presents each batch to you for confirmation.
+
+### Batch confirmation workflow
+
+When you invoke `/tally-triage`, Claude Code:
+
+1. Fetches untriaged SAST and API findings from your active project
+2. Groups findings into batches
+3. Sends each batch to the triage agent
+4. Displays the verdicts and waits for your approval
+5. On approval, persists the verdicts to the project database
+6. Moves to the next batch
+
+You can approve, reject, or edit verdicts in Claude Code before confirming. Rejected batches are skipped and remain untriaged; you can retry them later.
+
+### When to use MCP triage vs auto-triage
+
+Use **MCP triage** when:
+- You want to review and confirm findings interactively before committing verdicts
+- You prefer to run triage from Claude Code alongside other development workflows
+- You want visibility into each batch before persistence
+- You do not want a long-running container on the host
+
+Use **auto-triage** when:
+- You want to process all findings headlessly without interaction
+- You want triage to run from the REPL or web UI in a fully automated pipeline
+- You are triaging a large volume of findings and interactivity is not needed
+
+---
+
 ## Troubleshooting
 
 ### "Docker is not installed or not running"

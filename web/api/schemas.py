@@ -356,6 +356,8 @@ class ToolCatalogItem(BaseModel):
     supports_local: bool
     supports_docker: bool
     description: str
+    requires_base_urls: bool = False
+    requires_url_inventory: bool = False
 
 
 class ToolCatalogResponse(BaseModel):
@@ -388,6 +390,7 @@ class CapabilitiesResponse(BaseModel):
     triage_enabled: bool
     report_retention_enabled: bool
     max_report_history: int
+    triage_backend_label: str | None
 
 
 class FindingHistoryItem(BaseModel):
@@ -652,6 +655,10 @@ class TriageStartRequest(BaseModel):
         default=None,
         validation_alias=AliasChoices("finding_ids", "findingIds"),
     )
+    scan_run_id: int | None = Field(
+        default=None,
+        validation_alias=AliasChoices("scan_run_id", "scanRunId"),
+    )
 
 
 class TriageRunSummary(BaseModel):
@@ -662,6 +669,7 @@ class TriageRunSummary(BaseModel):
     finished_at: str | None
     total_findings: int
     processed_findings: int
+    previous_max_batch_id: int | None = None
 
 
 class TriagesListResponse(BaseModel):
@@ -698,6 +706,10 @@ class TriageDetailResponse(BaseModel):
 class TriageCancelResponse(BaseModel):
     scan_run_id: int
     status: str
+
+
+class MaxBatchIdResponse(BaseModel):
+    max_batch_id: int | None
 
 
 class ReportGenerateRequest(BaseModel):

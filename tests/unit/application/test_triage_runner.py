@@ -5,7 +5,6 @@ from __future__ import annotations
 import sys
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
@@ -119,7 +118,8 @@ def _make_runner(
         tool_registry=MagicMock(),
         finding_repo=fr,
         repo_paths=repo_paths or {},
-        triaged_by="claudecode",
+        triage_provider="anthropic",
+        triaged_by="auto_triage",
     )
     return runner, store, triage_backend  # type: ignore[return-value]
 
@@ -177,20 +177,22 @@ def test_batch_calls_create_per_combo(tmp_path: Path) -> None:
     runner, store, _ = _make_runner(tmp_path)
     store.get_active_finding_combos.return_value = [
         ("semgrep", "repo1", "sast"),
-        ("zap", "repo1", "api"),
+        ("zap", "repo1", "web"),
     ]
     store.fetch_active_findings_for_batching.return_value = []
-    store.create_batches.return_value = 2
+    store.create_batches.return_value = [(100, 3), (101, 2)]
 
     run_id, total = runner.batch()
 
     assert store.fetch_active_findings_for_batching.call_count == 2
-    store.fetch_active_findings_for_batching.assert_any_call("semgrep", "repo1", "sast")
-    store.fetch_active_findings_for_batching.assert_any_call("zap", "repo1", "api")
+    store.fetch_active_findings_for_batching.assert_any_call(
+        1, "semgrep", "repo1", "sast"
+    )
+    store.fetch_active_findings_for_batching.assert_any_call(1, "zap", "repo1", "web")
     assert store.create_batches.call_count == 2
     for call in store.create_batches.call_args_list:
         assert call.args[0] == run_id
-    assert total == 4  # 2 + 2
+    assert total == 4  # 2 batches per combo
 
 
 def test_batch_passes_skip_tools_to_store(
@@ -205,7 +207,7 @@ def test_batch_passes_skip_tools_to_store(
         mock_reg.get_all_tools.return_value = [mock_nmap]
         runner.batch()
 
-    skip_tools = store.get_active_finding_combos.call_args[0][0]
+    skip_tools = store.get_active_finding_combos.call_args[0][1]
     assert "nmap" in skip_tools
 
 
@@ -343,7 +345,8 @@ def test_run_batch_findings_writes_verdict_fields(
             "call_stack": '["main.py:10", "db.py:5"]',
         },
         strategy="sast",
-        triaged_by="claudecode",
+        triage_provider="anthropic",
+        triaged_by="auto_triage",
         source="auto_triage",
     )
 
@@ -414,60 +417,6 @@ def test_non_parse_error_not_retried(
     assert len(agent.calls) == 1
 
 
-# _read_source_file()
-
-
-def test_read_source_file_returns_contents(
-    tmp_path: Path,
-) -> None:
-    repo_dir = tmp_path / "myrepo"
-    repo_dir.mkdir()
-    src = repo_dir / "src" / "app.py"
-    src.parent.mkdir(parents=True)
-    src.write_text("print('hello')")
-
-    runner, _, _ = _make_runner(tmp_path, repo_paths={"myrepo": repo_dir})
-    finding: dict[str, Any] = {
-        "repo": "myrepo",
-        "file": "src/app.py",
-    }
-
-    assert runner._read_source_file(finding) == "print('hello')"
-
-
-def test_read_source_file_missing_repo(
-    tmp_path: Path,
-) -> None:
-    runner, _, _ = _make_runner(tmp_path, repo_paths={})
-    finding: dict[str, Any] = {
-        "repo": "missing",
-        "file": "a.py",
-    }
-
-    assert runner._read_source_file(finding) == ""
-
-
-def test_read_source_file_missing_file(
-    tmp_path: Path,
-) -> None:
-    runner, _, _ = _make_runner(tmp_path, repo_paths={"r": tmp_path})
-    finding: dict[str, Any] = {
-        "repo": "r",
-        "file": "nonexistent.py",
-    }
-
-    assert runner._read_source_file(finding) == ""
-
-
-def test_read_source_file_no_file_field(
-    tmp_path: Path,
-) -> None:
-    runner, _, _ = _make_runner(tmp_path, repo_paths={"r": tmp_path})
-    finding: dict[str, Any] = {"repo": "r"}
-
-    assert runner._read_source_file(finding) == ""
-
-
 # run()
 
 
@@ -527,7 +476,7 @@ def test_run_skips_skip_strategy_tools(
         result = runner.run()
 
     assert result.sessions_run == 0
-    store.complete_batch.assert_called_once_with(1, "success")
+    store.complete_batch.assert_called_once_with(1, "completed")
 
 
 def test_run_uses_agent_prepared_session_context(
@@ -581,8 +530,8 @@ def test_run_dry_run_marks_all_batches_success(
         runner.run_dry_run()
 
     assert store.complete_batch.call_count == 2
-    store.complete_batch.assert_any_call(10, "success")
-    store.complete_batch.assert_any_call(11, "success")
+    store.complete_batch.assert_any_call(10, "completed")
+    store.complete_batch.assert_any_call(11, "completed")
 
 
 def test_run_dry_run_no_pending_remain(
@@ -603,7 +552,7 @@ def test_run_dry_run_no_pending_remain(
         runner.run_dry_run()
 
     calls = [c.args for c in store.complete_batch.call_args_list]
-    assert all(status == "success" for _, status in calls)
+    assert all(status == "completed" for _, status in calls)
 
 
 def test_run_dry_run_prompt_logged(
@@ -679,7 +628,7 @@ def test_run_batch_loop_skip_completes_without_handler(
         result = runner._run_batch_loop(1, handler)
 
     handler.assert_not_called()
-    store.complete_batch.assert_called_once_with(1, "success")
+    store.complete_batch.assert_called_once_with(1, "completed")
     assert result.sessions_run == 0
     assert result.success == 0
 

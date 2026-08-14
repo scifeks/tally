@@ -71,6 +71,8 @@ class NucleiDockerTool(BaseNucleiTool):
             tool_args.extend(["-t", f"{default_template_dir},{custom_template_dir}"])
         elif custom_template_dir:
             tool_args.extend(["-t", str(custom_template_dir)])
+        elif default_template_dir:
+            tool_args.extend(["-t", str(default_template_dir)])
 
         return build_docker_exec(self._container_name, self._tool_path, tool_args)
 

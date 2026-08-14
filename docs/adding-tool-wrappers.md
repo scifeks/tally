@@ -351,7 +351,7 @@ class <ToolName>Handler:
 | `domain` | `"code"` (SAST/SCA/secrets) or `"web"` (API/ZAP) |
 | `segment` | Matches `scan_segment` on the wrapper |
 | `non_enriched_fields` | Fields the tool provides; LLM enrichment skipped for these |
-| `type_flags` | Maps finding_type string → set of `type_*` boolean fields |
+| `type_flags` | Maps finding_type string -> set of `type_*` boolean fields |
 | `should_enrich` | `False` to skip LLM enrichment entirely |
 | `normalized_fields` | Shown by `search --show-fields --tool=<name>` |
 
