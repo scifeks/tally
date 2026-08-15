@@ -64,6 +64,7 @@ def cmd_mcp_serve(
             tool_registry,
             token_repo,
             encryption_key,
+            base_path,
         )
         return 0
     except KeyboardInterrupt:

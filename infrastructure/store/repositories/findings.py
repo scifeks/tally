@@ -41,7 +41,13 @@ class FindingRepository(FindingRepositoryPort):
     def __init__(self, factory: ConnectionFactory) -> None:
         self._factory = factory
 
-    def insert_findings(self, run_id: int, findings: list[NormalizedFinding]) -> None:
+    def insert_findings(
+        self,
+        run_id: int,
+        findings: list[NormalizedFinding],
+        *,
+        should_report: bool = False,
+    ) -> None:
         """Append finding rows from a scan."""
         if not findings:
             return
@@ -108,7 +114,7 @@ class FindingRepository(FindingRepositoryPort):
                         now,
                         1,
                         "active",
-                        0,
+                        1 if should_report else 0,
                     ),
                 )
 
@@ -211,7 +217,7 @@ class FindingRepository(FindingRepositoryPort):
         segments: list[str] | None = None,
         require_file: bool = False,
     ) -> tuple[str, list[object]]:
-        clauses: list[str] = []
+        clauses: list[str] = ["duplicate_of IS NULL"]
         params: list[object] = []
         if segments:
             placeholders = ",".join("?" * len(segments))
@@ -229,7 +235,7 @@ class FindingRepository(FindingRepositoryPort):
         if status:
             clauses.append("status = ?")
             params.append(status)
-        where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
+        where = "WHERE " + " AND ".join(clauses)
         return where, params
 
     def get_findings(
@@ -381,7 +387,7 @@ class FindingRepository(FindingRepositoryPort):
 
     def get_reportable_findings(self) -> list[Finding]:
         """Return findings marked for inclusion in reports."""
-        sql = "SELECT * FROM findings WHERE should_report = 1"
+        sql = "SELECT * FROM findings WHERE should_report = 1 AND duplicate_of IS NULL"
         with self._factory.connect() as conn:
             rows = conn.execute(sql).fetchall()
         return [Finding.from_row(r) for r in rows]
@@ -389,13 +395,15 @@ class FindingRepository(FindingRepositoryPort):
     def get_all_findings(self) -> list[Finding]:
         """Return all findings with no triage filter."""
         with self._factory.connect() as conn:
-            rows = conn.execute("SELECT * FROM findings").fetchall()
+            rows = conn.execute(
+                "SELECT * FROM findings WHERE duplicate_of IS NULL"
+            ).fetchall()
         return [Finding.from_row(r) for r in rows]
 
     def get_findings_by_run_id(self, run_id: int) -> list[Finding]:
         with self._factory.connect() as conn:
             rows = conn.execute(
-                "SELECT * FROM findings WHERE run_id = ?",
+                "SELECT * FROM findings WHERE run_id = ? AND duplicate_of IS NULL",
                 (run_id,),
             ).fetchall()
         return [Finding.from_row(r) for r in rows]
@@ -403,14 +411,17 @@ class FindingRepository(FindingRepositoryPort):
     def get_all_findings_deserialized(self) -> list[dict]:
         """Return all findings with no triage filter, deserialized."""
         with self._factory.connect() as conn:
-            rows = conn.execute("SELECT * FROM findings").fetchall()
+            rows = conn.execute(
+                "SELECT * FROM findings WHERE duplicate_of IS NULL"
+            ).fetchall()
         return [deserialise_row(r) for r in rows]
 
     def get_reportable_findings_deserialized(self) -> list[dict]:
         """Return findings marked for inclusion in reports, as dicts."""
         with self._factory.connect() as conn:
             rows = conn.execute(
-                "SELECT * FROM findings WHERE should_report = 1"
+                "SELECT * FROM findings"
+                " WHERE should_report = 1 AND duplicate_of IS NULL"
             ).fetchall()
         return [deserialise_row(r) for r in rows]
 
@@ -669,7 +680,7 @@ class FindingRepository(FindingRepositoryPort):
             by_severity: dict[str, int] = {}
             for rank, count in conn.execute(
                 "SELECT severity, COUNT(*) FROM findings"
-                " WHERE severity IS NOT NULL GROUP BY severity"
+                " WHERE severity IS NOT NULL AND duplicate_of IS NULL GROUP BY severity"
             ).fetchall():
                 by_severity[Severity.from_rank(rank).label] = count
 
@@ -677,14 +688,15 @@ class FindingRepository(FindingRepositoryPort):
                 row[0]: row[1]
                 for row in conn.execute(
                     "SELECT domain, COUNT(*) FROM findings"
-                    " WHERE domain IS NOT NULL GROUP BY domain"
+                    " WHERE domain IS NOT NULL AND duplicate_of IS NULL GROUP BY domain"
                 ).fetchall()
             }
             by_segment: dict[str, int] = {
                 row[0]: row[1]
                 for row in conn.execute(
                     "SELECT segment, COUNT(*) FROM findings"
-                    " WHERE segment IS NOT NULL GROUP BY segment"
+                    " WHERE segment IS NOT NULL AND duplicate_of IS NULL"
+                    " GROUP BY segment"
                 ).fetchall()
             }
             by_repo: dict[str, int] = {
@@ -692,21 +704,22 @@ class FindingRepository(FindingRepositoryPort):
                 for row in conn.execute(
                     "SELECT r.name, COUNT(*) FROM findings f"
                     " JOIN repositories r ON f.repo_id = r.id"
-                    " WHERE f.repo_id IS NOT NULL GROUP BY f.repo_id"
+                    " WHERE f.repo_id IS NOT NULL AND f.duplicate_of IS NULL"
+                    " GROUP BY f.repo_id"
                 ).fetchall()
             }
             by_status: dict[str, int] = {
                 row[0]: row[1]
                 for row in conn.execute(
                     "SELECT status, COUNT(*) FROM findings"
-                    " WHERE status IS NOT NULL GROUP BY status"
+                    " WHERE status IS NOT NULL AND duplicate_of IS NULL GROUP BY status"
                 ).fetchall()
             }
             by_tool: dict[str, int] = {
                 row[0]: row[1]
                 for row in conn.execute(
                     "SELECT tool, COUNT(*) FROM findings"
-                    " WHERE tool IS NOT NULL GROUP BY tool"
+                    " WHERE tool IS NOT NULL AND duplicate_of IS NULL GROUP BY tool"
                 ).fetchall()
             }
 
@@ -718,7 +731,7 @@ class FindingRepository(FindingRepositoryPort):
             for rank, status, count in conn.execute(
                 "SELECT severity, status, COUNT(*) FROM findings"
                 " WHERE severity IS NOT NULL AND status IS NOT NULL"
-                " GROUP BY severity, status"
+                " AND duplicate_of IS NULL GROUP BY severity, status"
             ).fetchall():
                 sev_label = Severity.from_rank(rank).label
                 row = by_severity_status.setdefault(
@@ -726,16 +739,20 @@ class FindingRepository(FindingRepositoryPort):
                 )
                 row[status] = count
 
-            (total_row,) = conn.execute("SELECT COUNT(*) FROM findings").fetchone()
+            (total_row,) = conn.execute(
+                "SELECT COUNT(*) FROM findings WHERE duplicate_of IS NULL"
+            ).fetchone()
             total = int(total_row or 0)
 
             (scans_row,) = conn.execute(
-                "SELECT COUNT(DISTINCT run_id) FROM findings WHERE run_id IS NOT NULL"
+                "SELECT COUNT(DISTINCT run_id) FROM findings"
+                " WHERE run_id IS NOT NULL AND duplicate_of IS NULL"
             ).fetchone()
             scans_count = int(scans_row or 0)
 
             (repos_row,) = conn.execute(
-                "SELECT COUNT(DISTINCT repo_id) FROM findings WHERE repo_id IS NOT NULL"
+                "SELECT COUNT(DISTINCT repo_id) FROM findings"
+                " WHERE repo_id IS NOT NULL AND duplicate_of IS NULL"
             ).fetchone()
             repos_count = int(repos_row or 0)
 
@@ -745,11 +762,13 @@ class FindingRepository(FindingRepositoryPort):
             (last_scan_row,) = conn.execute(
                 "SELECT MAX(sr.created_at) FROM scan_runs sr"
                 " JOIN findings f ON f.run_id = sr.id"
+                " WHERE f.duplicate_of IS NULL"
             ).fetchone()
             last_scan_at = last_scan_row
 
             (last_triage_row,) = conn.execute(
-                "SELECT MAX(triaged_at) FROM findings WHERE triaged_at IS NOT NULL"
+                "SELECT MAX(triaged_at) FROM findings"
+                " WHERE triaged_at IS NOT NULL AND duplicate_of IS NULL"
             ).fetchone()
             last_triage_at = last_triage_row
 
@@ -775,27 +794,30 @@ class FindingRepository(FindingRepositoryPort):
             domains = sorted(
                 row[0]
                 for row in conn.execute(
-                    "SELECT DISTINCT domain FROM findings WHERE domain IS NOT NULL"
+                    "SELECT DISTINCT domain FROM findings"
+                    " WHERE domain IS NOT NULL AND duplicate_of IS NULL"
                 ).fetchall()
             )
             severity_ranks = sorted(
                 row[0]
                 for row in conn.execute(
-                    "SELECT DISTINCT severity FROM findings WHERE severity IS NOT NULL"
+                    "SELECT DISTINCT severity FROM findings"
+                    " WHERE severity IS NOT NULL AND duplicate_of IS NULL"
                 ).fetchall()
             )
             severities = [Severity.from_rank(r).label for r in severity_ranks]
             statuses = sorted(
                 row[0]
                 for row in conn.execute(
-                    "SELECT DISTINCT status FROM findings WHERE status IS NOT NULL"
+                    "SELECT DISTINCT status FROM findings"
+                    " WHERE status IS NOT NULL AND duplicate_of IS NULL"
                 ).fetchall()
             )
             confidence_levels = sorted(
                 row[0]
                 for row in conn.execute(
                     "SELECT DISTINCT confidence FROM findings"
-                    " WHERE confidence IS NOT NULL"
+                    " WHERE confidence IS NOT NULL AND duplicate_of IS NULL"
                 ).fetchall()
             )
             finding_types = sorted(
@@ -803,13 +825,14 @@ class FindingRepository(FindingRepositoryPort):
                 for row in conn.execute(
                     "SELECT DISTINCT je.value FROM findings,"
                     " json_each(findings.finding_type) AS je"
-                    " WHERE je.value IS NOT NULL"
+                    " WHERE je.value IS NOT NULL AND findings.duplicate_of IS NULL"
                 ).fetchall()
             )
             tools = sorted(
                 row[0]
                 for row in conn.execute(
-                    "SELECT DISTINCT tool FROM findings WHERE tool IS NOT NULL"
+                    "SELECT DISTINCT tool FROM findings"
+                    " WHERE tool IS NOT NULL AND duplicate_of IS NULL"
                 ).fetchall()
             )
             repos = sorted(
@@ -817,13 +840,14 @@ class FindingRepository(FindingRepositoryPort):
                 for row in conn.execute(
                     "SELECT DISTINCT r.name FROM findings f"
                     " JOIN repositories r ON f.repo_id = r.id"
-                    " WHERE f.repo_id IS NOT NULL"
+                    " WHERE f.repo_id IS NOT NULL AND f.duplicate_of IS NULL"
                 ).fetchall()
             )
             segments = sorted(
                 row[0]
                 for row in conn.execute(
-                    "SELECT DISTINCT segment FROM findings WHERE segment IS NOT NULL"
+                    "SELECT DISTINCT segment FROM findings"
+                    " WHERE segment IS NOT NULL AND duplicate_of IS NULL"
                 ).fetchall()
             )
         return {
@@ -979,4 +1003,16 @@ class FindingRepository(FindingRepositoryPort):
             conn.execute(
                 "DELETE FROM findings WHERE id = ?",
                 (finding_id,),
+            )
+
+    def mark_as_duplicate(self, finding_id: int, survivor_id: int) -> None:
+        """Mark a finding as a duplicate of the survivor.
+
+        Read paths filter duplicate_of IS NULL so the loser row is
+        hidden but preserved.
+        """
+        with self._factory.connect() as conn:
+            conn.execute(
+                "UPDATE findings SET duplicate_of = ? WHERE id = ?",
+                (survivor_id, finding_id),
             )
