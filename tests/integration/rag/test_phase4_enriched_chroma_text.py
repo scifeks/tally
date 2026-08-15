@@ -17,10 +17,11 @@ from unittest.mock import patch
 
 import pytest
 
-from application.pipeline.chromadb_ids import chromadb_doc_id
 from application.pipeline.strategies import PersistOnlyStrategy
 from application.ports.embedding_provider import EmbeddingProvider
+from application.rag.finding_indexer import FindingIndexer
 from application.rag.knowledge_base import FindingKnowledgeBase
+from application.rag.vector_doc_ids import finding_vector_id
 from core.project_paths import ProjectPaths
 from domain.pipeline.events import IngestCompleted
 from infrastructure.store import make_store
@@ -102,7 +103,10 @@ def env(tmp_path: Path) -> dict:
     run_repo, finding_repo, _, _ = make_store(base_path, _PROJECT_NAME)
     run_id = run_repo.create_run({})
 
-    handler = PersistOnlyStrategy(finding_repo=finding_repo)
+    handler = PersistOnlyStrategy(
+        finding_repo=finding_repo,
+        indexer=FindingIndexer(finding_repo=finding_repo),
+    )
 
     return {
         "base_path": base_path,
@@ -133,7 +137,7 @@ class TestEnrichedChromaText:
 
         kb = _build_test_kb(env["project_name"], Path(env["base_path"]))
         try:
-            doc_id = chromadb_doc_id(fp, "default")
+            doc_id = finding_vector_id(fp, "default")
             doc = kb.get_finding(doc_id)
             assert doc is not None, "ChromaDB document was not written"
             text = doc["document"]
@@ -167,7 +171,7 @@ class TestEnrichedChromaText:
 
         kb = _build_test_kb(env["project_name"], Path(env["base_path"]))
         try:
-            doc_id = chromadb_doc_id(fp, "default")
+            doc_id = finding_vector_id(fp, "default")
             doc = kb.get_finding(doc_id)
             assert doc is not None, "ChromaDB document was not written"
             assert doc["metadata"] is not None

@@ -284,6 +284,7 @@ def create_findings_service(
     )
     from application.findings.findings_service import FindingsService
     from application.locking import LockQueryService
+    from application.rag.finding_indexer import FindingIndexer
 
     row, paths = _resolve_project(registry, project_id)
     findings_db_exists = paths.findings_db.exists()
@@ -298,6 +299,7 @@ def create_findings_service(
         project_repo=project_repo,
         analyst=analyst,
         lock_query=LockQueryService(),
+        indexer=FindingIndexer(finding_repo=finding_repo),
         project_id=project_id,
         project_name=row.name,
         findings_db_exists=findings_db_exists,

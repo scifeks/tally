@@ -12,10 +12,11 @@ from unittest.mock import patch
 
 import pytest
 
-from application.pipeline.chromadb_ids import chromadb_doc_id
 from application.pipeline.strategies import PersistOnlyStrategy
 from application.ports.embedding_provider import EmbeddingProvider
+from application.rag.finding_indexer import FindingIndexer
 from application.rag.knowledge_base import FindingKnowledgeBase
+from application.rag.vector_doc_ids import finding_vector_id
 from core.project_paths import ProjectPaths
 from domain.pipeline.events import IngestCompleted
 from infrastructure.store import make_store
@@ -107,7 +108,10 @@ def phase4_env(tmp_path: Path) -> dict:
     gitleaks_fp = _test_fingerprint(gitleaks_row)
     gitleaks_id = _seed_finding(finding_repo, run_id, gitleaks_row)
 
-    handler = PersistOnlyStrategy(finding_repo=finding_repo)
+    handler = PersistOnlyStrategy(
+        finding_repo=finding_repo,
+        indexer=FindingIndexer(finding_repo=finding_repo),
+    )
 
     return {
         "base_path": base_path,
@@ -171,7 +175,7 @@ class TestPhase4ChromaDBWrite:
         finally:
             kb.close()
 
-    def test_chromadb_doc_ids_are_fingerprint_based(self, phase4_env: dict) -> None:
+    def test_finding_vector_ids_are_fingerprint_based(self, phase4_env: dict) -> None:
         """ChromaDB doc IDs are fingerprint:profile format."""
         semgrep_id = phase4_env["semgrep_id"]
         semgrep_fp = phase4_env["semgrep_fp"]
@@ -181,8 +185,8 @@ class TestPhase4ChromaDBWrite:
 
         kb = _open_kb(phase4_env)
         try:
-            semgrep_doc_id = chromadb_doc_id(semgrep_fp, "default")
-            gitleaks_doc_id = chromadb_doc_id(gitleaks_fp, "default")
+            semgrep_doc_id = finding_vector_id(semgrep_fp, "default")
+            gitleaks_doc_id = finding_vector_id(gitleaks_fp, "default")
             assert kb.get_finding(semgrep_doc_id) is not None
             assert kb.get_finding(gitleaks_doc_id) is not None
         finally:
@@ -195,7 +199,7 @@ class TestPhase4ChromaDBWrite:
 
         kb = _open_kb(phase4_env)
         try:
-            doc_id = chromadb_doc_id(semgrep_fp, "default")
+            doc_id = finding_vector_id(semgrep_fp, "default")
             doc = kb.get_finding(doc_id)
             assert doc is not None
             text = doc["document"]
@@ -233,8 +237,8 @@ class TestPhase4ChromaDBWrite:
 
         kb = _open_kb(phase4_env)
         try:
-            semgrep_doc_id = chromadb_doc_id(semgrep_fp, "default")
-            gitleaks_doc_id = chromadb_doc_id(gitleaks_fp, "default")
+            semgrep_doc_id = finding_vector_id(semgrep_fp, "default")
+            gitleaks_doc_id = finding_vector_id(gitleaks_fp, "default")
             assert kb.get_finding(semgrep_doc_id) is not None
             assert kb.get_finding(gitleaks_doc_id) is None
         finally:
@@ -301,7 +305,7 @@ class TestPhase4ChromaDBWrite:
 
         kb = _open_kb(phase4_env)
         try:
-            doc_id = chromadb_doc_id(semgrep_fp, "default")
+            doc_id = finding_vector_id(semgrep_fp, "default")
             doc = kb.get_finding(doc_id)
             assert doc is not None
             meta = doc["metadata"]

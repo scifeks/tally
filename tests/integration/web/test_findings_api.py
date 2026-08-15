@@ -544,8 +544,10 @@ class TestPatchFinding:
         assert rag_mock.add_findings.called
 
     async def test_chroma_sync_failure_returns_200(self, app_client) -> None:
+        from application.ports.vector_index import VectorIndexError
+
         client, finding_id, rag_mock, _, mut_headers, project_id = app_client
-        rag_mock.add_findings.side_effect = Exception("chroma error")
+        rag_mock.add_findings.side_effect = VectorIndexError("chroma error")
         response = await client.patch(
             f"/api/v1/projects/{project_id}/findings/{finding_id}",
             json={"severity": "low"},

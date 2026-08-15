@@ -15,7 +15,7 @@ from application.ports.finding_event_sink import (
     FindingEventSink,
     NullFindingEventSink,
 )
-from application.rag.ingestor import ToolHandlerFactory
+from application.rag.finding_indexer import FindingIndexer
 from application.rag.knowledge_base_cache import get_or_build_knowledge_base
 from domain.findings.events import FindingUpdated
 
@@ -50,6 +50,7 @@ class FindingsService:
         project_repo: ProjectRepoRepositoryPort,
         analyst: FindingAnalystService,
         lock_query: LockQueryService,
+        indexer: FindingIndexer,
         *,
         project_id: int,
         project_name: str,
@@ -64,6 +65,7 @@ class FindingsService:
         self._project_repo = project_repo
         self._analyst = analyst
         self._lock_query = lock_query
+        self._indexer = indexer
         self._project_id = project_id
         self._project_name = project_name
         self._findings_db_exists = findings_db_exists
@@ -170,7 +172,7 @@ class FindingsService:
         """Apply analyst-writable updates to a single finding.
 
         Acquires the per-finding lock under a service-built holder, writes
-        the fields, syncs to ChromaDB best-effort, and emits a
+        the fields, syncs to the vector index best-effort, and emits a
         ``FindingUpdated`` event. Returns the refreshed ``Finding`` on
         success or ``None`` if the finding does not exist. Raises
         ``FindingsBusy`` if the finding is held by another holder.
@@ -187,7 +189,7 @@ class FindingsService:
         finding = self._analyst.get_finding(finding_id)
         if finding is None:
             return None
-        self._sync_to_chroma(finding_id)
+        self._sync_to_vector_index(finding_id)
         self._emit_updated(finding)
         return finding
 
@@ -198,7 +200,7 @@ class FindingsService:
 
         Per-id lock acquire / write / release; locked rows skipped, not
         errored. After the bulk write, each successfully updated row is
-        synced to ChromaDB and an event is emitted. Returns the
+        synced to the vector index and an event is emitted. Returns the
         ``BulkUpdateResult`` from the analyst service unchanged.
         """
         holder = f"analyst-batch:{uuid.uuid4().hex[:8]}"
@@ -207,7 +209,7 @@ class FindingsService:
             finding = self._analyst.get_finding(fid)
             if finding is None:
                 continue
-            self._sync_to_chroma(fid)
+            self._sync_to_vector_index(fid)
             self._emit_updated(finding)
         return result
 
@@ -318,7 +320,7 @@ class FindingsService:
 
         self._finding_repo.delete_finding_by_id(finding_id)
 
-        self._remove_from_chroma(finding_id)
+        self._remove_from_vector_index(finding_id)
 
         self._event_sink.emit(
             FindingDeleted(
@@ -338,85 +340,60 @@ class FindingsService:
             )
         )
 
-    def _sync_to_chroma(self, finding_id: int) -> None:
-        """Best-effort ChromaDB upsert after a SQLite analyst PATCH.
-
-        Fetches the row, renders text via ``ToolHandler.render()``, and
-        upserts via the per-project knowledge base. Never raises; all
-        exceptions are caught and logged as warnings.
-        """
-        from application.pipeline.chromadb_ids import chromadb_doc_id
-
+    def _sync_to_vector_index(self, finding_id: int) -> None:
+        """Best-effort vector-index resync after a SQLite analyst PATCH."""
         try:
             knowledge_base = get_or_build_knowledge_base(
                 self._kb_cache, self._project_name, self._base_path
             )
-            if knowledge_base is None:
-                logger.warning("Chroma sync: knowledge base not available; skipping")
-                return
-
-            rows = self._finding_repo.get_by_ids([finding_id])
-            if not rows:
-                logger.warning(
-                    "Chroma sync: finding id=%s not found in SQLite (skipping)",
-                    finding_id,
-                )
-                return
-
-            row = rows[0]
-            handler = ToolHandlerFactory.load(row["tool"])
-            if handler is None:
-                logger.warning(
-                    "Chroma sync: no handler for tool=%s (finding id=%s) (skipping)",
-                    row["tool"],
-                    finding_id,
-                )
-                return
-
-            text = handler.render(row)
-            metadata = {
-                "tool": row["tool"],
-                "profile": row["profile"],
-                "run_id": row.get("run_id", 0),
-                "severity": row.get("severity", ""),
-                "segment": row.get("segment", ""),
-                "status": row.get("status", "active"),
-                "fingerprint": row.get("fingerprint", ""),
-            }
-            doc_id = chromadb_doc_id(row.get("fingerprint", ""), row.get("profile", ""))
-            knowledge_base.add_findings(
-                documents=[text],
-                metadatas=[metadata],
-                ids=[doc_id],
+        except Exception as exc:
+            logger.warning(
+                "vector sync: knowledge base init failed for finding id=%s: %s",
+                finding_id,
+                exc,
+            )
+            return
+        if knowledge_base is None:
+            logger.warning("vector sync: knowledge base not available; skipping")
+            return
+        try:
+            self._indexer.index_findings(
+                knowledge_base, [finding_id], caller_label="FindingsService"
             )
         except Exception as exc:
             logger.warning(
-                "Chroma sync: unexpected error for finding id=%s: %s",
+                "vector sync: unexpected error for finding id=%s: %s",
                 finding_id,
                 exc,
             )
 
-    def _remove_from_chroma(self, finding_id: int) -> None:
-        """Best-effort ChromaDB removal after a manual finding delete."""
+    def _remove_from_vector_index(self, finding_id: int) -> None:
+        """Best-effort vector-index removal after a manual finding delete."""
         try:
             knowledge_base = get_or_build_knowledge_base(
                 self._kb_cache,
                 self._project_name,
                 self._base_path,
             )
-            if knowledge_base is None:
-                return
+        except Exception as exc:
+            logger.warning(
+                "vector cleanup: knowledge base init failed for id=%s: %s",
+                finding_id,
+                exc,
+            )
+            return
+        if knowledge_base is None:
+            return
+        try:
             rows = self._finding_repo.get_by_ids([finding_id])
             if not rows:
                 return
-            row = rows[0]
-            from application.pipeline.chromadb_ids import chromadb_doc_id
-
-            doc_id = chromadb_doc_id(row.get("fingerprint", ""), row.get("profile", ""))
-            knowledge_base._index.delete(ids=[doc_id])
+            self._indexer.remove_findings(
+                knowledge_base, [rows[0]], caller_label="FindingsService"
+            )
         except Exception as exc:
             logger.warning(
-                "Chroma cleanup: error for finding id=%s: %s",
+                "vector cleanup: unexpected error for id=%s: %s",
                 finding_id,
                 exc,
             )
