@@ -103,17 +103,25 @@ rigor.
 
 ### Step 4: Reconnaissance
 
-Dispatch a recon subagent with model override `claude-sonnet-4-6`
-to map the codebase's attack surface.
+Dispatch a recon subagent using agent type `tally-scan-recon`
+(defined in `.claude/agents/tally-scan-recon.md`, which pins
+the model to `claude-sonnet-4-6`).
 
-The subagent's prompt is the contents of
-`references/recon-prompt.md`. Pass the target repo paths (from
-step 1) so the subagent knows what to scan.
+The subagent's dispatch prompt must include:
 
-Tell the subagent to write its output manifest to a file at a
-known path (e.g., `<repo_path>/.tally-recon-manifest.md`). The
-subagent's return message must be under 20 words; the manifest
-file IS the output.
+- The target repo paths to scan. These are the directories
+  containing the code the user wants scanned. If the user is
+  running Claude Code from within the target project, the repo
+  path is the current working directory. If the Tally project
+  registry returns paths for the selected repos, use those.
+  When in doubt, use the cwd.
+- The path to write the manifest file (use
+  `<repo_path>/.tally-recon-manifest.md`).
+- An instruction to read `references/recon-prompt.md` for the
+  full methodology.
+
+The subagent's return message must be under 20 words; the
+manifest file IS the output.
 
 After the subagent returns, read the manifest file. It contains:
 
@@ -163,10 +171,10 @@ For each partition in the recon manifest:
       - `${LANGUAGE_REF_LIST}`: paths to per-language reference
         files (e.g., `tally-scan-injection-sql/references/python.md`)
         for languages present in the partition
-   d. Dispatch the subagent.
+   d. Dispatch the subagent using agent type `tally-scan-domain`.
 
-Dispatch agents in parallel per the parallel-dispatch pattern.
-Each agent returns a JSON list of findings.
+Dispatch agents in parallel. Each agent returns a JSON list of
+findings.
 
 For partitions marked `SEQUENTIAL-FALLBACK` in the recon manifest,
 dispatch families sequentially (one at a time) to avoid context
@@ -204,8 +212,10 @@ For each domain family in `family-map.md`:
    - `${LANGUAGE_REF_LIST}`: same as step 5, filtered to
      languages present in the dead code files
 
-Dispatch sweep agents in parallel. Each returns a JSON list of
-findings (all with `confidence: potential` and
+Dispatch sweep agents in parallel using agent type
+`tally-scan-domain` (same agent type as step 5; the dispatch
+prompt differentiates the behavior). Each returns a JSON list
+of findings (all with `confidence: potential` and
 `finding_type: ["weakness"]`).
 
 Collect sweep findings and merge them with the domain agent

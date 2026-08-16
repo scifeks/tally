@@ -62,8 +62,11 @@ MagicMock
 /docs/decisions/
 /docs/superpowers/
 
-#Claude MCP stuff — track the tally-scan-* skill family and shared dev skills
+#Claude MCP stuff — track the tally-scan-* skill family, agents, and shared dev skills
 .claude/*
+!.claude/agents/
+.claude/agents/*
+!.claude/agents/tally-scan-*
 !.claude/skills/
 .claude/skills/*
 !.claude/skills/tally-scan-*/
