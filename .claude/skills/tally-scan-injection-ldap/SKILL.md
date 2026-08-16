@@ -31,7 +31,6 @@ Authoritative payload shape:
 | Default severity | `high` |
 | Parent label (dedup) | `LDAPInjection` |
 
-Source: `docs/roadmap/TAL-148/taxonomy.md` T3 row 5.
 
 ## Detection matrix
 
@@ -50,7 +49,7 @@ Source: `docs/roadmap/TAL-148/taxonomy.md` T3 row 5.
   concatenation in filter arguments without escaping. The safe form wraps
   values in `escape_filter_chars()`.
 
-Defer to `references/python.md` for vulnerable-vs-safe snippets.
+Read `references/python.md` for vulnerable-vs-safe code patterns.
 
 ### PHP
 
@@ -64,7 +63,7 @@ Defer to `references/python.md` for vulnerable-vs-safe snippets.
 - **Direct filter interpolation**: `"(uid=$userInput)"` style. Safe form is
   `"(uid=" . ldap_escape($userInput, '', LDAP_ESCAPE_FILTER) . ")"`.
 
-Defer to `references/php.md` for vulnerable-vs-safe snippets.
+Read `references/php.md` for vulnerable-vs-safe code patterns.
 
 ### JavaScript
 
@@ -75,7 +74,7 @@ Defer to `references/php.md` for vulnerable-vs-safe snippets.
 - **String concatenation filter**: `"(uid=" + userInput + ")"` passed as the
   filter option. Safe form escapes or uses a filter-building library.
 
-Defer to `references/javascript.md` for vulnerable-vs-safe snippets.
+Read `references/javascript.md` for vulnerable-vs-safe code patterns.
 
 ### TypeScript
 
@@ -84,7 +83,7 @@ Defer to `references/javascript.md` for vulnerable-vs-safe snippets.
 - **Dynamic filter in typed code**: same concatenation patterns as JS,
   type-annotated. Safe form escapes the value before assembly.
 
-Defer to `references/typescript.md` for vulnerable-vs-safe snippets.
+Read `references/typescript.md` for vulnerable-vs-safe code patterns.
 
 ## Evidence requirements
 
@@ -127,7 +126,7 @@ Emit one JSON object per finding with these fixed fields for
     "title": "<short human title, e.g. 'LDAP injection via f-string in
       auth handler'>",
     "owasp_name": "Injection",
-    "remediation": "<per-finding, per D19; see remediation guidance below>",
+    "remediation": "<per-finding; see remediation guidance below>",
     "code_snippet": "<2-6 lines of source containing the sink>",
     "taint_source": "<request parameter or upstream variable, when
       traceable>",
@@ -141,7 +140,7 @@ field list and validator behavior.
 
 ## Remediation guidance for the scanner
 
-Per D19, write `meta.remediation` inline based on the actual library
+Write `meta.remediation` inline based on the actual library
 observed in the code. Examples of good remediation strings:
 
 - **python-ldap**: `Escape the user input with

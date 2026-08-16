@@ -33,7 +33,6 @@ Authoritative payload shape:
 | Default severity | `high` |
 | Parent label (dedup) | `AuthzBypass` |
 
-Source: `docs/roadmap/TAL-148/taxonomy.md` T3 row for incorrect authz.
 
 ## Detection matrix
 
@@ -53,7 +52,7 @@ Source: `docs/roadmap/TAL-148/taxonomy.md` T3 row for incorrect authz.
 - **String case mismatch in comparison**: `role.lower() == 'admin'` when
   roles are stored mixed-case and comparison should be case-preserving.
 
-Defer to `references/python.md` for vulnerable-vs-safe snippets.
+Read `references/python.md` for vulnerable-vs-safe code patterns.
 
 ### PHP
 
@@ -67,7 +66,7 @@ Defer to `references/python.md` for vulnerable-vs-safe snippets.
 - **Wrong permission in policy**: `$this->authorize('view')` when the
   operation is 'delete'. Safe form uses the correct action.
 
-Defer to `references/php.md` for vulnerable-vs-safe snippets.
+Read `references/php.md` for vulnerable-vs-safe code patterns.
 
 ### JavaScript
 
@@ -80,7 +79,7 @@ Defer to `references/php.md` for vulnerable-vs-safe snippets.
 - **JWT role not verified**: token payload checked without signature
   verification upstream.
 
-Defer to `references/javascript.md` for vulnerable-vs-safe snippets.
+Read `references/javascript.md` for vulnerable-vs-safe code patterns.
 
 ### TypeScript
 
@@ -93,7 +92,7 @@ Defer to `references/javascript.md` for vulnerable-vs-safe snippets.
 - **CASL ability definition with overly permissive rule**: `can('read',
   'Article')` when the rule should be scoped per user or project.
 
-Defer to `references/typescript.md` for vulnerable-vs-safe snippets.
+Read `references/typescript.md` for vulnerable-vs-safe code patterns.
 
 ## Evidence requirements
 
@@ -135,7 +134,7 @@ Emit one JSON object per finding with these fixed fields for
     "title": "<short human title, e.g. 'Negated role check admits all
       non-guests'>",
     "owasp_name": "Broken Access Control",
-    "remediation": "<per-finding, per D19; see remediation guidance below>",
+    "remediation": "<per-finding; see remediation guidance below>",
     "code_snippet": "<2-6 lines of source containing the check>",
     "protected_operation": "<action being gated, when clear>",
     "reasoning": "<one sentence explaining why the logic is incorrect>"
@@ -148,7 +147,7 @@ field list and validator behavior.
 
 ## Remediation guidance for the scanner
 
-Per D19, write `meta.remediation` inline based on the framework and the
+Write `meta.remediation` inline based on the framework and the
 actual defect observed. Examples of good remediation strings:
 
 - **Django `@permission_required`**: `Use the correct permission name for

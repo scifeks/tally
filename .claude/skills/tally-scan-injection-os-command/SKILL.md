@@ -33,67 +33,56 @@ Authoritative payload shape:
 | Default severity | `critical` |
 | Parent label (dedup) | `CommandInjection` |
 
-Source: `docs/roadmap/TAL-148/taxonomy.md` T3 row 4.
 
 ## Detection matrix
 
 ### Python
 
-- **`os.system()` with user input**: passes a command string directly to
-  the shell. The argument is evaluated by the shell interpreter.
-- **`os.popen()` with user input**: opens a pipe to a shell command.
-- **`subprocess.call()` with `shell=True`**: executes a string command via
-  the shell when `shell=True` is set.
-- **`subprocess.Popen()` with `shell=True`**: spawns a process with shell
-  interpretation of the command string.
-- **`subprocess.run()` with `shell=True`**: runs a command with shell
-  interpretation.
-- **`subprocess.check_output()` with `shell=True` and user input**: same
-  vulnerability as `run` and `Popen`.
+Read `references/python.md` for vulnerable-vs-safe snippets.
 
-The key signal is `shell=True` combined with a user-derived string instead
-of a list of arguments.
+Detect these sink categories:
 
-Defer to `references/python.md` for vulnerable-vs-safe snippets.
+- **os module functions**: direct shell execution via system and popen calls.
+- **subprocess with shell interpretation**: call, Popen, run, or
+  check_output with shell parameter enabled.
+- **String-based command construction**: passing user-derived strings
+  instead of argument arrays to process spawning functions.
 
 ### PHP
 
-- **`exec($userInput)`**: executes a shell command and returns output.
-- **`system($userInput)`**: executes a shell command and outputs result
-  directly.
-- **`passthru($userInput)`**: executes a shell command and passes output
-  directly to stdout.
-- **`shell_exec($userInput)` or backtick operator**: executes a shell
-  command via backticks.
-- **`proc_open($userInput, ...)`**: opens a process with a command string.
-- **`popen($userInput, ...)`**: opens a process pipe.
+Read `references/php.md` for vulnerable-vs-safe snippets.
 
-Safe forms wrap arguments with `escapeshellarg()` per argument or use
-parameter arrays in newer PHP versions.
+Detect these sink categories:
 
-Defer to `references/php.md` for vulnerable-vs-safe snippets.
+- **Direct shell execution functions**: exec, system, passthru, shell_exec,
+  proc_open, popen.
+- **Unsafe argument handling**: passing user input without escaping or
+  parameterization to any shell execution function.
+- **Backtick operators**: executing commands via shell metacharacters.
 
 ### JavaScript
 
-- **`child_process.exec(userInput)`**: executes a string command via
-  `/bin/sh` (or `cmd.exe` on Windows).
-- **`child_process.execSync(userInput)`**: synchronous version of `exec`.
-- **`child_process.spawn('sh', ['-c', userInput])`**: spawns a shell with
-  the user input as a command.
+Read `references/javascript.md` for vulnerable-vs-safe snippets.
 
-Safe forms use `child_process.execFile()` with an argument array or
-`spawn()` with array arguments (no `-c` flag).
+Detect these sink categories:
 
-Defer to `references/javascript.md` for vulnerable-vs-safe snippets.
+- **exec and execSync**: functions that invoke the shell interpreter
+  directly.
+- **spawn with shell flag**: spawning a process with shell metacharacter
+  interpretation enabled.
+- **User input in command strings**: user-controlled data passed as the
+  command argument rather than in an argument array.
 
 ### TypeScript
 
+Read `references/typescript.md` for vulnerable-vs-safe snippets.
+
+Detect these sink categories:
+
 - **Same as JavaScript**: command injection patterns are identical on the
   Node.js runtime.
-- **`execa` library with `shell: true` and user input**: wraps Node's
-  child_process but the vulnerability is the same.
-
-Defer to `references/typescript.md` for vulnerable-vs-safe snippets.
+- **execa library**: wrapper around child_process with identical
+  vulnerabilities when shell interpretation is enabled.
 
 ## Evidence requirements
 
@@ -134,7 +123,7 @@ Emit one JSON object per finding with these fixed fields for
   "meta": {
     "title": "<short human title, e.g. 'OS command injection via os.system'>",
     "owasp_name": "Injection",
-    "remediation": "<per-finding, per D19; see remediation guidance below>",
+    "remediation": "<per-finding; see remediation guidance below>",
     "code_snippet": "<2-6 lines of source containing the sink>",
     "taint_source": "<request parameter or upstream variable, when traceable>",
     "reasoning": "<one sentence explaining the defect at this location>"
@@ -147,24 +136,13 @@ field list and validator behavior.
 
 ## Remediation guidance for the scanner
 
-Per D19, write `meta.remediation` inline based on the actual library
-observed in the code. Examples of good remediation strings:
+Write `meta.remediation` inline based on the actual library
+observed in the code. Use the safe patterns from the per-language
+reference files to write specific, actionable remediation.
 
-- **Python (subprocess)**: `Use `subprocess.run()` with a list of
-  arguments and `shell=False`: `subprocess.run(['ls', '-la', user_path],
-  shell=False)`. Never pass user input as part of the command string.`
-- **Python (os module)**: `Avoid `os.system()` and `os.popen()`. Migrate
-  to `subprocess.run()` with argument lists: `subprocess.run(['rm', '-f',
-  filename], shell=False)`.`
-- **PHP**: `Wrap each argument with `escapeshellarg()`: `exec('ls ' .
-  escapeshellarg($dir))`. Better, refactor to use PHP functions directly
-  (e.g., `scandir()` instead of shelling out).`
-- **Node.js**: `Use `child_process.execFile()` with argument arrays:
-  `execFile('ls', [userDir])`. Avoid `exec()` and `spawn('sh', ['-c',
-  ...])` with user input.`
-
-Keep it two to four sentences. Vague guidance ("use safe subprocess calls")
-is worse than no guidance.
+- Name the library and its specific safe API
+- Show the exact placeholder style or query builder method
+- Keep it two to four sentences
 
 ## Common false positives
 

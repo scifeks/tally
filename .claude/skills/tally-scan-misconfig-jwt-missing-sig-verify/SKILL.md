@@ -34,7 +34,6 @@ Authoritative payload shape:
 | Default severity | `critical` |
 | Parent label (dedup) | `JWT` |
 
-Source: `docs/roadmap/TAL-148/taxonomy.md` T3 row 25.
 
 ## Detection matrix
 
@@ -54,7 +53,7 @@ Source: `docs/roadmap/TAL-148/taxonomy.md` T3 row 25.
 - **PyJWT `decode` vs `decode_complete`**: both methods accept
   the `options` dict; check both for disabled verification.
 
-Defer to `references/python.md` for vulnerable-vs-safe snippets.
+Read `references/python.md` for vulnerable-vs-safe code patterns.
 
 ### PHP
 
@@ -69,7 +68,7 @@ Defer to `references/python.md` for vulnerable-vs-safe snippets.
   `(new Parser())->parse($token)` and reading claims without
   calling `->verify()` or `->assert()` with a validator.
 
-Defer to `references/php.md` for vulnerable-vs-safe snippets.
+Read `references/php.md` for vulnerable-vs-safe code patterns.
 
 ### JavaScript
 
@@ -84,7 +83,7 @@ Defer to `references/php.md` for vulnerable-vs-safe snippets.
   the header with `decodeProtectedHeader(token)` and acting
   on claims without a subsequent `jwtVerify()` call.
 
-Defer to `references/javascript.md` for vulnerable-vs-safe
+Read `references/javascript.md` for vulnerable-vs-safe code
 snippets.
 
 ### TypeScript
@@ -96,7 +95,7 @@ snippets.
 - **jose `decodeJwt`**: same as JavaScript. TypeScript types
   do not prevent use of `decodeJwt` for access decisions.
 
-Defer to `references/typescript.md` for vulnerable-vs-safe
+Read `references/typescript.md` for vulnerable-vs-safe code
 snippets.
 
 ## Evidence requirements
@@ -141,7 +140,7 @@ Emit one JSON object per finding with these fixed fields for
   "meta": {
     "title": "<short title, e.g. 'JWT decoded without signature verification'>",
     "owasp_name": "Security Misconfiguration",
-    "remediation": "<per-finding, per D19>",
+    "remediation": "<per-finding>",
     "code_snippet": "<2-6 lines of source>",
     "taint_source": "<token source, when traceable>",
     "reasoning": "<one sentence explaining the defect>"
@@ -154,7 +153,7 @@ the full field list and validator behavior.
 
 ## Remediation guidance for the scanner
 
-Per D19, write `meta.remediation` inline based on the actual
+Write `meta.remediation` inline based on the actual
 library observed in the code. Examples:
 
 - **PyJWT**: `Replace jwt.decode() with jwt.decode(token, key,

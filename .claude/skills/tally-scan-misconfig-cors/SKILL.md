@@ -31,68 +31,60 @@ Authoritative payload shape:
 | Default severity | `medium` |
 | Parent label (dedup) | `CORSMisconfig` |
 
-Source: `docs/roadmap/TAL-148/taxonomy.md` T3 row 29.
 
 ## Detection matrix
 
 ### Python
 
-- **django-cors-headers wildcard**: `CORS_ALLOW_ALL_ORIGINS = True` or
-  `CORS_ORIGIN_WHITELIST` containing `*` as a value.
-- **django-cors-headers with credentials**: `CORS_ALLOW_ALL_ORIGINS = True`
-  combined with `CORS_ALLOW_CREDENTIALS = True` (regardless of origin list).
-- **Flask-CORS wildcard origins**: `CORS(app, origins="*",
-  supports_credentials=True)` or `CORS(app, origins=["*"],
-  supports_credentials=True)`.
-- **Starlette/FastAPI CORSMiddleware**: `CORSMiddleware` configured with
-  `allow_origins=["*"]` and `allow_credentials=True`.
-- **Manual header reflection**: setting `Access-Control-Allow-Origin` to the
-  value of the `Origin` request header without validation against an allowlist.
+Read `references/python.md` for vulnerable-vs-safe snippets.
 
-Defer to `references/python.md` for vulnerable-vs-safe snippets.
+Detect these sink categories:
+
+- **django-cors-headers wildcard**: CORS configuration with wildcard origins
+  or credentials enabled.
+- **Flask-CORS wildcard origins**: CORS middleware with permissive origin
+  lists and credentials support.
+- **Starlette/FastAPI CORSMiddleware**: wildcard origins with credentials
+  enabled.
+- **Manual header reflection**: setting Access-Control-Allow-Origin to the
+  request Origin header without validation.
 
 ### PHP
 
-- **Laravel CORS wildcard**: `config/cors.php` with `allowed_origins =>
-  ['*']` and `supports_credentials => true`.
-- **Manual header reflection (PHP)**: `header('Access-Control-Allow-Origin: ' .
-  $_SERVER['HTTP_ORIGIN'])` without validating the origin against trusted
-  domains.
-- **Manual CORS with credentials**: `header('Access-Control-Allow-Origin:
-  *')` combined with `Access-Control-Allow-Credentials: true` (invalid but a
-  misconfiguration).
-- **DomDocument or manual XML processing**: permissive CORS on endpoints that
-  parse XML or JSON from any origin.
+Read `references/php.md` for vulnerable-vs-safe snippets.
 
-Defer to `references/php.md` for vulnerable-vs-safe snippets.
+Detect these sink categories:
+
+- **Laravel CORS wildcard**: allowed_origins with wildcard or credentials
+  enabled.
+- **Manual header reflection (PHP)**: reflecting the HTTP_ORIGIN header
+  without validation.
+- **Manual CORS with credentials**: wildcard origins combined with
+  Access-Control-Allow-Credentials.
 
 ### JavaScript
 
-- **Express cors middleware wildcard**: `cors({origin: '*',
-  credentials: true})` or `cors({origin: true, credentials: true})` with
-  access to any origin.
-- **Manual header reflection (Express)**: `res.setHeader(
-  'Access-Control-Allow-Origin', req.headers.origin)` without validation.
-- **Koa CORS middleware**: `cors({origin: '*', credentials: true})` or manual
-  header reflection via `ctx.set('Access-Control-Allow-Origin',
-  ctx.request.origin)`.
-- **Manual wildcard**: `res.header('Access-Control-Allow-Origin', '*')` with
-  other credentials headers enabled.
+Read `references/javascript.md` for vulnerable-vs-safe snippets.
 
-Defer to `references/javascript.md` for vulnerable-vs-safe snippets.
+Detect these sink categories:
+
+- **Express cors middleware wildcard**: wildcard origins with credentials
+  support.
+- **Manual header reflection (Express)**: setting headers with unvalidated
+  request origin.
+- **Koa CORS middleware**: permissive CORS configuration or origin reflection.
 
 ### TypeScript
 
-- **Express.js with typed cors**: same patterns as JavaScript; TypeScript
-  type declarations do not prevent misconfiguration.
-- **NestJS CORS config**: `@nestjs/common` CORS configuration with wildcard
-  origin and credentials enabled.
-- **Fastify CORS plugin**: `fastify.register(cors, {origin: '*',
-  credentials: true})` or manual reflection.
-- **Manual origin reflection**: custom CORS middleware that reflects the
-  Origin header without validation.
+Read `references/typescript.md` for vulnerable-vs-safe snippets.
 
-Defer to `references/typescript.md` for vulnerable-vs-safe snippets.
+Detect these sink categories:
+
+- **Express.js with typed cors**: same patterns as JavaScript; type
+  declarations do not prevent misconfiguration.
+- **NestJS CORS config**: CORS configuration with wildcard origin and
+  credentials.
+- **Fastify CORS plugin**: permissive origin configuration or reflection.
 
 ## Evidence requirements
 
@@ -135,7 +127,7 @@ Emit one JSON object per finding with these fixed fields for
     "title": "<short human title, e.g. 'CORS allows any origin with
     credentials enabled'>",
     "owasp_name": "Security Misconfiguration",
-    "remediation": "<per-finding, per D19; see remediation guidance
+    "remediation": "<per-finding; see remediation guidance
     below>",
     "code_snippet": "<2-6 lines of configuration or header code>",
     "reasoning": "<one sentence explaining the misconfiguration at this
@@ -149,28 +141,13 @@ field list and validator behavior.
 
 ## Remediation guidance for the scanner
 
-Per D19, write `meta.remediation` inline based on the actual library or
-framework observed in the code. Examples of good remediation strings:
+Write `meta.remediation` inline based on the actual library
+observed in the code. Use the safe patterns from the per-language
+reference files to write specific, actionable remediation.
 
-- **django-cors-headers**: `Set CORS_ALLOW_ALL_ORIGINS = False and list
-  specific trusted origins in CORS_ALLOWED_ORIGINS. Never combine wildcard
-  origin with CORS_ALLOW_CREDENTIALS = True.`
-- **Flask-CORS**: `Pass an explicit origins list: CORS(app, origins=[
-  "https://app.example.com"], supports_credentials=True). Validate origins
-  against a trusted allowlist.`
-- **Express cors**: `Pass an explicit origin list or a validation function:
-  cors({origin: ["https://app.example.com"], credentials: true}). Wildcard
-  origin with credentials is rejected by browsers but signals
-  misconfiguration.`
-- **Laravel**: `Set allowed_origins to specific domains in
-  config/cors.php. Remove the wildcard and list only trusted origins.`
-- **Origin reflection**: `Validate the Origin header against an allowlist
-  before reflecting it. Reject origins that do not match trusted domains.`
-- **Fastify/NestJS**: `Provide an explicit origin list or a validation
-  function. Do not reflect the Origin header without validation.`
-
-Keep it two to four sentences. Vague guidance ("use an origin allowlist")
-is worse than no guidance.
+- Name the library and its specific safe API
+- Show the exact placeholder style or query builder method
+- Keep it two to four sentences
 
 ## Common false positives
 

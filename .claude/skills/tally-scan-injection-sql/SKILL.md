@@ -33,7 +33,6 @@ Authoritative payload shape:
 | Default severity | `critical` |
 | Parent label (dedup) | `SQLi` |
 
-Source: `docs/roadmap/TAL-148/taxonomy.md` T3 row 4.
 
 ## Detection matrix
 
@@ -54,7 +53,7 @@ Source: `docs/roadmap/TAL-148/taxonomy.md` T3 row 4.
   cover identifiers; the safe form is an allowlist).
 - **`pandas.read_sql`** with a formatted query string.
 
-Defer to `references/python.md` for vulnerable-vs-safe snippets.
+Read `references/python.md` for vulnerable-vs-safe code patterns.
 
 ### PHP
 
@@ -71,7 +70,7 @@ Defer to `references/python.md` for vulnerable-vs-safe snippets.
 - **WordPress**: `$wpdb->query("SELECT ... $var")`. Safe form is
   `$wpdb->prepare(...)`.
 
-Defer to `references/php.md` for vulnerable-vs-safe snippets.
+Read `references/php.md` for vulnerable-vs-safe code patterns.
 
 ### JavaScript
 
@@ -86,7 +85,7 @@ Defer to `references/php.md` for vulnerable-vs-safe snippets.
 - **Sequelize `query()` with string interpolation**. Safe form
   passes `replacements` or `bind` options.
 
-Defer to `references/javascript.md` for vulnerable-vs-safe
+Read `references/javascript.md` for vulnerable-vs-safe code
 snippets.
 
 ### TypeScript
@@ -99,7 +98,7 @@ snippets.
 - **Sequelize `Sequelize.literal()`** with request data.
 - Same JavaScript sinks apply on the Node runtime.
 
-Defer to `references/typescript.md` for vulnerable-vs-safe
+Read `references/typescript.md` for vulnerable-vs-safe code
 snippets.
 
 ## Evidence requirements
@@ -141,7 +140,7 @@ Emit one JSON object per finding with these fixed fields for
   "meta": {
     "title": "<short human title, e.g. 'SQL injection via f-string in login handler'>",
     "owasp_name": "Injection",
-    "remediation": "<per-finding, per D19; see remediation guidance below>",
+    "remediation": "<per-finding; see remediation guidance below>",
     "code_snippet": "<2-6 lines of source containing the sink>",
     "taint_source": "<request parameter or upstream variable, when traceable>",
     "reasoning": "<one sentence explaining the defect at this location>"
@@ -154,7 +153,7 @@ the full field list and validator behavior.
 
 ## Remediation guidance for the scanner
 
-Per D19, write `meta.remediation` inline based on the actual
+Write `meta.remediation` inline based on the actual
 library observed in the code. Examples of good remediation
 strings:
 

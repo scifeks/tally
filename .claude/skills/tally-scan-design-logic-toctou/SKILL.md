@@ -35,7 +35,6 @@ Authoritative payload shape:
 | Default severity | `high` |
 | Parent label (dedup) | `TOCTOU` |
 
-Source: `docs/roadmap/TAL-148/taxonomy.md` T3 row 10.
 
 ## Detection matrix
 
@@ -60,7 +59,7 @@ Source: `docs/roadmap/TAL-148/taxonomy.md` T3 row 10.
   email=email)`. Another request can insert the same email after the
   check, violating uniqueness.
 
-Defer to `references/python.md` for vulnerable-vs-safe snippets.
+Read `references/python.md` for vulnerable-vs-safe code patterns.
 
 ### PHP
 
@@ -77,7 +76,7 @@ Defer to `references/python.md` for vulnerable-vs-safe snippets.
   without `flock()` between existence check and file operations, leaving a
   window for another request to interfere.
 
-Defer to `references/php.md` for vulnerable-vs-safe snippets.
+Read `references/php.md` for vulnerable-vs-safe code patterns.
 
 ### JavaScript
 
@@ -96,7 +95,7 @@ Defer to `references/php.md` for vulnerable-vs-safe snippets.
   `client.SET(key, value)` without using `SETNX` (set if not exists) or a
   Lua script. Another client can modify the key between GET and SET.
 
-Defer to `references/javascript.md` for vulnerable-vs-safe snippets.
+Read `references/javascript.md` for vulnerable-vs-safe code patterns.
 
 ### TypeScript
 
@@ -116,7 +115,7 @@ Defer to `references/javascript.md` for vulnerable-vs-safe snippets.
   a check and an act in an async handler, during which another request can
   run and change the shared state.
 
-Defer to `references/typescript.md` for vulnerable-vs-safe snippets.
+Read `references/typescript.md` for vulnerable-vs-safe code patterns.
 
 ## Evidence requirements
 
@@ -158,7 +157,7 @@ Emit one JSON object per finding with these fixed fields for
   "meta": {
     "title": "<short title, e.g. 'TOCTOU via file check and open'>",
     "owasp_name": "Insecure Design",
-    "remediation": "<per-finding, per D19; see remediation guidance>",
+    "remediation": "<per-finding; see remediation guidance>",
     "code_snippet": "<3-8 lines of source showing check and act>",
     "shared_resource": "<file path, database row, cache key, balance>",
     "reasoning": "<one sentence explaining TOCTOU window>"
@@ -171,7 +170,7 @@ field list and validator behavior.
 
 ## Remediation guidance for the scanner
 
-Per D19, write `meta.remediation` inline based on the actual library or
+Write `meta.remediation` inline based on the actual library or
 pattern observed in the code. Examples of good remediation strings:
 
 - **Python file operations (tempfile)**: `Use tempfile.mkstemp() or

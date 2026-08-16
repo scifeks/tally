@@ -6,9 +6,9 @@ finding. The orchestrator hands each finding to Tally's
 Any deviation is rejected per finding.
 
 Authoritative validator source:
-`application/mcp/finding_payload.py`. Authoritative skill IDs, primary
-CWEs, parent labels, OWASP names, and default severities:
-`docs/roadmap/TAL-148/taxonomy.md` T3.
+`application/mcp/finding_payload.py`. Skill IDs, primary
+CWEs, parent labels, OWASP names, and default severities are
+defined in each skill's "Fixed skill identity" table.
 
 ## Required top-level fields
 
@@ -21,7 +21,7 @@ CWEs, parent labels, OWASP names, and default severities:
 | `confidence` | string | `confirmed`, `probable`, `potential`, `false_positive` | `confirmed` when a taint source is traced end to end; `probable` when the sink pattern matches but the source is inferred; `potential` when the sink is suspicious but the source is unknown. |
 | `cwe` | list of strings | `["CWE-N", ...]` | Non-empty. Primary CWE first. Take the primary from taxonomy T3. |
 | `finding_type` | list of strings | non-empty | `["vulnerability"]` for security defects; `["misconfiguration"]` for framework-defaults; `["secret"]` for hardcoded credentials. |
-| `rule_id` | string | dot-notation skill ID | Exactly the skill ID from taxonomy T3, e.g. `injection.sql`, `xss.stored`, `access_control.idor_bola`. Per D22, `rule_id` carries the skill identity; the server reads it back through the report `_get_title` and OWASP-name fallbacks. |
+| `rule_id` | string | dot-notation skill ID | e.g. `injection.sql`, `xss.stored`, `access_control.idor_bola`. Carries the skill identity; the server reads it back through the report title and OWASP-name fallbacks. |
 | `meta` | dict | see below | Required keys: `title`, `owasp_name`, `remediation`. |
 
 ## Required meta fields
@@ -30,7 +30,7 @@ CWEs, parent labels, OWASP names, and default severities:
 |---|---|---|
 | `meta.title` | string | Short human title the report card shows, e.g. `"SQL injection via string-formatted query"`. |
 | `meta.owasp_name` | string | OWASP Top 10:2025 category NAME, not the numeric identifier. Take from taxonomy T6. Examples: `Injection`, `Broken Access Control`, `Cryptographic Failures`. |
-| `meta.remediation` | string | Per D19, the scanner writes this inline based on the actual library or framework observed in the scanned code. See `skill-template.md` for guidance. |
+| `meta.remediation` | string | The scanner writes this inline based on the actual library or framework observed in the scanned code. See `skill-template.md` for guidance. |
 
 ## Optional top-level fields
 
@@ -67,7 +67,7 @@ time:
   findings self-triage at discovery time and skip the batch triage
   flow).
 - `status = "active"`.
-- `should_report = True` (D18; findings render in the report
+- `should_report = True` (findings render in the report
   immediately without an analyst gate).
 - `duplicate_of = NULL` on insert; set later by
   `resolve_duplicates` if the LLM picks a survivor.
@@ -110,7 +110,7 @@ rest of the batch.
 Per Part 2's fidelity criterion, every MCP-ingested finding must
 render as if a triaged Tally finding. The report reads:
 
-- `meta.title` first, then `rule_id` as fallback (per D22, `rule_id`
+- `meta.title` first, then `rule_id` as fallback (`rule_id`
   is the dot-notation skill name, so the fallback still reads).
 - `meta.remediation` (or `meta.triage.remediation` if present, but
   MCP-ingested findings do not populate the triage sub-key).

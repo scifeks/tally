@@ -35,7 +35,6 @@ Authoritative payload shape:
 | Default severity | `high` |
 | Parent label (dedup) | `XSS` |
 
-Source: `docs/roadmap/TAL-148/taxonomy.md` T3 row 1.
 
 ## Detection matrix
 
@@ -57,7 +56,7 @@ Source: `docs/roadmap/TAL-148/taxonomy.md` T3 row 1.
 - **`render_template_string()` with DB data**: building a Jinja2
   template from stored data and rendering it.
 
-Defer to `references/python.md` for vulnerable-vs-safe snippets.
+Read `references/python.md` for vulnerable-vs-safe code patterns.
 
 ### PHP
 
@@ -74,7 +73,7 @@ Defer to `references/python.md` for vulnerable-vs-safe snippets.
   true)` or `echo $post->post_content` without `esc_html()` or
   `wp_kses()`.
 
-Defer to `references/php.md` for vulnerable-vs-safe snippets.
+Read `references/php.md` for vulnerable-vs-safe code patterns.
 
 ### JavaScript
 
@@ -91,7 +90,7 @@ Defer to `references/php.md` for vulnerable-vs-safe snippets.
 - **`insertAdjacentHTML()` with stored data**:
   `el.insertAdjacentHTML('beforeend', apiResponse.html)`.
 
-Defer to `references/javascript.md` for vulnerable-vs-safe
+Read `references/javascript.md` for vulnerable-vs-safe code
 snippets.
 
 ### TypeScript
@@ -104,7 +103,7 @@ snippets.
 - **Express + template engine**: same as JavaScript patterns on
   the Node runtime.
 
-Defer to `references/typescript.md` for vulnerable-vs-safe
+Read `references/typescript.md` for vulnerable-vs-safe code
 snippets.
 
 ## Evidence requirements
@@ -150,7 +149,7 @@ and what an attacker can do>",
     "title": "<short title, e.g. 'Stored XSS via unescaped
 comment field'>",
     "owasp_name": "Injection",
-    "remediation": "<per-finding, per D19; see guidance below>",
+    "remediation": "<per-finding; see guidance below>",
     "code_snippet": "<2-6 lines of source>",
     "taint_source": "<model field or query result, when traceable>",
     "reasoning": "<one sentence explaining the defect>"
@@ -163,7 +162,7 @@ the full field list and validator behavior.
 
 ## Remediation guidance for the scanner
 
-Per D19, write `meta.remediation` inline based on the actual
+Write `meta.remediation` inline based on the actual
 library or framework observed. Examples:
 
 - **Django mark_safe**: `Remove the mark_safe() call and let

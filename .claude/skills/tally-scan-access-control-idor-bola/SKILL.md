@@ -35,7 +35,6 @@ Authoritative payload shape:
 | Default severity | `high` |
 | Parent label (dedup) | `AuthzBypass` |
 
-Source: `docs/roadmap/TAL-148/taxonomy.md` T3 row 15.
 
 ## Detection matrix
 
@@ -55,7 +54,7 @@ Source: `docs/roadmap/TAL-148/taxonomy.md` T3 row 15.
 - **get_object_or_404**: Django's shortcut used without a queryset that
   scopes to the current user.
 
-Defer to `references/python.md` for vulnerable-vs-safe snippets.
+Read `references/python.md` for vulnerable-vs-safe code patterns.
 
 ### PHP
 
@@ -68,7 +67,7 @@ Defer to `references/python.md` for vulnerable-vs-safe snippets.
 - **Direct database access**: raw queries using `$_GET['id']` or
   `request()->input('id')` without user-scoped WHERE clauses.
 
-Defer to `references/php.md` for vulnerable-vs-safe snippets.
+Read `references/php.md` for vulnerable-vs-safe code patterns.
 
 ### JavaScript
 
@@ -81,7 +80,7 @@ Defer to `references/php.md` for vulnerable-vs-safe snippets.
 - **MongoDB direct find**: `collection.findOne({_id: ObjectId(req.params
   .id)})` without tenant or ownership filtering.
 
-Defer to `references/javascript.md` for vulnerable-vs-safe snippets.
+Read `references/javascript.md` for vulnerable-vs-safe code patterns.
 
 ### TypeScript
 
@@ -96,7 +95,7 @@ Defer to `references/javascript.md` for vulnerable-vs-safe snippets.
 - **Same JavaScript sinks apply**: Sequelize, Knex, and MongoDB patterns
   work in TypeScript projects as well.
 
-Defer to `references/typescript.md` for vulnerable-vs-safe snippets.
+Read `references/typescript.md` for vulnerable-vs-safe code patterns.
 
 ## Evidence requirements
 
@@ -140,7 +139,7 @@ Emit one JSON object per finding with these fixed fields for
     "title": "<short human title, e.g. 'IDOR via unfiltered ORM query
       in user profile handler'>",
     "owasp_name": "Broken Access Control",
-    "remediation": "<per-finding, per D19; see remediation guidance
+    "remediation": "<per-finding; see remediation guidance
       below>",
     "code_snippet": "<2-6 lines of source containing the sink>",
     "taint_source": "<request parameter or upstream variable, when
@@ -155,7 +154,7 @@ full field list and validator behavior.
 
 ## Remediation guidance for the scanner
 
-Per D19, write `meta.remediation` inline based on the actual library
+Write `meta.remediation` inline based on the actual library
 observed in the code. Examples of good remediation strings:
 
 - **Django ORM**: `Filter the queryset to the authenticated user:

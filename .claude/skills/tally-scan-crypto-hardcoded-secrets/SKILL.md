@@ -37,7 +37,6 @@ Authoritative payload shape:
 | Default severity | `critical` |
 | Parent label (dedup) | `HardcodedSecret` |
 
-Source: `docs/roadmap/TAL-148/taxonomy.md` T3 row 11.
 
 ## Detection matrix
 
@@ -58,7 +57,7 @@ Source: `docs/roadmap/TAL-148/taxonomy.md` T3 row 11.
 - **Config dicts with secret values**: `{"password": "...",
   "api_key": "..."}` in source code.
 
-Defer to `references/python.md` for vulnerable-vs-safe snippets.
+Read `references/python.md` for vulnerable-vs-safe code patterns.
 
 ### PHP
 
@@ -71,7 +70,7 @@ Defer to `references/python.md` for vulnerable-vs-safe snippets.
 - **DSN with credentials**: `"mysql:host=...;password=..."`
   as a string literal.
 
-Defer to `references/php.md` for vulnerable-vs-safe snippets.
+Read `references/php.md` for vulnerable-vs-safe code patterns.
 
 ### JavaScript
 
@@ -83,7 +82,7 @@ Defer to `references/php.md` for vulnerable-vs-safe snippets.
   where the fallback is a real secret.
 - **Connection strings**: `"mongodb://user:pass@host/db"`.
 
-Defer to `references/javascript.md` for vulnerable-vs-safe
+Read `references/javascript.md` for vulnerable-vs-safe code
 snippets.
 
 ### TypeScript
@@ -94,7 +93,7 @@ Same sinks as JavaScript. Additionally:
   secret properties.
 - **Interface implementations** with hardcoded credentials.
 
-Defer to `references/typescript.md` for vulnerable-vs-safe
+Read `references/typescript.md` for vulnerable-vs-safe code
 snippets.
 
 ## Evidence requirements
@@ -137,7 +136,7 @@ Emit one JSON object per finding with these fixed fields for
   "meta": {
     "title": "<short human title, e.g. 'Hardcoded AWS access key in config'>",
     "owasp_name": "Cryptographic Failures",
-    "remediation": "<per-finding remediation, per D19; see remediation guidance below>",
+    "remediation": "<per-finding remediation; see remediation guidance below>",
     "code_snippet": "<2-6 lines of source containing the secret>",
     "taint_source": "<variable name or context, when clear>",
     "reasoning": "<one sentence explaining why this is a hardcoded secret>"

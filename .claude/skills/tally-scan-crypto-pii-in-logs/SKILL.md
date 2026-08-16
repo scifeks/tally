@@ -34,7 +34,6 @@ Authoritative payload shape:
 | Default severity | `medium` |
 | Parent label (dedup) | `PIIExposure` |
 
-Source: `docs/roadmap/TAL-148/taxonomy.md` T3 row 6.
 
 ## Detection matrix
 
@@ -51,7 +50,7 @@ Source: `docs/roadmap/TAL-148/taxonomy.md` T3 row 6.
 - **Exception logging with sensitive args**:
   `logging.exception(f"Login failed: {password}")`.
 
-Defer to `references/python.md` for vulnerable-vs-safe
+Read `references/python.md` for vulnerable-vs-safe code
 snippets.
 
 ### PHP
@@ -68,7 +67,7 @@ snippets.
   bodies and responses in production, which captures passwords
   and tokens.
 
-Defer to `references/php.md` for vulnerable-vs-safe snippets.
+Read `references/php.md` for vulnerable-vs-safe code patterns.
 
 ### JavaScript
 
@@ -84,14 +83,14 @@ Defer to `references/php.md` for vulnerable-vs-safe snippets.
 - **Error logging with sensitive context**:
   `logger.error('Auth failed', {password, token})`.
 
-Defer to `references/javascript.md` for vulnerable-vs-safe
+Read `references/javascript.md` for vulnerable-vs-safe code
 snippets.
 
 ### TypeScript
 
 Same sinks as JavaScript with typed logger calls.
 
-Defer to `references/typescript.md` for vulnerable-vs-safe
+Read `references/typescript.md` for vulnerable-vs-safe code
 snippets.
 
 ## Evidence requirements
@@ -136,7 +135,7 @@ Emit one JSON object per finding with these fixed fields for
   "meta": {
     "title": "<short human title, e.g. 'Password logged in login handler'>",
     "owasp_name": "Cryptographic Failures",
-    "remediation": "<per-finding, per D19; see remediation guidance below>",
+    "remediation": "<per-finding; see remediation guidance below>",
     "code_snippet": "<2-6 lines of source containing the sink>",
     "taint_source": "<request parameter or upstream variable, when traceable>",
     "reasoning": "<one sentence explaining the defect at this location>"

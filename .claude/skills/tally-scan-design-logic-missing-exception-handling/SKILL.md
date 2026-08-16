@@ -37,7 +37,6 @@ Authoritative payload shape:
 | Default severity | `high` |
 | Parent label (dedup) | `MissingExceptionHandling` |
 
-Source: `docs/roadmap/TAL-148/taxonomy.md` T3 row.
 
 ## Detection matrix
 
@@ -57,7 +56,7 @@ Source: `docs/roadmap/TAL-148/taxonomy.md` T3 row.
   permissions, authentication, or rate limits. Assertions are stripped
   in `-O` and `-OO` optimization modes, causing the check to disappear.
 
-Defer to `references/python.md` for vulnerable-vs-safe snippets.
+Read `references/python.md` for vulnerable-vs-safe code patterns.
 
 ### PHP
 
@@ -73,7 +72,7 @@ Defer to `references/python.md` for vulnerable-vs-safe snippets.
 - **Assertion for security**: `assert($condition)` used for permission
   checks. Can be disabled via `zend.assertions = -1`.
 
-Defer to `references/php.md` for vulnerable-vs-safe snippets.
+Read `references/php.md` for vulnerable-vs-safe code patterns.
 
 ### JavaScript
 
@@ -88,7 +87,7 @@ Defer to `references/php.md` for vulnerable-vs-safe snippets.
 - **Silent catch**: `try { auth(); } catch (e) { }` where the
   exception is swallowed and execution continues.
 
-Defer to `references/javascript.md` for vulnerable-vs-safe snippets.
+Read `references/javascript.md` for vulnerable-vs-safe code patterns.
 
 ### TypeScript
 
@@ -105,7 +104,7 @@ Defer to `references/javascript.md` for vulnerable-vs-safe snippets.
   auth failure, but the catch block calls `done()` without an error,
   allowing the handler to execute.
 
-Defer to `references/typescript.md` for vulnerable-vs-safe snippets.
+Read `references/typescript.md` for vulnerable-vs-safe code patterns.
 
 ## Evidence requirements
 
@@ -150,7 +149,7 @@ Emit one JSON object per finding with these fixed fields for
     "title": "<short human title, e.g. 'Auth check fails silently in
     middleware'>",
     "owasp_name": "Insecure Design",
-    "remediation": "<per-finding, per D19; see remediation guidance
+    "remediation": "<per-finding; see remediation guidance
     below>",
     "code_snippet": "<2-6 lines of source containing the check and
     handler>",
@@ -165,7 +164,7 @@ full field list and validator behavior.
 
 ## Remediation guidance for the scanner
 
-Per D19, write `meta.remediation` inline based on the actual framework
+Write `meta.remediation` inline based on the actual framework
 observed in the code. Examples of good remediation strings:
 
 - **Python Django middleware**: `In the except block, return an

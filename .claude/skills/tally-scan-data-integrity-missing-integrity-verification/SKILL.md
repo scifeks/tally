@@ -33,7 +33,6 @@ Authoritative payload shape:
 | Default severity | `high` |
 | Parent label (dedup) | `MissingIntegrity` |
 
-Source: `docs/roadmap/TAL-148/taxonomy.md` T3 row.
 
 ## Detection matrix
 
@@ -55,7 +54,7 @@ Source: `docs/roadmap/TAL-148/taxonomy.md` T3 row.
   (`importlib.import_module()`, `__import__()`) of code from a URL without
   hash pinning.
 
-Defer to `references/python.md` for vulnerable-vs-safe snippets.
+Read `references/python.md` for vulnerable-vs-safe code patterns.
 
 ### PHP
 
@@ -69,7 +68,7 @@ Defer to `references/python.md` for vulnerable-vs-safe snippets.
 - **Remote include/require**: `include()` or `require()` on a file path
   that came from a URL without prior integrity check.
 
-Defer to `references/php.md` for vulnerable-vs-safe snippets.
+Read `references/php.md` for vulnerable-vs-safe code patterns.
 
 ### JavaScript
 
@@ -86,7 +85,7 @@ Defer to `references/php.md` for vulnerable-vs-safe snippets.
   `require(userInput)` where the path comes from external input without
   hash validation.
 
-Defer to `references/javascript.md` for vulnerable-vs-safe snippets.
+Read `references/javascript.md` for vulnerable-vs-safe code patterns.
 
 ### TypeScript
 
@@ -100,7 +99,7 @@ Defer to `references/javascript.md` for vulnerable-vs-safe snippets.
   one of a known-good set.
 - Same JavaScript sinks apply on the Node runtime.
 
-Defer to `references/typescript.md` for vulnerable-vs-safe snippets.
+Read `references/typescript.md` for vulnerable-vs-safe code patterns.
 
 ## Evidence requirements
 
@@ -143,7 +142,7 @@ Emit one JSON object per finding with these fixed fields for
   "meta": {
     "title": "<short human title, e.g. 'Unsigned artifact download'>",
     "owasp_name": "Software or Data Integrity Failures",
-    "remediation": "<per-finding, per D19; see remediation guidance below>",
+    "remediation": "<per-finding; see remediation guidance below>",
     "code_snippet": "<2-6 lines of source containing the sink>",
     "taint_source": "<URL, request parameter, or upstream variable, when traceable>",
     "reasoning": "<one sentence explaining why the integrity check is missing>"
@@ -156,7 +155,7 @@ field list and validator behavior.
 
 ## Remediation guidance for the scanner
 
-Per D19, write `meta.remediation` inline based on the actual library and
+Write `meta.remediation` inline based on the actual library and
 use case observed in the code. Examples of good remediation strings:
 
 - **Python artifact download**: `Compute hashlib.sha256(downloaded_bytes).hexdigest()

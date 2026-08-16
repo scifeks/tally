@@ -1,8 +1,8 @@
 # Canonical scanner-skill template
 
-Every `tally-scan-<leaf>/SKILL.md` follows this shape. Slices 5-11
-copy this template verbatim, filling in the per-skill values from
-`docs/roadmap/TAL-148/taxonomy.md`. The payload every skill emits is
+Every `tally-scan-<leaf>/SKILL.md` follows this shape. New skills
+follow this shape, Each skill fills in its own identity values (rule_id, CWE, OWASP category,
+severity, parent label). The payload every skill emits is
 specified in `mcp-payload-shape.md`.
 
 ## Frontmatter template
@@ -100,7 +100,7 @@ Do not emit a finding when:
 
 ## Remediation instructions
 
-Per D19, the scanner subagent writes `meta.remediation` inline for
+The scanner subagent writes `meta.remediation` inline for
 every finding based on the actual library or framework observed in
 the scanned code. There is no shared remediation table.
 
@@ -139,7 +139,7 @@ placeholders the subagent completes.
   "meta": {
     "title": "<short human title>",
     "owasp_name": "<OWASP_NAME>",
-    "remediation": "<per-finding remediation, per D19>",
+    "remediation": "<per-finding remediation>",
     "code_snippet": "<2-6 lines of source>",
     "taint_source": "<request parameter or upstream variable, if traceable>"
   }
@@ -165,7 +165,7 @@ and validator behavior.
 
 ## Cross-skill dedup awareness
 
-Per D24, findings across skills that share a family prefix (e.g.
+Findings across skills that share a family prefix (e.g.
 `xss.stored`, `xss.reflected`, `xss.blind` all share `xss.`) will
 be grouped as candidate duplicates when they land at the same file
 and their line ranges overlap or fall within 10 lines of each

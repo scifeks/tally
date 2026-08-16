@@ -34,7 +34,6 @@ Authoritative payload shape:
 | Default severity | `high` |
 | Parent label (dedup) | `WeakCrypto` |
 
-Source: `docs/roadmap/TAL-148/taxonomy.md` T3 row 5.
 
 ## Detection matrix
 
@@ -59,7 +58,7 @@ Source: `docs/roadmap/TAL-148/taxonomy.md` T3 row 5.
   `key_size=2048` or higher.
 - **Deprecated hashlib call**: `hashlib.new('md4', data)`.
 
-Defer to `references/python.md` for vulnerable-vs-safe snippets.
+Read `references/python.md` for vulnerable-vs-safe code patterns.
 
 ### PHP
 
@@ -79,7 +78,7 @@ Defer to `references/python.md` for vulnerable-vs-safe snippets.
 - **Small RSA key**: `openssl_pkey_new(['private_key_bits' =>
   1024])`. Safe form uses 2048 or higher.
 
-Defer to `references/php.md` for vulnerable-vs-safe snippets.
+Read `references/php.md` for vulnerable-vs-safe code patterns.
 
 ### JavaScript
 
@@ -96,7 +95,7 @@ Defer to `references/php.md` for vulnerable-vs-safe snippets.
 - **Small RSA key**: `crypto.generateKeyPairSync('rsa',
   {modulusLength: 1024})`. Safe form uses 2048 or higher.
 
-Defer to `references/javascript.md` for vulnerable-vs-safe
+Read `references/javascript.md` for vulnerable-vs-safe code
 snippets.
 
 ### TypeScript
@@ -109,7 +108,7 @@ Additionally:
 - Third-party libraries wrapping Node crypto with weak
   defaults.
 
-Defer to `references/typescript.md` for vulnerable-vs-safe
+Read `references/typescript.md` for vulnerable-vs-safe code
 snippets.
 
 ## Evidence requirements
@@ -151,7 +150,7 @@ Emit one JSON object per finding with these fixed fields for
   "meta": {
     "title": "<short human title, e.g. 'ECB mode in AES encryption'>",
     "owasp_name": "Cryptographic Failures",
-    "remediation": "<per-finding, per D19; see remediation guidance below>",
+    "remediation": "<per-finding; see remediation guidance below>",
     "code_snippet": "<2-6 lines of source containing the sink>",
     "taint_source": "<request parameter or upstream variable, when traceable>",
     "reasoning": "<one sentence explaining why this is a weak algorithm>"

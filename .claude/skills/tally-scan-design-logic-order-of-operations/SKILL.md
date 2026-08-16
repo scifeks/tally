@@ -35,7 +35,6 @@ Authoritative payload shape:
 | Default severity | `high` |
 | Parent label (dedup) | `OrderOfOperations` |
 
-Source: `docs/roadmap/TAL-148/taxonomy.md` T3 row (design logic family).
 
 ## Detection matrix
 
@@ -58,7 +57,7 @@ Source: `docs/roadmap/TAL-148/taxonomy.md` T3 row (design logic family).
   computation (parsing, cryptographic operation, ML inference)
   completed before rate-limit check runs.
 
-Defer to `references/python.md` for vulnerable-vs-safe snippets.
+Read `references/python.md` for vulnerable-vs-safe code patterns.
 
 ### PHP
 
@@ -74,7 +73,7 @@ Defer to `references/python.md` for vulnerable-vs-safe snippets.
   $content)` before `validate_path($path)` or path traversal check.
   Arbitrary file writes.
 
-Defer to `references/php.md` for vulnerable-vs-safe snippets.
+Read `references/php.md` for vulnerable-vs-safe code patterns.
 
 ### JavaScript
 
@@ -91,7 +90,7 @@ Defer to `references/php.md` for vulnerable-vs-safe snippets.
   after `innerHTML = html` assignment. XSS executes before
   sanitization.
 
-Defer to `references/javascript.md` for vulnerable-vs-safe snippets.
+Read `references/javascript.md` for vulnerable-vs-safe code patterns.
 
 ### TypeScript
 
@@ -108,7 +107,7 @@ Defer to `references/javascript.md` for vulnerable-vs-safe snippets.
 - **ORM persistence before type check**: Prisma or TypeORM
   `.create()` or `.save()` called before Zod schema validation.
 
-Defer to `references/typescript.md` for vulnerable-vs-safe snippets.
+Read `references/typescript.md` for vulnerable-vs-safe code patterns.
 
 ## Evidence requirements
 
@@ -170,7 +169,7 @@ full field list and validator behavior.
 
 ## Remediation guidance for the scanner
 
-Per D19, write `meta.remediation` inline based on the actual library
+Write `meta.remediation` inline based on the actual library
 and framework observed in the code. Examples of good remediation
 strings:
 

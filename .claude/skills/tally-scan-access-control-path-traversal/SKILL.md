@@ -33,7 +33,6 @@ Authoritative payload shape:
 | Default severity | `high` |
 | Parent label (dedup) | `PathTraversal` |
 
-Source: `docs/roadmap/TAL-148/taxonomy.md` T3 row 5.
 
 ## Detection matrix
 
@@ -55,7 +54,7 @@ Source: `docs/roadmap/TAL-148/taxonomy.md` T3 row 5.
 - **f-string path construction**: `open(f"{upload_dir}/{filename}")`
   where `filename` is request-sourced and unchecked.
 
-Defer to `references/python.md` for vulnerable-vs-safe snippets.
+Read `references/python.md` for vulnerable-vs-safe code patterns.
 
 ### PHP
 
@@ -72,7 +71,7 @@ Defer to `references/python.md` for vulnerable-vs-safe snippets.
   do not verify the result is within the base directory using
   `strpos($real, $base) === 0` or equivalent.
 
-Defer to `references/php.md` for vulnerable-vs-safe snippets.
+Read `references/php.md` for vulnerable-vs-safe code patterns.
 
 ### JavaScript
 
@@ -91,7 +90,7 @@ Defer to `references/php.md` for vulnerable-vs-safe snippets.
 - **String concatenation into file operations**:
   `fs.readFile(base + '/' + req.query.file)` without path validation.
 
-Defer to `references/javascript.md` for vulnerable-vs-safe snippets.
+Read `references/javascript.md` for vulnerable-vs-safe code patterns.
 
 ### TypeScript
 
@@ -103,7 +102,7 @@ Defer to `references/javascript.md` for vulnerable-vs-safe snippets.
   via crafted filenames in the upload.
 - **Same Node.js patterns as JavaScript** with typed equivalents.
 
-Defer to `references/typescript.md` for vulnerable-vs-safe snippets.
+Read `references/typescript.md` for vulnerable-vs-safe code patterns.
 
 ## Evidence requirements
 
@@ -147,7 +146,7 @@ Emit one JSON object per finding with these fixed fields for
     "title": "<short human title, e.g. 'Path traversal via
       unsanitized filename'>",
     "owasp_name": "Broken Access Control",
-    "remediation": "<per-finding, per D19; see remediation guidance
+    "remediation": "<per-finding; see remediation guidance
       below>",
     "code_snippet": "<2-6 lines of source containing the sink>",
     "taint_source": "<request parameter or upstream variable, when
@@ -163,7 +162,7 @@ the full field list and validator behavior.
 
 ## Remediation guidance for the scanner
 
-Per D19, write `meta.remediation` inline based on the actual library or
+Write `meta.remediation` inline based on the actual library or
 framework observed in the code. Examples of good remediation strings:
 
 - **Python `pathlib`**: `Resolve the full path and verify it is

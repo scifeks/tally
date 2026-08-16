@@ -34,7 +34,6 @@ Authoritative payload shape:
 | Default severity | `critical` |
 | Parent label (dedup) | `CodeInjection` |
 
-Source: `docs/roadmap/TAL-148/taxonomy.md` T3 row 5.
 
 ## Detection matrix
 
@@ -52,7 +51,7 @@ Source: `docs/roadmap/TAL-148/taxonomy.md` T3 row 5.
   belongs to a separate deserialization skill; flag only eval/exec/
   compile here.
 
-Defer to `references/python.md` for vulnerable-vs-safe snippets.
+Read `references/python.md` for vulnerable-vs-safe code patterns.
 
 ### PHP
 
@@ -68,7 +67,7 @@ Defer to `references/python.md` for vulnerable-vs-safe snippets.
   $userInput, ...)` evaluates the replacement as PHP code. The `/e`
   flag was removed in PHP 7; legacy codebases may still use it.
 
-Defer to `references/php.md` for vulnerable-vs-safe snippets.
+Read `references/php.md` for vulnerable-vs-safe code patterns.
 
 ### JavaScript
 
@@ -85,7 +84,7 @@ Defer to `references/php.md` for vulnerable-vs-safe snippets.
   evaluate user-controlled strings as code in a new or current VM
   context, respectively.
 
-Defer to `references/javascript.md` for vulnerable-vs-safe snippets.
+Read `references/javascript.md` for vulnerable-vs-safe code patterns.
 
 ### TypeScript
 
@@ -97,7 +96,7 @@ Defer to `references/javascript.md` for vulnerable-vs-safe snippets.
 - **`vm.runInNewContext()` and `vm.runInThisContext()`**: Same as
   JavaScript.
 
-Defer to `references/typescript.md` for vulnerable-vs-safe snippets.
+Read `references/typescript.md` for vulnerable-vs-safe code patterns.
 
 ## Evidence requirements
 

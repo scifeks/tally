@@ -32,7 +32,6 @@ Authoritative payload shape:
 | Default severity | `high` |
 | Parent label (dedup) | `SSRF` |
 
-Source: `docs/roadmap/TAL-148/taxonomy.md` T3.
 
 ## Detection matrix
 
@@ -53,7 +52,7 @@ Source: `docs/roadmap/TAL-148/taxonomy.md` T3.
   telnetlib reaching a sink that accepts a URL string from user
   input.
 
-Defer to `references/python.md` for vulnerable-vs-safe snippets.
+Read `references/python.md` for vulnerable-vs-safe code patterns.
 
 ### PHP
 
@@ -70,7 +69,7 @@ Defer to `references/python.md` for vulnerable-vs-safe snippets.
 - **fopen with URL wrappers**: `fopen($user_url, 'r')` where URL
   wrappers are enabled.
 
-Defer to `references/php.md` for vulnerable-vs-safe snippets.
+Read `references/php.md` for vulnerable-vs-safe code patterns.
 
 ### JavaScript
 
@@ -83,7 +82,7 @@ Defer to `references/php.md` for vulnerable-vs-safe snippets.
 - **http/https stdlib**: `http.get(userUrl)`,
   `https.request(userUrl)` without domain restriction.
 
-Defer to `references/javascript.md` for vulnerable-vs-safe
+Read `references/javascript.md` for vulnerable-vs-safe code
 snippets.
 
 ### TypeScript
@@ -96,7 +95,7 @@ snippets.
   from user input without validation.
 - **undici**: `undici.request(userUrl)` without domain validation.
 
-Defer to `references/typescript.md` for vulnerable-vs-safe
+Read `references/typescript.md` for vulnerable-vs-safe code
 snippets.
 
 ## Evidence requirements
@@ -140,7 +139,7 @@ Emit one JSON object per finding with these fixed fields for
     "title": "<short human title, e.g. 'SSRF via webhook URL
       parameter'>",
     "owasp_name": "Insecure Design",
-    "remediation": "<per-finding, per D19; see remediation
+    "remediation": "<per-finding; see remediation
       guidance below>",
     "code_snippet": "<2-6 lines of source containing the sink>",
     "taint_source": "<request parameter or upstream variable, when
@@ -156,7 +155,7 @@ the full field list and validator behavior.
 
 ## Remediation guidance for the scanner
 
-Per D19, write `meta.remediation` inline based on the actual
+Write `meta.remediation` inline based on the actual
 library observed in the code. Examples of good remediation
 strings:
 

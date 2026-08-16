@@ -33,50 +33,52 @@ Authoritative payload shape:
 | Default severity | `high` |
 | Parent label (dedup) | `XPathInjection` |
 
-Source: `docs/roadmap/TAL-148/taxonomy.md` T3 row 7.
 
 ## Detection matrix
 
 ### Python
 
-- **String-formatted XPath (lxml)**: an f-string, `.format()`, or
-  `%`-formatting that interpolates a request-derived value into an XPath
-  expression, then passes the string to `tree.xpath()` or `tree.findall()`.
-- **String-formatted XPath (ElementTree)**: interpolation into the path
-  argument of `root.findall()`, `root.find()`, or `root.iterfind()` from
-  the standard library `xml.etree.ElementTree`.
-- **Template literal concatenation**: XPath expression built via `+`
-  concatenation of a literal with request-derived values.
+Read `references/python.md` for vulnerable-vs-safe snippets.
 
-Defer to `references/python.md` for vulnerable-vs-safe snippets.
+Detect these sink categories:
+
+- **String-formatted XPath (lxml)**: f-strings, .format(), or %-formatting
+  that interpolate request-derived values into XPath expressions.
+- **String-formatted XPath (ElementTree)**: string interpolation into the
+  path argument of findall, find, or iterfind calls.
+- **Concatenation into XPath**: building XPath expressions via string
+  concatenation with request-derived values.
 
 ### PHP
 
-- **DOMXPath query concatenation**: `$xpath->query("//user[@name='$var'"])`
-  where `$var` is request-sourced. Safe form uses parameterization (lxml
-  style) or allowlist validation.
-- **SimpleXML xpath concatenation**: `$xml->xpath("//item[@id='$var']")`
-  with request data. Safe form validates or escapes the input.
+Read `references/php.md` for vulnerable-vs-safe snippets.
 
-Defer to `references/php.md` for vulnerable-vs-safe snippets.
+Detect these sink categories:
+
+- **DOMXPath query concatenation**: building query strings by interpolating
+  request variables into XPath expressions.
+- **SimpleXML xpath concatenation**: building xpath expressions with
+  request-sourced values.
 
 ### JavaScript
 
-- **xpath npm library concatenation**: `xpath.select(expr + userInput)` or
-  template literals interpolating request data into the XPath expression.
-  Safe form uses XPath variables (not always available) or input validation.
-- **xmldom evaluate concatenation**: `dom.evaluate('//user[@name="' +
-  userInput + '"]')` or template literals. Safe form validates input or
-  uses allowlist.
+Read `references/javascript.md` for vulnerable-vs-safe snippets.
 
-Defer to `references/javascript.md` for vulnerable-vs-safe snippets.
+Detect these sink categories:
+
+- **xpath npm library concatenation**: building XPath expressions via string
+  concatenation or template literals with request data.
+- **xmldom evaluate concatenation**: building expressions for the evaluate
+  method with request-derived values.
 
 ### TypeScript
 
-- **xmldom (typed)**: same JavaScript patterns with type annotations.
-- **xpath (typed npm)**: same JavaScript patterns.
+Read `references/typescript.md` for vulnerable-vs-safe snippets.
 
-Defer to `references/typescript.md` for vulnerable-vs-safe snippets.
+Detect these sink categories:
+
+- **xmldom (typed)**: same JavaScript patterns with type annotations.
+- **xpath (typed npm)**: same JavaScript patterns with type annotations.
 
 ## Evidence requirements
 
@@ -119,7 +121,7 @@ Emit one JSON object per finding with these fixed fields for
     "title": "<short human title, e.g. 'XPath injection via f-string in
     user search'>",
     "owasp_name": "Injection",
-    "remediation": "<per-finding, per D19; see remediation guidance
+    "remediation": "<per-finding; see remediation guidance
     below>",
     "code_snippet": "<2-6 lines of source containing the sink>",
     "taint_source": "<request parameter or upstream variable, when
@@ -134,30 +136,13 @@ field list and validator behavior.
 
 ## Remediation guidance for the scanner
 
-Per D19, write `meta.remediation` inline based on the actual library
-observed in the code. Examples of good remediation strings:
+Write `meta.remediation` inline based on the actual library
+observed in the code. Use the safe patterns from the per-language
+reference files to write specific, actionable remediation.
 
-- **lxml (Python)**: `Use XPath variables: replace the f-string with
-  tree.xpath("//user[@name=$name]", name=user_input). This parameterizes
-  the input safely.`
-- **ElementTree (Python)**: `ElementTree does not support parameterized
-  XPath. Validate the input against an allowlist or escape special
-  characters (@, /, [, ], ', ") before interpolating.`
-- **DOMXPath (PHP)**: `PHP's DOMXPath does not support parameterized
-  queries. Validate the input against an allowlist or escape single and
-  double quotes.`
-- **SimpleXML (PHP)**: `SimpleXML xpath does not support parameterization.
-  Validate the input against an allowlist before splicing into the XPath
-  expression.`
-- **xpath npm (JavaScript)**: `The xpath library does not support
-  parameterized queries. Validate the user input against an allowlist or
-  escape XPath special characters.`
-- **xmldom (JavaScript/TypeScript)**: `The xmldom evaluate method does not
-  support parameterization. Validate the input against an allowlist before
-  interpolating.`
-
-Keep it two to four sentences. Vague guidance ("parameterize the query") is
-worse than no guidance.
+- Name the library and its specific safe API
+- Show the exact placeholder style or query builder method
+- Keep it two to four sentences
 
 ## Common false positives
 

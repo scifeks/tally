@@ -34,70 +34,61 @@ Authoritative payload shape:
 | Default severity | `critical` |
 | Parent label (dedup) | `TemplateInjection` |
 
-Source: `docs/roadmap/TAL-148/taxonomy.md` T3 row 3.
 
 ## Detection matrix
 
 ### Python
 
-- **Jinja2 `render_template_string`**: Flask's
-  `render_template_string(user_input)` or Jinja2's direct call with an
-  unescaped string. Safe form uses `render_template('file.html',
-  var=user_input)` where the template path is a literal.
-- **Jinja2 `Template` direct instantiation**: `Template(user_input)
-  .render()` or `Environment().from_string(user_input).render()`. Safe
-  form passes user data through the context, not the template source.
-- **Mako `Template` constructor**: `MakoTemplate(user_input).render()`
-  or `TemplateLookup().get_template(user_input).render()`. Safe form
-  uses a template filename or passes data through the context.
-- **String template evaluation**: `string.Template(user_input)
-  .substitute(...)` when the input is not already a known constant.
+Read `references/python.md` for vulnerable-vs-safe snippets.
 
-Defer to `references/python.md` for vulnerable-vs-safe snippets.
+Detect these sink categories:
+
+- **Flask template rendering**: render_template_string or direct template
+  instantiation with user-supplied template source.
+- **Jinja2 direct usage**: Template constructor or from_string with
+  user-controlled template code.
+- **Mako template rendering**: direct template instantiation or
+  TemplateLookup with request-derived sources.
+- **String template evaluation**: string.Template with user-supplied format
+  strings.
 
 ### PHP
 
-- **Twig `createTemplate`**: `$twig->createTemplate($userInput)
-  ->render()`. Safe form uses `$twig->render('file.html', $context)`.
-- **Laravel Blade `compileString`**: `Blade::compileString($userInput)`
-  followed by rendering. Safe form uses Blade templates as files, not
-  compiled from request data.
-- **Smarty `fetch` with string prefix**: `$smarty->fetch('string:' .
-  $userInput)` or `$smarty->display('string:' . $userInput)`. Safe form
-  loads templates from files only.
+Read `references/php.md` for vulnerable-vs-safe snippets.
 
-Defer to `references/php.md` for vulnerable-vs-safe snippets.
+Detect these sink categories:
+
+- **Twig createTemplate**: creating template instances from user input
+  rather than loading from files.
+- **Laravel Blade compileString**: rendering compiled template strings from
+  request data.
+- **Smarty string prefix**: using the string: prefix to render request-sourced
+  template code.
 
 ### JavaScript
 
-- **EJS `render` with dynamic template**: `ejs.render(userInput, data)`
-  or `ejs.renderFile(userInput, data)` when the template source is
-  request-derived. Safe form renders from a literal filename and passes
-  data through the `data` parameter.
-- **Pug `render` with dynamic source**: `pug.render(userInput)`.
-  Safe form uses `pug.renderFile('file.pug')` and passes data through
-  the options.
-- **Handlebars `compile` with dynamic input**: `Handlebars.compile(
-  userInput)` then executing the result. Safe form defines templates as
-  literal strings or loads from files.
-- **Nunjucks `renderString` with dynamic template**: `nunjucks
-  .renderString(userInput, data)`. Safe form uses `nunjucks.render(
-  'file.html', data)`.
+Read `references/javascript.md` for vulnerable-vs-safe snippets.
 
-Defer to `references/javascript.md` for vulnerable-vs-safe snippets.
+Detect these sink categories:
+
+- **EJS render**: render or renderFile with user-supplied template source or
+  filename.
+- **Pug render**: render or renderFile with request-derived template data.
+- **Handlebars compile**: compiling user-supplied template strings.
+- **Nunjucks renderString**: evaluating request-sourced template code.
 
 ### TypeScript
 
-- **Nunjucks `renderString` (typed)**: Same as JavaScript, with type
-  declarations available.
-- **EJS (typed)**: Same as JavaScript, with type definitions.
-- **Angular `bypassSecurityTrustHtml`**: Returning a template string
-  that includes user data without prior escaping or validation. Safe
-  form escapes user input before combining with template markup.
-- **Server-side template rendering libraries**: TypeORM, Sequelize, or
-  other libraries that render templates dynamically.
+Read `references/typescript.md` for vulnerable-vs-safe snippets.
 
-Defer to `references/typescript.md` for vulnerable-vs-safe snippets.
+Detect these sink categories:
+
+- **Typed template engines**: EJS, Nunjucks, and other libraries used with
+  user-supplied template sources regardless of type declarations.
+- **Framework-specific bypasses**: Angular or other framework security
+  bypasses when user data flows to trusted-HTML functions.
+- **Dynamic template rendering**: TypeORM, Sequelize, or similar libraries
+  rendering templates from user input.
 
 ## Evidence requirements
 
@@ -138,7 +129,7 @@ Emit one JSON object per finding with these fixed fields for
   "meta": {
     "title": "<short human title, e.g. 'SSTI via Jinja2 render_template_string'>",
     "owasp_name": "Injection",
-    "remediation": "<per-finding, per D19; see remediation guidance below>",
+    "remediation": "<per-finding; see remediation guidance below>",
     "code_snippet": "<2-6 lines of source containing the sink>",
     "taint_source": "<request parameter or upstream variable, when traceable>",
     "reasoning": "<one sentence explaining the defect at this location>"
@@ -151,31 +142,13 @@ the full field list and validator behavior.
 
 ## Remediation guidance for the scanner
 
-Per D19, write `meta.remediation` inline based on the actual
-library observed in the code. Examples of good remediation
-strings:
+Write `meta.remediation` inline based on the actual library
+observed in the code. Use the safe patterns from the per-language
+reference files to write specific, actionable remediation.
 
-- **Flask Jinja2**: `Use render_template('template.html', var=user_input)
-  where the template filename is a literal string. Never pass user input
-  to render_template_string().`
-- **Jinja2 direct**: `Pass user data through the template context, not
-  the template source. Use Environment().from_string('static {{ var }}')
-  .render(var=user_input), not from_string(user_input).`
-- **Mako**: `Load templates from files: TemplateLookup(
-  directories=['templates']).get_template('mytemplate.html'). If the
-  template source must be dynamic, use a SandboxedLookup.`
-- **Twig (PHP)**: `Load templates as files: $twig->render('file.html',
-  $context). Never pass request data to createTemplate().`
-- **Laravel Blade**: `Store templates as files in resources/views/. Use
-  view('template', $data) instead of Blade::compileString($userInput).`
-- **EJS (Node)**: `Render from a file: ejs.renderFile('views/template.ejs',
-  data, callback). Pass user input only through the data parameter.`
-- **Nunjucks**: `Use nunjucks.render('file.html', data) or
-  nunjucks.renderString('static {{ var }}', {var: data}), never
-  nunjucks.renderString(userInput).`
-
-Keep it two to four sentences. Vague guidance ("use a template file")
-is worse than no guidance.
+- Name the library and its specific safe API
+- Show the exact placeholder style or query builder method
+- Keep it two to four sentences
 
 ## Common false positives
 

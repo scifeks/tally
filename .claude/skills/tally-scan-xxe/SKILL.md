@@ -32,7 +32,6 @@ Authoritative payload shape:
 | Default severity | `high` |
 | Parent label (dedup) | `XXE` |
 
-Source: `docs/roadmap/TAL-148/taxonomy.md` T3 row for XXE.
 
 ## Detection matrix
 
@@ -51,7 +50,7 @@ Source: `docs/roadmap/TAL-148/taxonomy.md` T3 row for XXE.
   by design; unsafe calls to the above libraries (outside defusedxml) are
   vulnerable.
 
-Defer to `references/python.md` for vulnerable-vs-safe snippets.
+Read `references/python.md` for vulnerable-vs-safe code patterns.
 
 ### PHP
 
@@ -65,7 +64,7 @@ Defer to `references/python.md` for vulnerable-vs-safe snippets.
 - **Weak libxml settings**: relying on `libxml_disable_entity_loader(true)`
   without checking if the setting persists across function calls.
 
-Defer to `references/php.md` for vulnerable-vs-safe snippets.
+Read `references/php.md` for vulnerable-vs-safe code patterns.
 
 ### JavaScript
 
@@ -76,7 +75,7 @@ Defer to `references/php.md` for vulnerable-vs-safe snippets.
 - **Parsers safe by default**: `xml2js`, `fast-xml-parser`, and `xmldom` do
   not resolve external entities by default and are safe.
 
-Defer to `references/javascript.md` for vulnerable-vs-safe snippets.
+Read `references/javascript.md` for vulnerable-vs-safe code patterns.
 
 ### TypeScript
 
@@ -85,7 +84,7 @@ Defer to `references/javascript.md` for vulnerable-vs-safe snippets.
   hand-written entity resolvers.
 - **Same JavaScript sinks apply** on the Node runtime.
 
-Defer to `references/typescript.md` for vulnerable-vs-safe snippets.
+Read `references/typescript.md` for vulnerable-vs-safe code patterns.
 
 ## Evidence requirements
 
@@ -127,7 +126,7 @@ Emit one JSON object per finding with these fixed fields for `xxe`:
     "title": "<short human title, e.g. 'XXE injection via lxml
     parsing'>",
     "owasp_name": "Injection",
-    "remediation": "<per-finding, per D19; see remediation guidance
+    "remediation": "<per-finding; see remediation guidance
     below>",
     "code_snippet": "<2-6 lines of source containing the sink>",
     "taint_source": "<request parameter or upstream variable, when
@@ -142,7 +141,7 @@ field list and validator behavior.
 
 ## Remediation guidance for the scanner
 
-Per D19, write `meta.remediation` inline based on the actual library
+Write `meta.remediation` inline based on the actual library
 observed in the code. Examples of good remediation strings:
 
 - **lxml (Python)**: `Disable external entity resolution by constructing

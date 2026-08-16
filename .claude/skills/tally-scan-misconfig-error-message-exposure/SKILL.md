@@ -35,68 +35,62 @@ Authoritative payload shape:
 | Default severity | `medium` |
 | Parent label (dedup) | `ErrorMessageExposure` |
 
-Source: `docs/roadmap/TAL-148/taxonomy.md` T3 row 38.
 
 ## Detection matrix
 
 ### Python
 
-- **Django error views**: custom error view functions returning
-  `str(exception)` or `traceback.format_exc()` in the response body.
-- **Django exception handlers**: exception handler decorators catching
-  exceptions and returning `JsonResponse({"error": str(e)})` or similar.
-- **Flask error handlers**: `@app.errorhandler` functions returning
-  `str(e)` or `traceback.format_exc()` in the response body.
-- **Flask catch blocks**: bare `except` blocks in route handlers returning
-  the exception message directly to the client.
-- **FastAPI exception handlers**: custom exception handlers in route
-  handlers returning `{"detail": str(exc)}` with the full exception text.
-- **FastAPI catch blocks**: catch blocks in route handlers exposing
-  `exc.detail` or `str(exc)` in response bodies.
+Read `references/python.md` for vulnerable-vs-safe snippets.
 
-Defer to `references/python.md` for vulnerable-vs-safe snippets.
+Detect these sink categories:
+
+- **Django error views**: returning exception strings or stack traces in
+  response bodies.
+- **Flask error handlers**: returning exception messages or trace data in
+  responses.
+- **FastAPI exception handlers**: custom handlers returning full exception
+  text to the client.
+- **Catch blocks**: bare exception handlers returning error data to
+  responses.
 
 ### PHP
 
-- **display_errors setting**: `ini_set('display_errors', '1')` or
-  `ini_set('display_errors', 'On')` in application code turns on error
-  output to the client.
-- **Custom exception handlers**: exception handler functions calling
-  `$e->getMessage()`, `$e->getTraceAsString()`, or `$e->getTrace()` in
-  response output.
-- **Laravel exception rendering**: custom exception render methods
-  returning exception details; `abort()` calls with sensitive messages
-  that reach the response.
-- **WordPress error output**: `wp_die()` called with database error
-  messages or exception details.
+Read `references/php.md` for vulnerable-vs-safe snippets.
 
-Defer to `references/php.md` for vulnerable-vs-safe snippets.
+Detect these sink categories:
+
+- **display_errors setting**: ini_set enabling error output to the client.
+- **Custom exception handlers**: handlers returning exception messages or
+  traces in responses.
+- **Laravel exception rendering**: returning exception details in responses
+  or abort messages.
 
 ### JavaScript
 
-- **Express error middleware**: error middleware functions sending
-  `err.stack` or `err.message` in the response body.
-- **Express catch blocks**: unguarded `catch(err)` blocks in route
-  handlers returning the full error object or `err.message`.
-- **Koa error handling**: `ctx.body = err.message` or `ctx.body = err.stack`
-  in error handlers or middleware.
-- **Fastify error handlers**: custom error handlers returning internal
-  error details in the response body.
+Read `references/javascript.md` for vulnerable-vs-safe snippets.
 
-Defer to `references/javascript.md` for vulnerable-vs-safe snippets.
+Detect these sink categories:
+
+- **Express error middleware**: error middleware returning err.stack or
+  err.message in responses.
+- **Catch blocks**: exception handlers in route handlers returning error
+  details.
+- **Koa error handling**: error handlers returning error messages or stacks.
+- **Fastify error handlers**: custom error handlers returning internal error
+  details.
 
 ### TypeScript
 
-- **NestJS exception filters**: exception filters returning full exception
-  objects or internal error messages in the response.
-- **NestJS HttpException**: `HttpException` instantiated with internal
-  error details as the message parameter.
-- **Express error middleware (typed)**: typed error handlers sending
-  `err.stack` or `err.message` in the response body.
-- **Custom error DTOs**: data transfer objects that include stack traces
-  or internal error messages serialized to the HTTP response.
+Read `references/typescript.md` for vulnerable-vs-safe snippets.
 
-Defer to `references/typescript.md` for vulnerable-vs-safe snippets.
+Detect these sink categories:
+
+- **NestJS exception filters**: filters returning full exception objects or
+  internal messages.
+- **Express error middleware (typed)**: typed handlers returning err.stack or
+  err.message.
+- **Custom error DTOs**: response objects including stack traces or internal
+  error messages.
 
 ## Evidence requirements
 
@@ -138,7 +132,7 @@ Emit one JSON object per finding with these fixed fields for
     "title": "<short human title, e.g. 'Error message exposure in Django
     exception handler'>",
     "owasp_name": "Security Misconfiguration",
-    "remediation": "<per-finding, per D19; see remediation guidance
+    "remediation": "<per-finding; see remediation guidance
     below>",
     "code_snippet": "<2-6 lines of source containing the handler>",
     "taint_source": "<exception variable or error object name, when
@@ -153,32 +147,13 @@ field list and validator behavior.
 
 ## Remediation guidance for the scanner
 
-Per D19, write `meta.remediation` inline based on the actual library or
-framework observed in the code. Examples of good remediation strings:
+Write `meta.remediation` inline based on the actual library
+observed in the code. Use the safe patterns from the per-language
+reference files to write specific, actionable remediation.
 
-- **Django views**: `Return a generic error message to the user:
-  JsonResponse({"error": "Internal server error"}, status=500). Log the
-  full exception server-side with logger.exception() for debugging.`
-- **Flask error handlers**: `In the error handler, return a generic
-  message: return jsonify(error="Internal server error"), 500. Log the
-  exception server-side with app.logger.exception().`
-- **FastAPI routes**: `Remove the `str(exc)` from the response. Instead,
-  return a generic message like {"detail": "Internal server error"}. Log
-  exc server-side using the Python logging module or a structured logger.`
-- **Express middleware**: `In the error middleware, send a generic message:
-  res.status(500).json({error: "Internal server error"}). Log err.stack
-  server-side with your logging library.`
-- **PHP application code**: `Set display_errors = Off in production
-  php.ini. In custom exception handlers, return a generic message and log
-  the full exception server-side with error_log() or a PSR-3 logger.`
-- **NestJS exception filters**: `In exception filters, return a generic
-  HttpException with a user-safe message. Log the original exception
-  server-side with the Logger service.`
-- **Laravel**: `In the exception handler's render method, return a generic
-  error response. Log the full exception using Log::error() or similar.`
-
-Keep it two to four sentences. Vague guidance ("hide errors") is worse
-than no guidance.
+- Name the library and its specific safe API
+- Show the exact placeholder style or query builder method
+- Keep it two to four sentences
 
 ## Common false positives
 

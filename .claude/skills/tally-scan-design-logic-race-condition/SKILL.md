@@ -38,7 +38,6 @@ Authoritative payload shape:
 | Default severity | `high` |
 | Parent label (dedup) | `Race Condition` |
 
-Source: `docs/roadmap/TAL-148/taxonomy.md` T3 row 11.
 
 ## Detection matrix
 
@@ -58,7 +57,7 @@ Source: `docs/roadmap/TAL-148/taxonomy.md` T3 row 11.
   to or reading from the same file without `fcntl.flock()` or `os.open()`
   with O_EXCL, risking interleaved writes or stale reads.
 
-Defer to `references/python.md` for vulnerable-vs-safe snippets.
+Read `references/python.md` for vulnerable-vs-safe code patterns.
 
 ### PHP
 
@@ -75,7 +74,7 @@ Defer to `references/python.md` for vulnerable-vs-safe snippets.
   processes access shared memory segments via `shmop_read()` and
   `shmop_write()` without semaphores (`sem_get()`, `sem_acquire()`).
 
-Defer to `references/php.md` for vulnerable-vs-safe snippets.
+Read `references/php.md` for vulnerable-vs-safe code patterns.
 
 ### JavaScript
 
@@ -92,7 +91,7 @@ Defer to `references/php.md` for vulnerable-vs-safe snippets.
   value from Redis or database, checks it, then updates it in a separate
   operation without SETNX, Lua script, or transaction.
 
-Defer to `references/javascript.md` for vulnerable-vs-safe snippets.
+Read `references/javascript.md` for vulnerable-vs-safe code patterns.
 
 ### TypeScript
 
@@ -111,7 +110,7 @@ Defer to `references/javascript.md` for vulnerable-vs-safe snippets.
   keys in separate `await` calls without Lua scripts or transaction, risking
   race between read and write.
 
-Defer to `references/typescript.md` for vulnerable-vs-safe snippets.
+Read `references/typescript.md` for vulnerable-vs-safe code patterns.
 
 ## Evidence requirements
 
@@ -154,7 +153,7 @@ Emit one JSON object per finding with these fixed fields for
   "meta": {
     "title": "<short title, e.g. 'Asyncio race on shared dictionary'>",
     "owasp_name": "Insecure Design",
-    "remediation": "<per-finding, per D19; see remediation guidance>",
+    "remediation": "<per-finding; see remediation guidance>",
     "code_snippet": "<3-8 lines of source showing concurrent access>",
     "shared_resource": "<variable, table, file, or key name>",
     "reasoning": "<one sentence explaining race condition>"
@@ -167,7 +166,7 @@ field list and validator behavior.
 
 ## Remediation guidance for the scanner
 
-Per D19, write `meta.remediation` inline based on the actual library or
+Write `meta.remediation` inline based on the actual library or
 pattern observed in the code. Examples of good remediation strings:
 
 - **asyncio shared state**: `Use asyncio.Lock() to protect access to the

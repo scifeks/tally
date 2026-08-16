@@ -31,7 +31,6 @@ Authoritative payload shape:
 | Default severity | `high` |
 | Parent label (dedup) | `UnrestrictedFileUpload` |
 
-Source: `docs/roadmap/TAL-148/taxonomy.md` T3 row for CWE-434.
 
 ## Detection matrix
 
@@ -48,7 +47,7 @@ Source: `docs/roadmap/TAL-148/taxonomy.md` T3 row for CWE-434.
   `shutil.copyfile`, `.read().write()`, etc.) without validating the
   extension or MIME type.
 
-Defer to `references/python.md` for vulnerable-vs-safe snippets.
+Read `references/python.md` for vulnerable-vs-safe code patterns.
 
 ### PHP
 
@@ -65,7 +64,7 @@ Defer to `references/python.md` for vulnerable-vs-safe snippets.
   `$_FILES['file']['tmp_name']` content directly without checking the
   file extension or magic bytes.
 
-Defer to `references/php.md` for vulnerable-vs-safe snippets.
+Read `references/php.md` for vulnerable-vs-safe code patterns.
 
 ### JavaScript
 
@@ -78,7 +77,7 @@ Defer to `references/php.md` for vulnerable-vs-safe snippets.
 - **Koa + koa-body / formidable saving files unvalidated**: handlers that
   accept uploaded files and write them to disk without type validation.
 
-Defer to `references/javascript.md` for vulnerable-vs-safe snippets.
+Read `references/javascript.md` for vulnerable-vs-safe code patterns.
 
 ### TypeScript
 
@@ -91,7 +90,7 @@ Defer to `references/javascript.md` for vulnerable-vs-safe snippets.
   accept multipart uploads and write files without validating the
   Content-Type header or file extension.
 
-Defer to `references/typescript.md` for vulnerable-vs-safe snippets.
+Read `references/typescript.md` for vulnerable-vs-safe code patterns.
 
 ## Evidence requirements
 
@@ -132,7 +131,7 @@ Emit one JSON object per finding with these fixed fields for
   "meta": {
     "title": "<e.g. 'Unrestricted upload in profile handler'>",
     "owasp_name": "Software or Data Integrity Failures",
-    "remediation": "<per-finding, per D19 remediation guidance>",
+    "remediation": "<per-finding remediation guidance>",
     "code_snippet": "<2-6 lines of source containing the save call>",
     "taint_source": "<request field or handler parameter if
       traceable>",
@@ -146,7 +145,7 @@ field list and validator behavior.
 
 ## Remediation guidance for the scanner
 
-Per D19, write `meta.remediation` inline based on the actual library
+Write `meta.remediation` inline based on the actual library
 observed in the code. Examples of good remediation strings:
 
 - **Flask**: `Validate the extension against an allowlist using

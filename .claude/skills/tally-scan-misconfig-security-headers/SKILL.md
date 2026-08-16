@@ -35,7 +35,6 @@ Authoritative payload shape:
 | Default severity | `low` |
 | Parent label (dedup) | `MissingSecurityHeaders` |
 
-Source: `docs/roadmap/TAL-148/taxonomy.md` T3 row 30.
 
 ## Detection matrix
 
@@ -52,7 +51,7 @@ Source: `docs/roadmap/TAL-148/taxonomy.md` T3 row 30.
 - **Starlette without middleware**: Starlette applications without
   middleware that applies security headers to all responses.
 
-Defer to `references/python.md` for vulnerable-vs-safe snippets.
+Read `references/python.md` for vulnerable-vs-safe code patterns.
 
 ### PHP
 
@@ -65,7 +64,7 @@ Defer to `references/python.md` for vulnerable-vs-safe snippets.
   controller methods that call `header()` without setting
   X-Content-Type-Options, X-Frame-Options, or HSTS.
 
-Defer to `references/php.md` for vulnerable-vs-safe snippets.
+Read `references/php.md` for vulnerable-vs-safe code patterns.
 
 ### JavaScript
 
@@ -77,7 +76,7 @@ Defer to `references/php.md` for vulnerable-vs-safe snippets.
 - **Fastify without @fastify/helmet**: application lacks
   `@fastify/helmet` plugin that sets security headers on responses.
 
-Defer to `references/javascript.md` for vulnerable-vs-safe snippets.
+Read `references/javascript.md` for vulnerable-vs-safe code patterns.
 
 ### TypeScript
 
@@ -90,7 +89,7 @@ Defer to `references/javascript.md` for vulnerable-vs-safe snippets.
 - **Custom middleware omitting headers**: response middleware that does
   not set X-Content-Type-Options, X-Frame-Options, or HSTS headers.
 
-Defer to `references/typescript.md` for vulnerable-vs-safe snippets.
+Read `references/typescript.md` for vulnerable-vs-safe code patterns.
 
 ## Evidence requirements
 
@@ -136,7 +135,7 @@ Emit one JSON object per finding with these fixed fields for
     "title": "<short human title, e.g. 'Missing X-Frame-Options header
     in Flask response middleware'>",
     "owasp_name": "Security Misconfiguration",
-    "remediation": "<per-finding, per D19; see remediation guidance
+    "remediation": "<per-finding; see remediation guidance
     below>",
     "code_snippet": "<2-6 lines of source showing missing header setup>",
     "reasoning": "<one sentence explaining the defect at this location>"
@@ -149,7 +148,7 @@ field list and validator behavior.
 
 ## Remediation guidance for the scanner
 
-Per D19, write `meta.remediation` inline based on the actual framework
+Write `meta.remediation` inline based on the actual framework
 observed in the code. Examples of good remediation strings:
 
 - **Django**: `Set SECURE_HSTS_SECONDS to at least 31536000,

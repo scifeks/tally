@@ -33,7 +33,6 @@ Authoritative payload shape:
 | Default severity | `critical` |
 | Parent label (dedup) | `InsecureDeserialization` |
 
-Source: `docs/roadmap/TAL-148/taxonomy.md` T3 row 8.
 
 ## Detection matrix
 
@@ -56,7 +55,7 @@ Source: `docs/roadmap/TAL-148/taxonomy.md` T3 row 8.
 - **dill.loads()**: unsafe alternative to pickle; allows lambda and code
   object serialization.
 
-Defer to `references/python.md` for vulnerable-vs-safe snippets.
+Read `references/python.md` for vulnerable-vs-safe code patterns.
 
 ### PHP
 
@@ -72,7 +71,7 @@ Defer to `references/python.md` for vulnerable-vs-safe snippets.
   one or more objects designed to chain magic method calls and reach a code
   execution or file operation sink.
 
-Defer to `references/php.md` for vulnerable-vs-safe snippets.
+Read `references/php.md` for vulnerable-vs-safe code patterns.
 
 ### JavaScript
 
@@ -90,7 +89,7 @@ Defer to `references/php.md` for vulnerable-vs-safe snippets.
 - **eval() of JSON-like data**: use of `eval()` on JSON or JSON-like
   strings instead of `JSON.parse()`.
 
-Defer to `references/javascript.md` for vulnerable-vs-safe snippets.
+Read `references/javascript.md` for vulnerable-vs-safe code patterns.
 
 ### TypeScript
 
@@ -103,7 +102,7 @@ Defer to `references/javascript.md` for vulnerable-vs-safe snippets.
   deserializers; run the JavaScript detection checks on the underlying
   runtime behavior.
 
-Defer to `references/typescript.md` for vulnerable-vs-safe snippets.
+Read `references/typescript.md` for vulnerable-vs-safe code patterns.
 
 ## Evidence requirements
 
@@ -144,7 +143,7 @@ Emit one JSON object per finding with these fixed fields for
   "meta": {
     "title": "<short human title, e.g. 'Insecure deserialization via pickle'>",
     "owasp_name": "Software or Data Integrity Failures",
-    "remediation": "<per-finding, per D19; see remediation guidance below>",
+    "remediation": "<per-finding; see remediation guidance below>",
     "code_snippet": "<2-6 lines of source containing the sink>",
     "taint_source": "<request parameter or upstream variable, when traceable>",
     "reasoning": "<one sentence explaining the defect at this location>"
@@ -157,7 +156,7 @@ field list and validator behavior.
 
 ## Remediation guidance for the scanner
 
-Per D19, write `meta.remediation` inline based on the actual library
+Write `meta.remediation` inline based on the actual library
 observed in the code. Examples of good remediation strings:
 
 - **Python pickle**: `Replace pickle with JSON for data exchange or

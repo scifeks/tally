@@ -51,7 +51,7 @@ Source: Taxonomy defined in internal TAL-148 planning.
 - **Direct dictionary assignment**: `obj.__dict__.update(user_input)`
   or `obj.__setattr__` with request data.
 
-Defer to `references/python.md` for vulnerable-vs-safe snippets.
+Read `references/python.md` for vulnerable-vs-safe code patterns.
 
 ### PHP
 
@@ -64,7 +64,7 @@ Defer to `references/python.md` for vulnerable-vs-safe snippets.
 - **Symfony form handling without field restrictions**: Form builder
   without explicit field whitelisting.
 
-Defer to `references/php.md` for vulnerable-vs-safe snippets.
+Read `references/php.md` for vulnerable-vs-safe code patterns.
 
 ### JavaScript
 
@@ -77,7 +77,7 @@ Defer to `references/php.md` for vulnerable-vs-safe snippets.
 - **Direct property assignment**: looping over request keys and
   assigning to model without validation.
 
-Defer to `references/javascript.md` for vulnerable-vs-safe snippets.
+Read `references/javascript.md` for vulnerable-vs-safe code patterns.
 
 ### TypeScript
 
@@ -91,7 +91,7 @@ Defer to `references/javascript.md` for vulnerable-vs-safe snippets.
 - **TypeORM repository save**: `repository.save(req.body)` without
   field restrictions.
 
-Defer to `references/typescript.md` for vulnerable-vs-safe snippets.
+Read `references/typescript.md` for vulnerable-vs-safe code patterns.
 
 ## Evidence requirements
 
@@ -132,7 +132,7 @@ Emit one JSON object per finding with these fixed fields for
   "meta": {
     "title": "<e.g. 'Mass assignment via unfiltered Model.create()'>",
     "owasp_name": "Broken Access Control",
-    "remediation": "<per-finding, per D19; see remediation guidance below>",
+    "remediation": "<per-finding; see remediation guidance below>",
     "code_snippet": "<2-6 lines of source containing the sink>",
     "taint_source": "<request parameter or upstream variable, when traceable>",
     "reasoning": "<one sentence explaining why the pattern is unsafe>"
@@ -145,7 +145,7 @@ full field list and validator behavior.
 
 ## Remediation guidance for the scanner
 
-Per D19, write `meta.remediation` inline based on the actual library
+Write `meta.remediation` inline based on the actual library
 observed in the code. Examples of good remediation strings:
 
 - **Django ModelForm**: `Define explicit `fields` in the form's Meta

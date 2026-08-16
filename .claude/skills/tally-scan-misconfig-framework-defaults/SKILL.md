@@ -33,7 +33,6 @@ Authoritative payload shape:
 | Default severity | `medium` |
 | Parent label (dedup) | `FrameworkDefaults` |
 
-Source: `docs/roadmap/TAL-148/taxonomy.md` T3 row 31. CWE-1188 is
 Insecure Default Initialization of Resource, the correct primary weakness
 for hardcoded defaults and debug-mode flags.
 
@@ -41,68 +40,60 @@ for hardcoded defaults and debug-mode flags.
 
 ### Python
 
-- **Django DEBUG setting**: `DEBUG = True` in production settings files
-  or conditionally set to True without explicit environment guards.
-- **Django SECRET_KEY**: `SECRET_KEY` set to `django-insecure-*` prefix
-  (development marker), common tutorial values like `'secret'`,
-  `'insecure'`, or empty string.
-- **Django ALLOWED_HOSTS**: `ALLOWED_HOSTS = ['*']` in production settings.
-- **Flask debug mode**: `app.debug = True` or `app.run(debug=True)` in
-  production code paths.
-- **Flask secret_key**: `app.secret_key` set to short or common strings
-  like `'dev'`, `'secret'`, `'changeme'`, or derived from `os.urandom`
-  with a short seed in production settings.
-- **FastAPI debug mode**: `debug=True` in `FastAPI()` constructor in
-  production settings files.
-- **Starlette debug mode**: `debug=True` in `Starlette()` constructor in
-  production code paths.
+Read `references/python.md` for vulnerable-vs-safe snippets.
 
-Defer to `references/python.md` for vulnerable-vs-safe snippets.
+Detect these sink categories:
+
+- **Django DEBUG setting**: DEBUG flag set to True in production settings.
+- **Django SECRET_KEY**: SECRET_KEY set to development defaults or hardcoded
+  values.
+- **Django ALLOWED_HOSTS**: ALLOWED_HOSTS permissively configured.
+- **Flask debug mode**: debug flag enabled in production code paths.
+- **Flask secret_key**: secret_key set to common defaults or short strings.
+- **FastAPI/Starlette debug mode**: debug flag enabled in production
+  constructors.
 
 ### PHP
 
-- **Laravel APP_DEBUG**: `APP_DEBUG=true` in `.env` or config files
-  loaded in production, or set to true in config arrays.
-- **Laravel APP_KEY**: `APP_KEY` set to `base64:` prefix with a default
-  value, empty string, or common tutorial values.
-- **Laravel APP_ENV**: `APP_ENV=local` or `APP_ENV=development` in
-  production deployment environments.
-- **Symfony APP_ENV**: `APP_ENV=dev` in production `.env` files.
-- **Symfony APP_DEBUG**: `APP_DEBUG=1` in production environment.
-- **Symfony APP_SECRET**: `APP_SECRET` set to common defaults or empty.
-- **WordPress WP_DEBUG**: `WP_DEBUG` set to true in `wp-config.php` in
-  production deployments.
+Read `references/php.md` for vulnerable-vs-safe snippets.
 
-Defer to `references/php.md` for vulnerable-vs-safe snippets.
+Detect these sink categories:
+
+- **Laravel APP_DEBUG**: debug flag enabled in production environments.
+- **Laravel APP_KEY**: APP_KEY set to defaults or empty values.
+- **Laravel APP_ENV**: environment set to development values in production.
+- **Symfony APP_ENV and APP_DEBUG**: debug settings or dev environments in
+  production configuration.
+- **WordPress WP_DEBUG**: debug flag enabled in wp-config.php in production.
 
 ### JavaScript
 
-- **Express NODE_ENV**: `NODE_ENV` not set to `production` in deployment
-  configuration or conditionally set to a non-production value.
-- **Express error handler**: verbose error handler middleware that prints
-  stack traces to the client in production configuration.
-- **Next.js debug flags**: debug or development mode settings in
-  `next.config.js` used in production builds.
-- **Koa/Fastify debug mode**: debug flag or verbose logging enabled in
-  production configuration files.
+Read `references/javascript.md` for vulnerable-vs-safe snippets.
 
-Defer to `references/javascript.md` for vulnerable-vs-safe snippets.
+Detect these sink categories:
+
+- **Express NODE_ENV**: NODE_ENV not set to production in deployment.
+- **Express error handler**: verbose error handlers exposing stack traces.
+- **Next.js debug flags**: debug mode settings in configuration used in
+  production.
+- **Koa/Fastify debug mode**: debug flag or verbose logging in production
+  configuration.
 
 ### TypeScript
 
-- **NestJS ConfigModule**: `debug: true` in ConfigModule configuration
-  used in production code paths.
-- **NestJS default secrets**: `JWT_SECRET`, session secrets, or API keys
-  set to default or hardcoded strings instead of environment variables.
-- **TypeScript Express patterns**: same `NODE_ENV` and error handler
-  patterns as JavaScript Express.
-- **TypeScript Next.js patterns**: debug flags in `next.config.js` or
-  `.ts`/`.tsx` config files used in production builds.
-- **Hardcoded config values**: development configuration values
-  (localhost, debug flags, test credentials) included in production
-  TypeScript config files.
+Read `references/typescript.md` for vulnerable-vs-safe snippets.
 
-Defer to `references/typescript.md` for vulnerable-vs-safe snippets.
+Detect these sink categories:
+
+- **NestJS ConfigModule**: debug flag enabled in production code paths.
+- **NestJS default secrets**: hardcoded secret values instead of environment
+  variables.
+- **Express patterns (typed)**: same NODE_ENV and error handler patterns as
+  JavaScript.
+- **Next.js patterns (typed)**: debug flags in config files used in
+  production.
+- **Hardcoded config values**: development values in production TypeScript
+  config files.
 
 ## Evidence requirements
 
@@ -163,33 +154,13 @@ field list and validator behavior.
 
 ## Remediation guidance for the scanner
 
-Per D19, write `meta.remediation` inline based on the actual framework
-observed in the code. Examples of good remediation strings:
+Write `meta.remediation` inline based on the actual library
+observed in the code. Use the safe patterns from the per-language
+reference files to write specific, actionable remediation.
 
-- **Django DEBUG**: `Set DEBUG = False in production settings. Load this
-  setting from an environment variable: DEBUG = os.getenv('DEBUG',
-  'False').lower() == 'true'.`
-- **Django SECRET_KEY**: `Generate a unique SECRET_KEY with
-  django.core.management.utils.get_random_secret_key() and store it in
-  the SECRET_KEY environment variable. Load it with SECRET_KEY =
-  os.getenv('SECRET_KEY').`
-- **Flask debug mode**: `Set app.debug = False and load the setting from
-  the FLASK_ENV environment variable. Ensure the production deployment
-  does not set FLASK_ENV=development.`
-- **Laravel APP_DEBUG**: `Set APP_DEBUG=false in the production .env
-  file. Never hardcode debug flags in config arrays for production
-  deployments.`
-- **Laravel APP_KEY**: `Generate a unique APP_KEY with php artisan
-  key:generate and store it in the production .env file. Never use or
-  rely on the base64: default.`
-- **Express NODE_ENV**: `Set NODE_ENV=production in the deployment
-  environment (container, systemd, or CI/CD). This disables verbose error
-  pages and enables template caching.`
-- **WordPress WP_DEBUG**: `Set WP_DEBUG to false in wp-config.php for
-  production deployments. Do not enable debug logging in production.`
-
-Keep it two to four sentences. Vague guidance ("disable debug mode") is
-worse than no guidance.
+- Name the library and its specific safe API
+- Show the exact placeholder style or query builder method
+- Keep it two to four sentences
 
 ## Common false positives
 

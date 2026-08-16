@@ -37,7 +37,6 @@ Authoritative payload shape:
 | Default severity | `critical` |
 | Parent label (dedup) | `JWT` |
 
-Source: `docs/roadmap/TAL-148/taxonomy.md` T3 row 27.
 
 ## Detection matrix
 
@@ -54,7 +53,7 @@ Source: `docs/roadmap/TAL-148/taxonomy.md` T3 row 27.
   fetcher that follows the token's `jku` URL without an
   allowlist.
 
-Defer to `references/python.md` for vulnerable-vs-safe snippets.
+Read `references/python.md` for vulnerable-vs-safe code patterns.
 
 ### PHP
 
@@ -68,7 +67,7 @@ Defer to `references/python.md` for vulnerable-vs-safe snippets.
   from the token's `x5u` header without verifying the URL
   against an allowlist.
 
-Defer to `references/php.md` for vulnerable-vs-safe snippets.
+Read `references/php.md` for vulnerable-vs-safe code patterns.
 
 ### JavaScript
 
@@ -83,7 +82,7 @@ Defer to `references/php.md` for vulnerable-vs-safe snippets.
   verification key based on unverified token header claims
   without restricting the key source.
 
-Defer to `references/javascript.md` for vulnerable-vs-safe
+Read `references/javascript.md` for vulnerable-vs-safe code
 snippets.
 
 ### TypeScript
@@ -93,7 +92,7 @@ snippets.
   do not restrict the URL source.
 - **Embedded JWK import**: same as JavaScript.
 
-Defer to `references/typescript.md` for vulnerable-vs-safe
+Read `references/typescript.md` for vulnerable-vs-safe code
 snippets.
 
 ## Evidence requirements
@@ -138,7 +137,7 @@ Emit one JSON object per finding with these fixed fields for
   "meta": {
     "title": "<short title, e.g. 'JWKS URL sourced from token jku header'>",
     "owasp_name": "Security Misconfiguration",
-    "remediation": "<per-finding, per D19>",
+    "remediation": "<per-finding>",
     "code_snippet": "<2-6 lines of source>",
     "taint_source": "<header claim: jku, x5u, or jwk>",
     "reasoning": "<one sentence explaining the defect>"
@@ -151,7 +150,7 @@ the full field list and validator behavior.
 
 ## Remediation guidance for the scanner
 
-Per D19, write `meta.remediation` inline based on the actual
+Write `meta.remediation` inline based on the actual
 library observed in the code. Examples:
 
 - **PyJWKClient with hardcoded URL**: `Pin the JWKS URL in

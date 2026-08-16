@@ -33,7 +33,6 @@ Authoritative payload shape:
 | Default severity | `medium` |
 | Parent label (dedup) | `Header Injection` |
 
-Source: `docs/roadmap/TAL-148/taxonomy.md` T3 row for header injection.
 
 ## Detection matrix
 
@@ -50,7 +49,7 @@ Source: `docs/roadmap/TAL-148/taxonomy.md` T3 row for header injection.
 - **Location header**: `response['Location'] = user_url` or
   `response.redirect(user_url)`.
 
-Defer to `references/python.md` for vulnerable-vs-safe snippets.
+Read `references/python.md` for vulnerable-vs-safe code patterns.
 
 ### PHP
 
@@ -61,7 +60,7 @@ Defer to `references/python.md` for vulnerable-vs-safe snippets.
 - **header("Refresh")**: `header("Refresh: 5; url=" . $url)` with
   user-controlled URL.
 
-Defer to `references/php.md` for vulnerable-vs-safe snippets.
+Read `references/php.md` for vulnerable-vs-safe code patterns.
 
 ### JavaScript
 
@@ -73,14 +72,14 @@ Defer to `references/php.md` for vulnerable-vs-safe snippets.
   userInput})`.
 - **Set-Cookie**: `res.setHeader('Set-Cookie', userInput)`.
 
-Defer to `references/javascript.md` for vulnerable-vs-safe snippets.
+Read `references/javascript.md` for vulnerable-vs-safe code patterns.
 
 ### TypeScript
 
 - Same sinks as JavaScript apply on the Node.js runtime.
 - Express types and middleware for TypeScript projects.
 
-Defer to `references/typescript.md` for vulnerable-vs-safe snippets.
+Read `references/typescript.md` for vulnerable-vs-safe code patterns.
 
 ## Evidence requirements
 
@@ -121,7 +120,7 @@ Emit one JSON object per finding with these fixed fields for
   "meta": {
     "title": "<short human title, e.g. 'Header injection via user URL in redirect'>",
     "owasp_name": "Injection",
-    "remediation": "<per-finding, per D19; see remediation guidance below>",
+    "remediation": "<per-finding; see remediation guidance below>",
     "code_snippet": "<2-6 lines of source containing the sink>",
     "taint_source": "<request parameter or upstream variable, when traceable>",
     "reasoning": "<one sentence explaining why newlines in the value enable the defect>"
@@ -134,7 +133,7 @@ field list and validator behavior.
 
 ## Remediation guidance for the scanner
 
-Per D19, write `meta.remediation` inline based on the actual framework or
+Write `meta.remediation` inline based on the actual framework or
 library observed in the code. Examples of good remediation strings:
 
 - **Django**: `Use Django's built-in redirect helpers which validate URLs:

@@ -38,7 +38,6 @@ Authoritative payload shape:
 | Default severity | `critical` |
 | Parent label (dedup) | `JWT` |
 
-Source: `docs/roadmap/TAL-148/taxonomy.md` T3 row 26.
 
 ## Detection matrix
 
@@ -54,7 +53,7 @@ Source: `docs/roadmap/TAL-148/taxonomy.md` T3 row 26.
   the parameter but legacy code may suppress the warning.
 - **python-jose mixed algorithms**: same pattern as PyJWT.
 
-Defer to `references/python.md` for vulnerable-vs-safe snippets.
+Read `references/python.md` for vulnerable-vs-safe code patterns.
 
 ### PHP
 
@@ -67,7 +66,7 @@ Defer to `references/python.md` for vulnerable-vs-safe snippets.
   verification algorithm instead of enforcing a server-side
   algorithm.
 
-Defer to `references/php.md` for vulnerable-vs-safe snippets.
+Read `references/php.md` for vulnerable-vs-safe code patterns.
 
 ### JavaScript
 
@@ -82,7 +81,7 @@ Defer to `references/php.md` for vulnerable-vs-safe snippets.
   an `algorithms` option. The `jose` library restricts by key
   type by default, but explicit restriction is safer.
 
-Defer to `references/javascript.md` for vulnerable-vs-safe
+Read `references/javascript.md` for vulnerable-vs-safe code
 snippets.
 
 ### TypeScript
@@ -92,7 +91,7 @@ snippets.
   as optional, so omitting it compiles without error.
 - **jose missing algorithms**: same as JavaScript.
 
-Defer to `references/typescript.md` for vulnerable-vs-safe
+Read `references/typescript.md` for vulnerable-vs-safe code
 snippets.
 
 ## Evidence requirements
@@ -136,7 +135,7 @@ Emit one JSON object per finding with these fixed fields for
   "meta": {
     "title": "<short title, e.g. 'JWT accepts both HS256 and RS256'>",
     "owasp_name": "Security Misconfiguration",
-    "remediation": "<per-finding, per D19>",
+    "remediation": "<per-finding>",
     "code_snippet": "<2-6 lines of source>",
     "taint_source": "<key type info, when visible>",
     "reasoning": "<one sentence explaining the defect>"
@@ -149,7 +148,7 @@ the full field list and validator behavior.
 
 ## Remediation guidance for the scanner
 
-Per D19, write `meta.remediation` inline based on the actual
+Write `meta.remediation` inline based on the actual
 library observed in the code. Examples:
 
 - **PyJWT**: `Restrict the algorithms list to a single family:

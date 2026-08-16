@@ -34,53 +34,48 @@ Authoritative payload shape:
 | Default severity | `high` |
 | Parent label (dedup) | `Prototype Pollution` |
 
-Source: `docs/roadmap/TAL-148/taxonomy.md` T3 row 28.
 
 ## Detection matrix
 
 ### JavaScript
 
-- **Recursive merge with user input**: `_.merge(target, req.body)`,
-  `$.extend(true, {}, req.query)`, or custom recursive merge functions
-  that traverse and merge user-supplied objects without filtering
-  `__proto__` or `constructor.prototype` keys.
-- **Object.assign on shared object**: `Object.assign(sharedConfig,
-  userInput)` where the target is a module-level or shared state
-  object reachable by multiple request handlers.
-- **Deep clone with prototype traversal**: Libraries or custom code
-  that use `JSON.parse` on user input and recursively merge the
-  result into an existing object.
-- **Query string parsing**: `qs.parse(queryString, {allowPrototypes:
-  true})` or equivalent parsers that allow `__proto__`, `constructor`,
-  or `prototype` keys in the parsed result.
-- **lodash merge variants**: `_.merge()`, `_.set()`, `_.defaultsDeep()`
-  with user input without prototype filtering.
+Read `references/javascript.md` for vulnerable-vs-safe snippets.
 
-Defer to `references/javascript.md` for vulnerable-vs-safe snippets.
+Detect these sink categories:
+
+- **Recursive merge operations**: lodash merge variants, jQuery extend with
+  deep flag, or custom merge functions that traverse nested objects
+  without filtering prototype-chain keys.
+- **Object mutation on shared state**: assigning user-supplied objects to
+  module-level or request-shared variables using Object.assign or direct
+  property assignment.
+- **Deep clone libraries**: JSON parsing followed by recursive merge of
+  user-supplied data into existing objects.
+- **Query string parsing**: parsing URL parameters or request bodies with
+  parsers that permit __proto__ or constructor keys in the result.
 
 ### TypeScript
 
-- Same JavaScript sinks apply on the Node.js runtime and in
-  browser-shared state management (e.g., Vuex, Redux stores
-  initialized from user data).
-- **Type-unsafety in recursion**: TypeScript type guards do not
-  protect against `__proto__` injection; a parameter typed as
-  `Partial<Config>` can still carry a `__proto__` key.
+Read `references/typescript.md` for vulnerable-vs-safe snippets.
 
-Defer to `references/typescript.md` for vulnerable-vs-safe snippets.
+Detect these sink categories:
+
+- **Same JavaScript sinks apply**: Node.js runtime and browser state
+  management patterns are vulnerable regardless of TypeScript typing.
+- **Type-guarded parameters**: parameters typed as Partial objects offer no
+  runtime protection against __proto__ injection.
 
 ### Python
 
-Prototype pollution is not applicable to Python. Python uses
-attribute dictionaries (`__dict__`) for object state, not prototype
-chains. Assignment to `__dict__` keys does not affect other object
-instances. Refer to `references/python.md` for explanation.
+Prototype pollution is not applicable to Python. Read `references/python.md`
+for explanation. Python uses attribute dictionaries for object state, not
+prototype chains. Assignment does not affect other instances.
 
 ### PHP
 
-Prototype pollution is not applicable to PHP. PHP does not have
-prototype chains; objects are instances of classes with fixed
-property sets. Refer to `references/php.md` for explanation.
+Prototype pollution is not applicable to PHP. Read `references/php.md` for
+explanation. PHP does not have prototype chains; objects are instances of
+classes with fixed property sets.
 
 ## Evidence requirements
 
@@ -130,7 +125,7 @@ Emit one JSON object per finding with these fixed fields for
   "meta": {
     "title": "<short human title, e.g. 'Prototype pollution via request merge'>",
     "owasp_name": "Injection",
-    "remediation": "<per-finding, per D19; see remediation guidance below>",
+    "remediation": "<per-finding; see remediation guidance below>",
     "code_snippet": "<2-6 lines of source containing the sink>",
     "taint_source": "<request parameter or upstream variable, when traceable>",
     "reasoning": "<one sentence explaining the defect at this location>"
@@ -143,29 +138,13 @@ full field list and validator behavior.
 
 ## Remediation guidance for the scanner
 
-Write `meta.remediation` inline based on the actual library observed in
-the code. Examples of good remediation strings:
+Write `meta.remediation` inline based on the actual library
+observed in the code. Use the safe patterns from the per-language
+reference files to write specific, actionable remediation.
 
-- **lodash (v4.17.21+)**: `The installed version of lodash has
-  prototype pollution protection. Upgrade to the latest release if
-  you are below 4.17.21. If upgrading is not an option, add an
-  input-validation guard that rejects any key matching __proto__,
-  constructor, or prototype before the merge.`
-- **Custom merge function**: `Filter the input object before merging:
-  filter out any keys equal to __proto__, constructor, or prototype.
-  Create the target with Object.create(null) to disable the
-  prototype chain entirely, or use a shallow copy (const result =
-  {...existing, ...filtered};) instead of recursive merge.`
-- **Object.assign on shared state**: `Avoid mutating shared
-  module-level state with user input. Create a new object per
-  request: const config = Object.assign({}, defaults, userInput);.
-  Better, validate userInput and only assign known-safe keys.`
-- **Query parsing**: `Use a query parser that disables prototype
-  pollution: qs.parse(qs, {allowPrototypes: false}). Or validate
-  after parsing to remove __proto__ and constructor keys.`
-
-Keep it two to four sentences. Vague guidance ("filter user input")
-is worse than no guidance.
+- Name the library and its specific safe API
+- Show the exact placeholder style or query builder method
+- Keep it two to four sentences
 
 ## Common false positives
 

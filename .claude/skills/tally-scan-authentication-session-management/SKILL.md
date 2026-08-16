@@ -36,7 +36,6 @@ Authoritative payload shape:
 | Default severity | `high` |
 | Parent label (dedup) | `BrokenSession` |
 
-Source: `docs/roadmap/TAL-148/taxonomy.md` T3 row 23.
 
 ## Detection matrix
 
@@ -61,7 +60,7 @@ Source: `docs/roadmap/TAL-148/taxonomy.md` T3 row 23.
   to an excessively large value (over 86400) or absent (Django
   defaults to two weeks).
 
-Defer to `references/python.md` for vulnerable-vs-safe snippets.
+Read `references/python.md` for vulnerable-vs-safe code patterns.
 
 ### PHP
 
@@ -81,7 +80,7 @@ Defer to `references/python.md` for vulnerable-vs-safe snippets.
   `session.use_only_cookies = 0` in configuration, which appends
   the session ID to URLs.
 
-Defer to `references/php.md` for vulnerable-vs-safe snippets.
+Read `references/php.md` for vulnerable-vs-safe code patterns.
 
 ### JavaScript
 
@@ -100,7 +99,7 @@ Defer to `references/php.md` for vulnerable-vs-safe snippets.
   adapter (connect-redis, connect-mongo, etc.) in production
   code. MemoryStore leaks memory and loses sessions on restart.
 
-Defer to `references/javascript.md` for vulnerable-vs-safe
+Read `references/javascript.md` for vulnerable-vs-safe code
 snippets.
 
 ### TypeScript
@@ -115,7 +114,7 @@ snippets.
 - **Insecure cookie flags in NestJS**: `NestExpressApplication`
   session configuration missing secure cookie options.
 
-Defer to `references/typescript.md` for vulnerable-vs-safe
+Read `references/typescript.md` for vulnerable-vs-safe code
 snippets.
 
 ## Evidence requirements
@@ -159,7 +158,7 @@ Emit one JSON object per finding with these fixed fields for
   "meta": {
     "title": "<short title, e.g. 'Session fixation in login handler'>",
     "owasp_name": "Authentication Failures",
-    "remediation": "<per-finding, per D19>",
+    "remediation": "<per-finding>",
     "code_snippet": "<2-6 lines of source>",
     "taint_source": "<auth context, when traceable>",
     "reasoning": "<one sentence explaining the defect>"
@@ -172,7 +171,7 @@ the full field list and validator behavior.
 
 ## Remediation guidance for the scanner
 
-Per D19, write `meta.remediation` inline based on the actual
+Write `meta.remediation` inline based on the actual
 framework observed in the code. Examples of good remediation
 strings:
 

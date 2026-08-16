@@ -35,7 +35,6 @@ Authoritative payload shape:
 | Default severity | `medium` |
 | Parent label (dedup) | `File Permissions` |
 
-Source: `docs/roadmap/TAL-148/taxonomy.md`. CWE-276 (Incorrect Default
 Permissions) and CWE-732 (Incorrect Permission Assignment) are the primary
 weaknesses for file permission misconfigurations.
 
@@ -59,7 +58,7 @@ weaknesses for file permission misconfigurations.
   without explicit restrictive mode, leaving it world-readable on some
   systems; file persists on disk after process exit.
 
-Defer to `references/python.md` for vulnerable-vs-safe snippets.
+Read `references/python.md` for vulnerable-vs-safe code patterns.
 
 ### PHP
 
@@ -75,7 +74,7 @@ Defer to `references/python.md` for vulnerable-vs-safe snippets.
   writes `.env`, database credentials, or API keys without explicitly
   setting restrictive file permissions.
 
-Defer to `references/php.md` for vulnerable-vs-safe snippets.
+Read `references/php.md` for vulnerable-vs-safe code patterns.
 
 ### JavaScript
 
@@ -91,7 +90,7 @@ Defer to `references/php.md` for vulnerable-vs-safe snippets.
   `fs.promises.writeFile()` without setting the mode option to restrict
   access.
 
-Defer to `references/javascript.md` for vulnerable-vs-safe snippets.
+Read `references/javascript.md` for vulnerable-vs-safe code patterns.
 
 ### TypeScript
 
@@ -105,7 +104,7 @@ Defer to `references/javascript.md` for vulnerable-vs-safe snippets.
   tokens, or secrets without setting restrictive file permissions via the
   mode option.
 
-Defer to `references/typescript.md` for vulnerable-vs-safe snippets.
+Read `references/typescript.md` for vulnerable-vs-safe code patterns.
 
 ## Evidence requirements
 
@@ -167,7 +166,7 @@ field list and validator behavior.
 
 ## Remediation guidance for the scanner
 
-Per D19, write `meta.remediation` inline based on the actual operation
+Write `meta.remediation` inline based on the actual operation
 observed in the code. Examples of good remediation strings:
 
 - **Python chmod**: `Replace os.chmod(path, 0o777) with os.chmod(path,

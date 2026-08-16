@@ -36,7 +36,6 @@ Authoritative payload shape:
 | Default severity | `high` |
 | Parent label (dedup) | `WeakPasswordHash` |
 
-Source: `docs/roadmap/TAL-148/taxonomy.md` T3 row 5.
 
 ## Detection matrix
 
@@ -56,7 +55,7 @@ Source: `docs/roadmap/TAL-148/taxonomy.md` T3 row 5.
   `passlib.hash.des_crypt`, `passlib.hash.sha256_crypt` with
   low rounds.
 
-Defer to `references/python.md` for vulnerable-vs-safe snippets.
+Read `references/python.md` for vulnerable-vs-safe code patterns.
 
 ### PHP
 
@@ -72,7 +71,7 @@ Defer to `references/python.md` for vulnerable-vs-safe snippets.
 - **Missing password_hash**: custom hashing instead of
   `password_hash()` / `password_verify()`.
 
-Defer to `references/php.md` for vulnerable-vs-safe snippets.
+Read `references/php.md` for vulnerable-vs-safe code patterns.
 
 ### JavaScript
 
@@ -85,7 +84,7 @@ Defer to `references/php.md` for vulnerable-vs-safe snippets.
 - **Low PBKDF2 iterations**: `crypto.pbkdf2Sync(password,
   salt, N, ...)` where N < 100000.
 
-Defer to `references/javascript.md` for vulnerable-vs-safe
+Read `references/javascript.md` for vulnerable-vs-safe code
 snippets.
 
 ### TypeScript
@@ -95,7 +94,7 @@ Same Node.js sinks as JavaScript apply. Additionally:
 - Typed password-handling functions that accept a `string`
   password and return a `string` hash via a fast hash function.
 
-Defer to `references/typescript.md` for vulnerable-vs-safe
+Read `references/typescript.md` for vulnerable-vs-safe code
 snippets.
 
 ## Evidence requirements
@@ -139,7 +138,7 @@ Emit one JSON object per finding with these fixed fields for
     "title": "<short human title, e.g. 'Weak password hashing
     via MD5'>",
     "owasp_name": "Cryptographic Failures",
-    "remediation": "<per-finding, per D19; see remediation
+    "remediation": "<per-finding; see remediation
     guidance below>",
     "code_snippet": "<2-6 lines of source containing the sink>",
     "taint_source": "<request parameter or upstream variable,

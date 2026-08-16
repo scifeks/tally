@@ -34,7 +34,6 @@ Authoritative payload shape:
 | Default severity | `medium` |
 | Parent label (dedup) | `InsufficientLogging` |
 
-Source: `docs/roadmap/TAL-148/taxonomy.md` T3 row.
 
 ## Detection matrix
 
@@ -59,7 +58,7 @@ Source: `docs/roadmap/TAL-148/taxonomy.md` T3 row.
   except: pass` where the operation is auth, permission, rate limit,
   or signature-related and no logging occurs.
 
-Defer to `references/python.md` for vulnerable-vs-safe snippets.
+Read `references/python.md` for vulnerable-vs-safe code patterns.
 
 ### PHP
 
@@ -78,7 +77,7 @@ Defer to `references/python.md` for vulnerable-vs-safe snippets.
   (AuthException $e) { return $next($request); }` without logging the
   auth failure before proceeding.
 
-Defer to `references/php.md` for vulnerable-vs-safe snippets.
+Read `references/php.md` for vulnerable-vs-safe code patterns.
 
 ### JavaScript
 
@@ -98,7 +97,7 @@ Defer to `references/php.md` for vulnerable-vs-safe snippets.
   fails-open (allows requests through) when Redis/backend is
   unavailable, with no logging of the degraded state.
 
-Defer to `references/javascript.md` for vulnerable-vs-safe snippets.
+Read `references/javascript.md` for vulnerable-vs-safe code patterns.
 
 ### TypeScript
 
@@ -117,7 +116,7 @@ Defer to `references/javascript.md` for vulnerable-vs-safe snippets.
 - **Fastify hook without logging**: An `onRequest` or `onPreHandler`
   hook performs auth validation but does not log failures or successes.
 
-Defer to `references/typescript.md` for vulnerable-vs-safe snippets.
+Read `references/typescript.md` for vulnerable-vs-safe code patterns.
 
 ## Evidence requirements
 
@@ -161,7 +160,7 @@ Emit one JSON object per finding with these fixed fields for
     "title": "<short human title, e.g. 'Login handler does not log
     authentication attempts'>",
     "owasp_name": "Security Logging and Monitoring Failures",
-    "remediation": "<per-finding, per D19; see remediation guidance
+    "remediation": "<per-finding; see remediation guidance
     below>",
     "code_snippet": "<2-6 lines of source showing the operation and
     absence of logging>",
@@ -176,7 +175,7 @@ full field list and validator behavior.
 
 ## Remediation guidance for the scanner
 
-Per D19, write `meta.remediation` inline based on the actual framework
+Write `meta.remediation` inline based on the actual framework
 observed in the code. Examples of good remediation strings:
 
 - **Python Django auth middleware**: `Log all authentication attempts

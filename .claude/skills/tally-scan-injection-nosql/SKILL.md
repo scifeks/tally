@@ -33,7 +33,6 @@ Authoritative payload shape:
 | Default severity | `high` |
 | Parent label (dedup) | `NoSQLInjection` |
 
-Source: `docs/roadmap/TAL-148/taxonomy.md` T3 row 8.
 
 ## Detection matrix
 
@@ -49,7 +48,7 @@ Source: `docs/roadmap/TAL-148/taxonomy.md` T3 row 8.
 - **$where injection**: `collection.find({"$where": f"this.x == 
   '{user_input}'"})` where user input reaches JavaScript evaluation.
 
-Defer to `references/python.md` for vulnerable-vs-safe snippets.
+Read `references/python.md` for vulnerable-vs-safe code patterns.
 
 ### PHP
 
@@ -62,7 +61,7 @@ Defer to `references/python.md` for vulnerable-vs-safe snippets.
 - **$where injection**: `$collection->find(["$where" => 
   "this.x == '$userInput'"])` where user input reaches JavaScript eval.
 
-Defer to `references/php.md` for vulnerable-vs-safe snippets.
+Read `references/php.md` for vulnerable-vs-safe code patterns.
 
 ### JavaScript
 
@@ -76,7 +75,7 @@ Defer to `references/php.md` for vulnerable-vs-safe snippets.
 - **$where injection**: `collection.find({$where: 'this.x == "' + 
   userInput + '"'})` where user input reaches JavaScript code.
 
-Defer to `references/javascript.md` for vulnerable-vs-safe snippets.
+Read `references/javascript.md` for vulnerable-vs-safe code patterns.
 
 ### TypeScript
 
@@ -89,7 +88,7 @@ Defer to `references/javascript.md` for vulnerable-vs-safe snippets.
 - **$where injection**: same patterns as JavaScript; TypeScript provides
   no additional safety at runtime.
 
-Defer to `references/typescript.md` for vulnerable-vs-safe snippets.
+Read `references/typescript.md` for vulnerable-vs-safe code patterns.
 
 ## Evidence requirements
 

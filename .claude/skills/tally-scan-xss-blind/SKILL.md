@@ -38,7 +38,6 @@ Authoritative payload shape:
 | Default severity | `high` |
 | Parent label (dedup) | `XSS` |
 
-Source: `docs/roadmap/TAL-148/taxonomy.md` T3 row 3.
 
 ## Detection matrix
 
@@ -66,7 +65,7 @@ to accept public input.
   by WeasyPrint or xhtml2pdf that include user-submitted fields
   without escaping.
 
-Defer to `references/python.md` for vulnerable-vs-safe snippets.
+Read `references/python.md` for vulnerable-vs-safe code patterns.
 
 ### PHP
 
@@ -84,7 +83,7 @@ Defer to `references/python.md` for vulnerable-vs-safe snippets.
   'body' => $contact->message], ...)` where the email Blade
   template uses `{!! $body !!}`.
 
-Defer to `references/php.md` for vulnerable-vs-safe snippets.
+Read `references/php.md` for vulnerable-vs-safe code patterns.
 
 ### JavaScript
 
@@ -102,7 +101,7 @@ Defer to `references/php.md` for vulnerable-vs-safe snippets.
   that interpolates user-submitted data without escaping:
   `html: `<p>${ticket.body}</p>``
 
-Defer to `references/javascript.md` for vulnerable-vs-safe
+Read `references/javascript.md` for vulnerable-vs-safe code
 snippets.
 
 ### TypeScript
@@ -113,7 +112,7 @@ snippets.
 - **React admin dashboard (TSX)**: same as JavaScript React
   pattern in an admin-facing component.
 
-Defer to `references/typescript.md` for vulnerable-vs-safe
+Read `references/typescript.md` for vulnerable-vs-safe code
 snippets.
 
 ## Evidence requirements
@@ -162,7 +161,7 @@ the user-submitted data source, and what an attacker can do>",
     "title": "<short title, e.g. 'Blind XSS in admin ticket
 viewer'>",
     "owasp_name": "Injection",
-    "remediation": "<per-finding, per D19; see guidance below>",
+    "remediation": "<per-finding; see guidance below>",
     "code_snippet": "<2-6 lines of source>",
     "taint_source": "<model or table storing user data, when
 traceable>",
@@ -176,7 +175,7 @@ the full field list and validator behavior.
 
 ## Remediation guidance for the scanner
 
-Per D19, write `meta.remediation` inline based on the actual
+Write `meta.remediation` inline based on the actual
 library or framework observed. Examples:
 
 - **Django admin template**: `Remove the |safe filter from the

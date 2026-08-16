@@ -35,7 +35,6 @@ Authoritative payload shape:
 | Default severity | `high` |
 | Parent label (dedup) | `AuthzBypass` |
 
-Source: `docs/roadmap/TAL-148/taxonomy.md` T3 row 12.
 
 ## Detection matrix
 
@@ -56,7 +55,7 @@ Source: `docs/roadmap/TAL-148/taxonomy.md` T3 row 12.
 - **Flask route without @login_required**: state-changing route
   registered without `@login_required` decorator from Flask-Login.
 
-Defer to `references/python.md` for vulnerable-vs-safe snippets.
+Read `references/python.md` for vulnerable-vs-safe code patterns.
 
 ### PHP
 
@@ -71,7 +70,7 @@ Defer to `references/python.md` for vulnerable-vs-safe snippets.
   lacking `session_start()` and a conditional auth check before
   processing state changes.
 
-Defer to `references/php.md` for vulnerable-vs-safe snippets.
+Read `references/php.md` for vulnerable-vs-safe code patterns.
 
 ### JavaScript
 
@@ -83,7 +82,7 @@ Defer to `references/php.md` for vulnerable-vs-safe snippets.
 - **Koa route without auth middleware**: handler registered without
   a preceding auth middleware in the middleware chain.
 
-Defer to `references/javascript.md` for vulnerable-vs-safe snippets.
+Read `references/javascript.md` for vulnerable-vs-safe code patterns.
 
 ### TypeScript
 
@@ -96,7 +95,7 @@ Defer to `references/javascript.md` for vulnerable-vs-safe snippets.
 - **Fastify route without preHandler**: handler registered without
   an auth `preHandler` hook or security scheme.
 
-Defer to `references/typescript.md` for vulnerable-vs-safe snippets.
+Read `references/typescript.md` for vulnerable-vs-safe code patterns.
 
 ## Evidence requirements
 
@@ -141,7 +140,7 @@ data or action it exposes, and how an attacker would exploit it>",
     "title": "<short human title, e.g. 'Unprotected endpoint \
 allows user data update'>",
     "owasp_name": "Broken Access Control",
-    "remediation": "<per-finding, per D19; see remediation \
+    "remediation": "<per-finding; see remediation \
 guidance below>",
     "code_snippet": "<2-6 lines of source containing the endpoint \
 definition>",
@@ -156,7 +155,7 @@ the full field list and validator behavior.
 
 ## Remediation guidance for the scanner
 
-Per D19, write `meta.remediation` inline based on the actual
+Write `meta.remediation` inline based on the actual
 framework observed in the code. Examples of good remediation
 strings:
 

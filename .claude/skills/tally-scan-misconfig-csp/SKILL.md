@@ -31,60 +31,61 @@ Authoritative payload shape:
 | Default severity | `medium` |
 | Parent label (dedup) | `CSPMisconfig` |
 
-Source: `docs/roadmap/TAL-148/taxonomy.md` T3 row 28, CWE override per
-decision D27.
-
 ## Detection matrix
 
 ### Python
 
-- **Django CSP middleware disabled**: `MIDDLEWARE` list does not include
-  `'csp.middleware.CSPMiddleware'` or similar CSP middleware module.
-- **Django CSP permissive**: `CSP_DEFAULT_SRC` set to `('*',)` or contains
-  `'unsafe-inline'` or `'unsafe-eval'` without strict fallback sources.
-- **Flask-Talisman disabled**: `Talisman` initialized with
-  `content_security_policy=False`.
-- **Flask-Talisman permissive**: `content_security_policy` dict contains
-  `'default-src': '*'` or includes `'unsafe-inline'` or `'unsafe-eval'`.
-- **Starlette middleware missing**: middleware stack does not include a CSP
-  header injector, or CSP header is empty or contains wildcards.
+Read `references/python.md` for vulnerable-vs-safe snippets.
 
-Defer to `references/python.md` for vulnerable-vs-safe snippets.
+Detect these sink categories:
+
+- **Django CSP middleware disabled**: CSP middleware not in the MIDDLEWARE
+  list.
+- **Django CSP permissive**: CSP_DEFAULT_SRC with wildcard or unsafe
+  directives.
+- **Flask-Talisman disabled**: Talisman initialized with CSP disabled.
+- **Flask-Talisman permissive**: content_security_policy dict with wildcard or
+  unsafe directives.
+- **Starlette middleware missing**: CSP middleware absent from the middleware
+  stack.
 
 ### PHP
 
-- **Laravel middleware missing**: security middleware does not set a
-  restrictive Content-Security-Policy header in the response.
-- **Laravel header permissive**: `header('Content-Security-Policy: ...')` call
-  with `default-src *` or containing `unsafe-inline` or `unsafe-eval`.
-- **Symfony NelmioSecurityBundle**: CSP config with `default_src: ['*']` or
-  containing unsafe directives.
-- **Manual header() permissive**: `header('Content-Security-Policy: ...')` with
-  `*` in default-src or containing `unsafe-inline` or `unsafe-eval`.
+Read `references/php.md` for vulnerable-vs-safe snippets.
 
-Defer to `references/php.md` for vulnerable-vs-safe snippets.
+Detect these sink categories:
+
+- **Laravel middleware missing**: security middleware absent or not setting CSP
+  header.
+- **Laravel header permissive**: Content-Security-Policy header with wildcard
+  or unsafe directives.
+- **Symfony NelmioSecurityBundle**: CSP config with permissive directives.
+- **Manual header() permissive**: header calls setting wildcard or unsafe CSP
+  directives.
 
 ### JavaScript
 
-- **Express helmet disabled**: `contentSecurityPolicy: false` in helmet config.
-- **Express helmet permissive**: helmet CSP config with `defaultSrc: ['*']` or
-  containing `'unsafe-inline'` or `'unsafe-eval'`.
-- **Koa helmet missing**: no CSP middleware in the middleware stack, or CSP
-  header is empty.
-- **Fastify helmet disabled**: `@fastify/helmet` registered with
-  `contentSecurityPolicy: false`.
+Read `references/javascript.md` for vulnerable-vs-safe snippets.
 
-Defer to `references/javascript.md` for vulnerable-vs-safe snippets.
+Detect these sink categories:
+
+- **Express helmet disabled**: contentSecurityPolicy set to false in config.
+- **Express helmet permissive**: CSP config with wildcard or unsafe directives.
+- **Koa helmet missing**: no CSP middleware or empty CSP header.
+- **Fastify helmet disabled**: @fastify/helmet with CSP disabled.
 
 ### TypeScript
 
-- **Express helmet permissive**: same as JavaScript patterns above.
-- **NestJS helmet permissive**: helmet integration with permissive CSP config.
-- **Koa with TypeScript**: same as JavaScript Koa patterns.
-- **Custom middleware permissive**: custom middleware setting CSP header with
-  `default-src *` or containing `unsafe-inline` or `unsafe-eval`.
+Read `references/typescript.md` for vulnerable-vs-safe snippets.
 
-Defer to `references/typescript.md` for vulnerable-vs-safe snippets.
+Detect these sink categories:
+
+- **Express helmet permissive**: same as JavaScript patterns with type
+  annotations.
+- **NestJS helmet permissive**: helm integration with permissive config.
+- **Koa with TypeScript**: same as JavaScript patterns.
+- **Custom middleware permissive**: middleware setting wildcard or unsafe CSP
+  directives.
 
 ## Evidence requirements
 
@@ -125,7 +126,7 @@ Emit one JSON object per finding with these fixed fields for `misconfig.csp`:
   "meta": {
     "title": "<short human title, e.g. 'CSP default-src set to wildcard'>",
     "owasp_name": "Security Misconfiguration",
-    "remediation": "<per-finding, per D19; see remediation guidance
+    "remediation": "<per-finding; see remediation guidance
     below>",
     "code_snippet": "<2-6 lines of source containing the configuration
     or middleware>",
@@ -142,37 +143,13 @@ field list and validator behavior.
 
 ## Remediation guidance for the scanner
 
-Per D19, write `meta.remediation` inline based on the actual framework or
-configuration observed in the code. Examples of good remediation strings:
+Write `meta.remediation` inline based on the actual library
+observed in the code. Use the safe patterns from the per-language
+reference files to write specific, actionable remediation.
 
-- **Django**: `Add django-csp and configure CSP_DEFAULT_SRC =
-  ("'self'",) in settings.py. For scripts and styles, set specific
-  sources (e.g., CSP_SCRIPT_SRC, CSP_STYLE_SRC) instead of relying on
-  default-src alone.`
-- **Flask-Talisman**: `Pass a restrictive content_security_policy dict to
-  Talisman(). Set default-src to "'self'" and add specific source origins
-  only for required external resources.`
-- **Express helmet**: `Enable contentSecurityPolicy in helmet config. Set
-  defaultSrc to ["'self'"] and directives to trusted sources only. Remove
-  wildcard sources.`
-- **Laravel**: `Set a restrictive CSP header in security middleware.
-  Configure default-src to 'self' and use specific directives for scripts
-  and styles.`
-- **Symfony**: `Configure CSP in NelmioSecurityBundle with restrictive
-  directives. Set default_src to "'self'" and add only trusted script and
-  style sources.`
-- **PHP manual**: `Set a restrictive Content-Security-Policy header:
-  header("Content-Security-Policy: default-src 'self'"). Add specific
-  source origins for scripts and styles as needed.`
-- **Koa**: `Use koa-helmet middleware to set CSP headers. Configure a
-  restrictive default-src policy with specific directives for scripts and
-  styles.`
-- **Fastify**: `Register @fastify/helmet with a restrictive
-  contentSecurityPolicy config. Set defaultSrc to ["'self'"] and trust
-  only specific external origins.`
-
-Keep it two to four sentences. Vague guidance ("set CSP") is worse than no
-guidance.
+- Name the library and its specific safe API
+- Show the exact placeholder style or query builder method
+- Keep it two to four sentences
 
 ## Common false positives
 

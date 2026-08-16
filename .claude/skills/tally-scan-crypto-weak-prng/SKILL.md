@@ -34,7 +34,6 @@ Authoritative payload shape:
 | Default severity | `medium` |
 | Parent label (dedup) | `WeakPRNG` |
 
-Source: `docs/roadmap/TAL-148/taxonomy.md` T3 row 10.
 
 ## Detection matrix
 
@@ -47,7 +46,7 @@ Source: `docs/roadmap/TAL-148/taxonomy.md` T3 row 10.
 - **`uuid.uuid1()` for security tokens**: UUID1 is time-based and
   partially predictable. Safe form for tokens is `uuid.uuid4()`.
 
-Defer to `references/python.md` for vulnerable-vs-safe snippets.
+Read `references/python.md` for vulnerable-vs-safe code patterns.
 
 ### PHP
 
@@ -59,7 +58,7 @@ Defer to `references/python.md` for vulnerable-vs-safe snippets.
 - **`uniqid()`**: time-based, trivially predictable. Not suitable for
   tokens or secret values.
 
-Defer to `references/php.md` for vulnerable-vs-safe snippets.
+Read `references/php.md` for vulnerable-vs-safe code patterns.
 
 ### JavaScript
 
@@ -68,14 +67,14 @@ Defer to `references/php.md` for vulnerable-vs-safe snippets.
   `Math.random()` is not cryptographically secure on any JavaScript
   engine.
 
-Defer to `references/javascript.md` for vulnerable-vs-safe snippets.
+Read `references/javascript.md` for vulnerable-vs-safe code patterns.
 
 ### TypeScript
 
 Same sinks as JavaScript. `Math.random()` typed as `number` is the
 primary pattern.
 
-Defer to `references/typescript.md` for vulnerable-vs-safe snippets.
+Read `references/typescript.md` for vulnerable-vs-safe code patterns.
 
 ## Evidence requirements
 
@@ -116,7 +115,7 @@ Emit one JSON object per finding with these fixed fields for
   "meta": {
     "title": "<short human title>",
     "owasp_name": "Cryptographic Failures",
-    "remediation": "<per-finding, per D19; see remediation guidance below>",
+    "remediation": "<per-finding; see remediation guidance below>",
     "code_snippet": "<2-6 lines of source containing the sink>",
     "taint_source": "<request parameter or upstream variable, when traceable>",
     "reasoning": "<one sentence explaining why the weak PRNG is used>"

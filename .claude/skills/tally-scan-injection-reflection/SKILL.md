@@ -33,65 +33,56 @@ Authoritative payload shape:
 | Default severity | `high` |
 | Parent label (dedup) | `UnsafeReflection` |
 
-Source: `docs/roadmap/TAL-148/taxonomy.md` T3 row 14.
 
 ## Detection matrix
 
 ### Python
 
-- **getattr with user input**: method dispatch via `getattr(obj,
-  user_input)()` where the attribute name is request-derived. Safe form
-  validates against an allowlist.
-- **Dynamic module loading**: `__import__(user_input)` or
-  `importlib.import_module(user_input)` where the module name is
-  request-sourced. Safe form uses an allowlist.
-- **Dynamic function from globals/locals**: `globals()[user_input]()`
-  or `locals()[user_input]()` with request data as the key. Safe form
-  is an explicit dispatch table.
-- **exec/eval on user data**: `exec(user_input)` or `eval(user_input)`
-  with any request-derived value.
+Read `references/python.md` for vulnerable-vs-safe snippets.
 
-Defer to `references/python.md` for vulnerable-vs-safe snippets.
+Detect these sink categories:
+
+- **Method dispatch via reflection**: getattr calls with request-sourced
+  attribute names, or dynamic lookup in globals or locals.
+- **Dynamic module loading**: __import__ or importlib calls with
+  request-derived module names.
+- **Code execution**: exec or eval with any request-derived input.
 
 ### PHP
 
-- **Variable class instantiation**: `$class = $_GET['class']; new
-  $class()` where the class name is request-derived. Safe form validates
-  against an allowlist or uses a factory.
-- **Variable function call**: `$func = $_GET['func']; $func()` with
-  request data. Safe form is a dispatch array mapping allowed names to
-  callable closures.
-- **call_user_func with user input**: `call_user_func($userInput, ...)`
-  where `$userInput` is request-sourced. Safe form is an allowlist.
-- **ReflectionClass from user input**: `new ReflectionClass(
-  $userInput)->newInstance(...)` with untrusted class name.
+Read `references/php.md` for vulnerable-vs-safe snippets.
 
-Defer to `references/php.md` for vulnerable-vs-safe snippets.
+Detect these sink categories:
+
+- **Variable class instantiation**: new with a request-sourced class name.
+- **Variable function calls**: function names from request data passed to
+  call_user_func or invoked via property access.
+- **Reflection API**: ReflectionClass instantiation with untrusted class
+  names.
 
 ### JavaScript
 
-- **Dynamic property access and invocation**: `obj[userInput]()`
-  where the property name is request-derived. Safe form validates
-  against an allowlist or uses Object.hasOwn before access.
-- **Dynamic require/import**: `require(userInput)` or `import(
-  userInput)` from request data. Safe form uses an allowlist.
-- **global or window property access**: `global[userInput]()`
-  or `window[userInput]()` with untrusted keys. Safe form is a
-  dispatch object with fixed properties.
+Read `references/javascript.md` for vulnerable-vs-safe snippets.
 
-Defer to `references/javascript.md` for vulnerable-vs-safe snippets.
+Detect these sink categories:
+
+- **Dynamic property access and invocation**: property names from request
+  data used with bracket notation.
+- **Dynamic code loading**: require or import calls with request-derived
+  module identifiers.
+- **Global or window property access**: property names from request data
+  used to access module-level or global objects.
 
 ### TypeScript
 
-- **Dynamic property access and invocation**: Same as JavaScript.
-  TypeScript's type system does not prevent runtime dynamic property
-  access from user input.
-- **Dynamic require/import**: Same as JavaScript.
-- **Type-unsafe casting**: TypeScript-specific patterns like `(obj as
-  any)[userInput]()` that explicitly bypass type checking. Still
-  vulnerable at runtime.
+Read `references/typescript.md` for vulnerable-vs-safe snippets.
 
-Defer to `references/typescript.md` for vulnerable-vs-safe snippets.
+Detect these sink categories:
+
+- **Same as JavaScript**: dynamic property access and code loading patterns
+  are identical at runtime regardless of TypeScript types.
+- **Type-unsafe casting**: explicit type bypasses like casting to any do not
+  prevent runtime vulnerabilities.
 
 ## Evidence requirements
 
@@ -134,7 +125,7 @@ Emit one JSON object per finding with these fixed fields for
     "title": "<short human title, e.g. 'Dynamic method dispatch on
     user input'>",
     "owasp_name": "Injection",
-    "remediation": "<per-finding, per D19; see remediation guidance
+    "remediation": "<per-finding; see remediation guidance
     below>",
     "code_snippet": "<2-6 lines of source containing the sink>",
     "taint_source": "<request parameter or upstream variable, when
@@ -150,37 +141,13 @@ the full field list and validator behavior.
 
 ## Remediation guidance for the scanner
 
-Per D19, write `meta.remediation` inline based on the actual
-library or framework observed in the code. Examples of good
-remediation strings:
+Write `meta.remediation` inline based on the actual library
+observed in the code. Use the safe patterns from the per-language
+reference files to write specific, actionable remediation.
 
-- **Python getattr**: `Create a whitelist of allowed method names
-  and check the attribute name against it before calling getattr.
-  Example: if method_name in ALLOWED_METHODS: getattr(obj,
-  method_name)().`
-- **Python importlib**: `Maintain an allowlist of safe module names.
-  Check the requested module name against the list before calling
-  importlib.import_module(). Never import arbitrary modules from
-  request data.`
-- **PHP variable class**: `Build a registry of allowed classes and
-  check the input against it. Example: if (in_array($class,
-  ALLOWED_CLASSES)) { $obj = new $class(); }. Better, use a factory
-  pattern that maps class names to callables.`
-- **PHP call_user_func**: `Use a dispatch array mapping safe method
-  names to closures or callables. Example: $handlers = ['method1' =>
-  fn($x) => ..., ...]; if (isset($handlers[$name])) {
-  $handlers[$name]($data); }`.
-- **JavaScript dynamic property access**: `Build an allowlist of
-  safe property names and use Object.hasOwn() to check before access.
-  Example: if (ALLOWED_METHODS.includes(methodName)) {
-  obj[methodName](...).`
-- **Dynamic require/import**: `Use a dispatch map for code that
-  chooses which module to load. Example: const modules = { 'module1':
-  require('./module1'), 'module2': require('./module2') };
-  const selected = modules[userInput];`.
-
-Keep it two to four sentences. Vague guidance ("use an allowlist")
-is worse than no guidance.
+- Name the library and its specific safe API
+- Show the exact placeholder style or query builder method
+- Keep it two to four sentences
 
 ## Common false positives
 

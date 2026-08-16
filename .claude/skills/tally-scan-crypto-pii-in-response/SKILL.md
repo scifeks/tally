@@ -35,7 +35,6 @@ Authoritative payload shape:
 | Default severity | `medium` |
 | Parent label (dedup) | `PIIExposure` |
 
-Source: `docs/roadmap/TAL-148/taxonomy.md` T3 row 5.
 
 ## Detection matrix
 
@@ -53,7 +52,7 @@ Source: `docs/roadmap/TAL-148/taxonomy.md` T3 row 5.
   includes `password`, `ssn`, `credit_card`, or `token` fields to the
   client.
 
-Defer to `references/python.md` for vulnerable-vs-safe snippets.
+Read `references/python.md` for vulnerable-vs-safe code patterns.
 
 ### PHP
 
@@ -67,7 +66,7 @@ Defer to `references/python.md` for vulnerable-vs-safe snippets.
 - **Missing `$hidden` array**: Eloquent model without `$hidden` for
   sensitive fields like `password`, `remember_token`.
 
-Defer to `references/php.md` for vulnerable-vs-safe snippets.
+Read `references/php.md` for vulnerable-vs-safe code patterns.
 
 ### JavaScript
 
@@ -78,7 +77,7 @@ Defer to `references/php.md` for vulnerable-vs-safe snippets.
 - **Serialization of `req.user`**: middleware or handler that sends the
   full user object (including tokens, password hashes) in a response.
 
-Defer to `references/javascript.md` for vulnerable-vs-safe snippets.
+Read `references/javascript.md` for vulnerable-vs-safe code patterns.
 
 ### TypeScript
 
@@ -88,7 +87,7 @@ Same sinks as JavaScript. Additionally:
   interface or class used for both database entity and API response
   without separating concerns.
 
-Defer to `references/typescript.md` for vulnerable-vs-safe snippets.
+Read `references/typescript.md` for vulnerable-vs-safe code patterns.
 
 ## Evidence requirements
 
@@ -128,7 +127,7 @@ Emit one JSON object per finding with these fixed fields for
   "meta": {
     "title": "<short human title, e.g. 'PII exposed in user profile response'>",
     "owasp_name": "Cryptographic Failures",
-    "remediation": "<per-finding, per D19; see remediation guidance below>",
+    "remediation": "<per-finding; see remediation guidance below>",
     "code_snippet": "<2-6 lines of source containing the sink>",
     "taint_source": "<request parameter or upstream variable, when traceable>",
     "reasoning": "<one sentence explaining the defect at this location>"

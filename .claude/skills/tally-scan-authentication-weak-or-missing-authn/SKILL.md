@@ -36,7 +36,6 @@ Authoritative payload shape:
 | Default severity | `high` |
 | Parent label (dedup) | `WeakAuthN` |
 
-Source: `docs/roadmap/TAL-148/taxonomy.md` T3 row 24.
 
 ## Detection matrix
 
@@ -60,7 +59,7 @@ Source: `docs/roadmap/TAL-148/taxonomy.md` T3 row 24.
 - **Hardcoded credentials**: `if password == "admin123"` or
   `token = "hardcoded_secret"` in authentication logic.
 
-Defer to `references/python.md` for vulnerable-vs-safe snippets.
+Read `references/python.md` for vulnerable-vs-safe code patterns.
 
 ### PHP
 
@@ -77,7 +76,7 @@ Defer to `references/python.md` for vulnerable-vs-safe snippets.
 - **Hardcoded credentials**: `if ($password === 'admin')` or
   API keys defined as string literals in authentication code.
 
-Defer to `references/php.md` for vulnerable-vs-safe snippets.
+Read `references/php.md` for vulnerable-vs-safe code patterns.
 
 ### JavaScript
 
@@ -94,7 +93,7 @@ Defer to `references/php.md` for vulnerable-vs-safe snippets.
   does not verify the `Authorization` header before processing
   the request.
 
-Defer to `references/javascript.md` for vulnerable-vs-safe
+Read `references/javascript.md` for vulnerable-vs-safe code
 snippets.
 
 ### TypeScript
@@ -108,7 +107,7 @@ snippets.
 - **GraphQL resolver without auth**: a NestJS GraphQL resolver
   method without an authentication guard applied.
 
-Defer to `references/typescript.md` for vulnerable-vs-safe
+Read `references/typescript.md` for vulnerable-vs-safe code
 snippets.
 
 ## Evidence requirements
@@ -154,7 +153,7 @@ Emit one JSON object per finding with these fixed fields for
   "meta": {
     "title": "<short title, e.g. 'Missing auth on user data endpoint'>",
     "owasp_name": "Authentication Failures",
-    "remediation": "<per-finding, per D19>",
+    "remediation": "<per-finding>",
     "code_snippet": "<2-6 lines of source>",
     "taint_source": "<route path, when identifiable>",
     "reasoning": "<one sentence explaining the defect>"
@@ -167,7 +166,7 @@ the full field list and validator behavior.
 
 ## Remediation guidance for the scanner
 
-Per D19, write `meta.remediation` inline based on the actual
+Write `meta.remediation` inline based on the actual
 framework observed in the code. Examples of good remediation
 strings:
 
