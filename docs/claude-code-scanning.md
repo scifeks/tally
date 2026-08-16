@@ -3,13 +3,15 @@
 ## Overview
 
 Claude Code scanning is an LLM-driven SAST capability that runs inside Claude Code
-sessions. It scans your repository for security vulnerabilities across Python, PHP,
-JavaScript, and TypeScript by dispatching parallel scanner subagents, each specialized
-in one vulnerability category.
+sessions. It maps your codebase's attack surface first (entry points, inputs, call
+graph, trust boundaries), then dispatches specialized scanner agents per code
+partition to trace user-controlled data to dangerous sinks. Unreachable code is
+swept separately for latent vulnerabilities.
 
 Unlike Tally's CLI-based tool scanning (Semgrep, Psalm, Gitleaks), Claude Code
 scanning uses language model pattern matching guided by per-language detection
-matrices. It does not require installing external tool binaries.
+matrices. It does not require installing external tool binaries. It covers Python,
+PHP, JavaScript, and TypeScript.
 
 Findings are submitted to Tally through the MCP server, where they appear alongside
 tool-generated findings in reports, the web UI, and triage workflows.
@@ -91,24 +93,30 @@ If you changed the port, update the URL to match.
 You can also add this to your Claude Code user settings for global availability. See
 Claude Code's MCP documentation for user-level configuration.
 
-### Step 4: Make scanner skills available
+### Step 4: Make scanner skills and agents available
 
-The scanner skills live in Tally's `.claude/skills/` directory. To use them from
-another project, copy or symlink the skill directories to your Claude Code skills
-path:
+The scanner skills live in Tally's `.claude/skills/` directory and the agent
+definitions live in `.claude/agents/`. To use them from another project, copy or
+symlink both to your Claude Code paths:
 
 ```bash
 cp -r /path/to/tally/.claude/skills/tally-scan-* ~/.claude/skills/
+cp -r /path/to/tally/.claude/agents/tally-scan-* ~/.claude/agents/
 ```
 
 Or create symlinks:
 
 ```bash
 ln -s /path/to/tally/.claude/skills/tally-scan-* ~/.claude/skills/
+ln -s /path/to/tally/.claude/agents/tally-scan-* ~/.claude/agents/
 ```
 
-If you run Claude Code from within the Tally project directory, the skills are
-discovered automatically.
+The agent definitions control model selection and tool access for the recon and
+scanner subagents. Without them, the orchestrator falls back to generic agent
+dispatch.
+
+If you run Claude Code from within the Tally project directory, skills and agents
+are discovered automatically.
 
 ---
 
@@ -120,20 +128,87 @@ Invoke the orchestrator skill:
 /tally-scan-external
 ```
 
-The orchestrator walks you through:
+The orchestrator runs a multi-phase pipeline.
+
+### Phase 1: Setup
 
 1. **Project selection.** Lists your Tally projects and asks which one to scan.
 2. **Run mode.** Continue a previous scan run or start a new one.
 3. **Adversarial verification.** Optionally enable a courtroom-style verification
    pass that filters false positives before submission (see below).
-4. **Scanner dispatch.** Dispatches all installed `tally-scan-*` skills in parallel.
-   Each scanner covers one vulnerability category (SQL injection, XSS, CSRF, etc.).
-5. **Finding submission.** Submits each finding to Tally through the MCP server.
-6. **Dedup pass.** Groups candidate duplicates and picks survivors.
-7. **Summary.** Reports how many skills ran, how many findings were submitted,
-   accepted, rejected, and deduplicated.
 
-### Adversarial Verification
+### Phase 2: Reconnaissance
+
+The orchestrator dispatches a recon agent (running on Sonnet for speed) that maps
+the codebase before any vulnerability scanning begins. Recon produces a manifest
+with:
+
+- **Entry points.** HTTP routes, CLI handlers, GraphQL resolvers, WebSocket
+  handlers, queue consumers, and cron jobs discovered via framework-specific grep
+  patterns.
+- **Input inventory.** A numbered table of user-controlled inputs for each entry
+  point (query params, body fields, headers, cookies, path variables, file uploads,
+  CLI args).
+- **Call graph.** A two-level trace from each entry point handler to the
+  application functions it calls and the dangerous sinks those functions reach.
+- **Trust boundaries.** Where authentication middleware is applied, where data
+  crosses to databases, external APIs, file systems, and subprocesses.
+- **Scope partitions.** Entry points that share application-specific code are
+  grouped into partitions via union-find. Each partition becomes an independent
+  unit of work for scanner agents.
+- **Dead code inventory.** Source files not reachable from any entry point. These
+  are scanned separately with lower confidence defaults.
+
+If recon fails, the orchestrator falls back to dispatching individual scanner
+skills against the full repo without recon context.
+
+### Phase 3: Domain family scanning
+
+The 47 scanner skills are grouped into 10 domain families: injection, XSS,
+access control, authentication, crypto, data integrity, design logic,
+misconfiguration, JWT, and network.
+
+For each partition from the recon manifest, the orchestrator dispatches one domain
+agent per relevant family. Each agent receives its partition's scope (entry points,
+inputs, files, trust boundaries) and all the skill references for its family. The
+agent traces each numbered input forward through the call graph to dangerous sinks,
+applying detection patterns from its family's skills.
+
+Families are skipped when a partition contains none of the family's relevant
+languages. The JWT family is additionally skipped when no JWT library imports are
+present.
+
+### Phase 4: Dead code sweep
+
+After domain agents finish, the orchestrator dispatches sweep agents against the
+dead code inventory from recon. Sweep agents use pattern-based detection (not
+input-forward tracing, since dead code has no inputs to trace from). All dead code
+findings default to `finding_type: weakness` and `confidence: potential` because the
+code is not currently exploitable. Severity reflects the pattern's inherent danger.
+
+Dead code matters because it can be activated by a variable change, a spelling fix,
+or an import addition. Reporting it as a weakness gives developers visibility into
+latent risk.
+
+### Classification gates
+
+Every finding (from both domain agents and dead code sweep) passes through four
+classification gates that adjust severity, confidence, and finding type. Gates
+classify findings, they do not eliminate them.
+
+1. **Reachability.** Is the code reachable from a production entry point? Dev-only
+   paths are downgraded to `weakness`.
+2. **Attacker control.** Is the input actually attacker-controlled? Server-generated
+   or config-sourced inputs reduce confidence.
+3. **Sanitization.** Is there effective sanitization between source and sink? Context
+   mismatches (HTML sanitizer on a SQL sink) are flagged explicitly.
+4. **Impact.** Does exploiting this give a meaningful new capability? Limited reads
+   and self-only writes are downgraded.
+
+Gate results are recorded in each finding's `reasoning` field and
+`meta.gate_results` for downstream review.
+
+### Phase 5: Adversarial verification (optional)
 
 When enabled, the orchestrator passes all collected findings through the
 `tally-scan-adversarial` skill before submission. For each finding, three
@@ -149,6 +224,13 @@ in security scanning).
 
 Adversarial verification is off by default. Enable it when you want higher precision
 at the cost of longer scan time.
+
+### Phase 6: Submission and dedup
+
+The orchestrator submits each finding to Tally through the MCP server, runs a
+required deduplication pass to group candidate duplicates by file, rule, and line
+proximity, then closes the scan run. A summary reports: recon results, agent
+dispatch counts, findings collected, accepted, rejected, and deduplicated.
 
 ---
 
