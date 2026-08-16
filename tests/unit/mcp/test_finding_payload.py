@@ -278,3 +278,41 @@ class TestValidateFindingPayload:
         payload["line_start"] = 50
         result = validate_finding_payload(payload)
         assert result["line_number"] == 42
+
+    def test_invalid_cwe_format_raises(self) -> None:
+        """CWE entry not matching CWE-N pattern raises error."""
+        payload = _valid_payload()
+        payload["cwe"] = ["garbage"]
+        with pytest.raises(FindingPayloadError, match="cwe"):
+            validate_finding_payload(payload)
+
+    def test_cwe_non_string_raises(self) -> None:
+        """Non-string CWE entry raises error."""
+        payload = _valid_payload()
+        payload["cwe"] = [89]
+        with pytest.raises(FindingPayloadError, match="cwe"):
+            validate_finding_payload(payload)
+
+    def test_valid_cwe_format_accepted(self) -> None:
+        """CWE entries matching CWE-N pattern pass."""
+        payload = _valid_payload()
+        payload["cwe"] = ["CWE-89", "CWE-564"]
+        result = validate_finding_payload(payload)
+        assert result["cwe"] == ["CWE-89", "CWE-564"]
+
+    def test_invalid_finding_type_raises(self) -> None:
+        """finding_type not in allowed set raises error."""
+        payload = _valid_payload()
+        payload["finding_type"] = ["nonexistent"]
+        with pytest.raises(FindingPayloadError, match="finding_type"):
+            validate_finding_payload(payload)
+
+    def test_valid_finding_types_accepted(self) -> None:
+        """Known finding_type values pass."""
+        payload = _valid_payload()
+        payload["finding_type"] = ["vulnerability", "misconfiguration"]
+        result = validate_finding_payload(payload)
+        assert result["finding_type"] == [
+            "vulnerability",
+            "misconfiguration",
+        ]

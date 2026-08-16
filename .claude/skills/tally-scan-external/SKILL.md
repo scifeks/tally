@@ -124,6 +124,20 @@ Each subagent prompt includes:
 Wait for every subagent to return. Do not proceed to step 5 until
 every subagent has produced its output.
 
+#### Subagent failure handling
+
+If a subagent crashes, returns malformed JSON, or produces no
+output:
+
+- Log the skill name and the error (or "no output").
+- Exclude it from the batch and continue with the remaining
+  subagents' findings.
+- Track the failure for the summary in step 8.
+
+The scan is best-effort; a single scanner failure should not abort
+the whole run. If every scanner fails, report the failures and
+skip to step 8 without creating submissions.
+
 ### Step 5: Optional adversarial pass
 
 Concatenate every subagent's finding list into a single batch.
@@ -222,8 +236,9 @@ end_scan(
 
 Report to the developer:
 
-- Number of scanner skills dispatched.
-- Number of findings collected.
+- Number of scanner skills dispatched and how many succeeded.
+- Names of any scanner skills that failed (with reason).
+- Number of findings collected across all successful scanners.
 - Number accepted, rejected, and marked as duplicates.
 - Run ID for downstream inspection.
 

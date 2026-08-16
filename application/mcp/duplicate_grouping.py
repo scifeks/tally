@@ -1,9 +1,8 @@
 """Duplicate-candidate grouping for MCP-ingested findings (TAL-148).
 
 Two findings are grouped as candidate duplicates when they share the
-same file, the same rule_id family prefix (substring through the first
-dot), and their line ranges either overlap or fall within a proximity
-window. Grouping is transitive via union-find.
+same file, the same rule_id, and their line ranges either overlap or
+fall within a proximity window. Grouping is transitive via union-find.
 """
 
 from __future__ import annotations
@@ -31,8 +30,6 @@ class _ValidFinding:
 
 
 def _family(rule_id: str) -> str:
-    if "." in rule_id:
-        return rule_id.split(".", 1)[0] + "."
     return rule_id
 
 

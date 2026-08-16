@@ -35,8 +35,8 @@ class TestGroupDuplicateCandidates:
         """Single finding is not returned."""
         assert group_duplicate_candidates([_f(1)]) == []
 
-    def test_overlapping_same_family_grouped(self) -> None:
-        """Overlapping ranges with same family are grouped."""
+    def test_overlapping_same_rule_id_grouped(self) -> None:
+        """Overlapping ranges with same rule_id are grouped."""
         a = _f(1, line_start=10, line_end=15)
         b = _f(2, line_start=12, line_end=18)
         assert group_duplicate_candidates([a, b]) == [[1, 2]]
@@ -55,10 +55,28 @@ class TestGroupDuplicateCandidates:
         b = _f(2, line_start=26, line_end=30)
         assert group_duplicate_candidates([a, b]) == []
 
-    def test_different_family_not_grouped(self) -> None:
-        """Different rule families are not grouped."""
+    def test_different_rule_id_not_grouped(self) -> None:
+        """Different rule_ids are not grouped."""
         a = _f(1, rule_id="xss.stored", line_start=10, line_end=15)
         b = _f(2, rule_id="injection.sql", line_start=10, line_end=15)
+        assert group_duplicate_candidates([a, b]) == []
+
+    def test_same_family_different_rule_id_not_grouped(
+        self,
+    ) -> None:
+        """Same family prefix but different rule_id not grouped."""
+        a = _f(
+            1,
+            rule_id="access_control.csrf",
+            line_start=10,
+            line_end=15,
+        )
+        b = _f(
+            2,
+            rule_id="access_control.idor_bola",
+            line_start=10,
+            line_end=15,
+        )
         assert group_duplicate_candidates([a, b]) == []
 
     def test_different_file_not_grouped(self) -> None:

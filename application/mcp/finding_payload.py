@@ -2,10 +2,17 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
-from domain.tools.constants import CONFIDENCE_LEVELS, SEVERITY_LEVELS
+from domain.tools.constants import (
+    CONFIDENCE_LEVELS,
+    FINDING_TYPES,
+    SEVERITY_LEVELS,
+)
 from domain.tools.scan_types.models import SEGMENT_ORDER
+
+_CWE_PATTERN = re.compile(r"^CWE-\d+$")
 
 
 class FindingPayloadError(Exception):
@@ -53,7 +60,9 @@ def validate_finding_payload(payload: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(file_val, str):
         raise FindingPayloadError("file must be a string")
 
-    line_val = payload.get("line_number") or payload.get("line_start")
+    line_val = payload.get("line_number")
+    if line_val is None:
+        line_val = payload.get("line_start")
     if line_val is None:
         raise FindingPayloadError("Missing required field: line_number (or line_start)")
     if not isinstance(line_val, int):
@@ -84,12 +93,22 @@ def validate_finding_payload(payload: dict[str, Any]) -> dict[str, Any]:
         raise FindingPayloadError("Missing required field: cwe")
     if not isinstance(cwe, list) or len(cwe) == 0:
         raise FindingPayloadError("cwe must be a non-empty list")
+    for cwe_item in cwe:
+        if not isinstance(cwe_item, str) or not _CWE_PATTERN.match(cwe_item):
+            raise FindingPayloadError(
+                f"Invalid cwe entry: {cwe_item!r} (expected format CWE-N)"
+            )
 
     finding_type = payload.get("finding_type")
     if finding_type is None:
         raise FindingPayloadError("Missing required field: finding_type")
     if not isinstance(finding_type, list) or len(finding_type) == 0:
         raise FindingPayloadError("finding_type must be a non-empty list")
+    for ft_item in finding_type:
+        if ft_item not in FINDING_TYPES:
+            raise FindingPayloadError(
+                f"Invalid finding_type: {ft_item!r} not in {sorted(FINDING_TYPES)}"
+            )
 
     rule_id = payload.get("rule_id", "")
     if not rule_id or not isinstance(rule_id, str):

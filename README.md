@@ -9,6 +9,7 @@ Tally is a security auditing platform that eliminates the noise and busy work in
 - Browser-based UI with dashboard, scan launcher, findings editor, AI triage, report builder, and RAG chat
 - Wraps tools like Semgrep, OWASP ZAP, XSStrike, Gitleaks, OSV-Scanner, and [more](docs/tools.md)
 - AI triage: an LLM agent reads each finding and its source code, then produces a verdict with severity, confidence, remediation, and attack vector
+- Claude Code scanning: LLM-driven SAST across Python, PHP, JavaScript, and TypeScript with parallel scanner subagents
 - Interactive MCP triage mode: review and confirm triage verdicts in Claude Code before persistence
 - Four report formats: Markdown, HTML, JSON, and assembled PDF with LLM-drafted narrative sections
 - RAG-powered search and chat over ingested findings using any configured provider ([docs/chat.md](docs/chat.md))
@@ -231,6 +232,7 @@ Tools can run locally or inside a Docker container. The execution mode is config
 - [docs/report.md](docs/report.md) - Report generation guide: quick reports, PDF assembly, and shell preview
 - [docs/chat.md](docs/chat.md) - RAG chat configuration and usage
 - [docs/triage.md](docs/triage.md) - AI triage: auto-triage and MCP triage modes, container lifecycle, and security model
+- [docs/claude-code-scanning.md](docs/claude-code-scanning.md) - Claude Code scanning: setup, skills, and MCP server
 - [docs/configuration.md](docs/configuration.md) - Config file reference
 - [docs/tools.md](docs/tools.md) - Supported tools and how each is detected at startup
 - [docs/antares-shim.md](docs/antares-shim.md) - Antares CWE scanner Ollama completions shim configuration

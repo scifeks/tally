@@ -154,7 +154,8 @@ class McpIngestService:
 
         meta = validated.get("meta", {})
         for key, val in meta.items():
-            raw_row[key] = val
+            if key not in raw_row:
+                raw_row[key] = val
 
         normalized = normalise_finding_for_insert(raw_row)
         fingerprint = compute_fingerprint(raw_row)
@@ -182,8 +183,8 @@ class McpIngestService:
     def get_duplicate_candidates(self, run_id: int) -> dict[str, Any]:
         """Return candidate duplicate groups for a run.
 
-        Grouping rule: same file, shared ``rule_id`` family prefix, and
-        line ranges that overlap or fall within 10 lines of each other.
+        Grouping rule: same file, same ``rule_id``, and line ranges
+        that overlap or fall within 10 lines of each other.
         """
         findings = self._findings.get_findings_by_run_id(run_id)
         groupables = [
@@ -207,19 +208,26 @@ class McpIngestService:
     ) -> dict[str, Any]:
         """Mark each removed finding as a duplicate of the survivor.
 
-        Rejects when the survivor is missing or itself a duplicate; the
-        read-path filter only walks one level of ``duplicate_of``, so
-        chains would leave losers visible. ``run_id`` matches the MCP
-        tool signature; repos are project-scoped.
+        Rejects when the survivor is missing, itself a duplicate, or
+        belongs to a different run. The read-path filter only walks one
+        level of ``duplicate_of``, so chains would leave losers visible.
         """
         survivor = self._findings.get_finding(survivor_id)
         if survivor is None:
             return {"status": "rejected", "error": "survivor not found"}
+        if survivor.run_id != run_id:
+            return {
+                "status": "rejected",
+                "error": "survivor does not belong to this run",
+            }
         if survivor.duplicate_of is not None:
             return {
                 "status": "rejected",
                 "error": "survivor is already marked as a duplicate",
             }
         for loser_id in removed_ids:
+            loser = self._findings.get_finding(loser_id)
+            if loser is None or loser.run_id != run_id:
+                continue
             self._findings.mark_as_duplicate(loser_id, survivor_id)
         return {"status": "resolved", "count": len(removed_ids)}

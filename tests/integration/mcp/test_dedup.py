@@ -77,15 +77,15 @@ class TestGetDuplicateCandidatesEmptyRun:
         assert result == {"groups": []}
 
 
-class TestGetDuplicateCandidatesSameFileFamily:
-    def test_two_findings_same_file_same_family_overlapping_lines(
+class TestGetDuplicateCandidatesSameRuleId:
+    def test_two_findings_same_rule_id_overlapping_lines(
         self,
         run_id: int,
         finding_repo: FindingRepository,
         run_repo: RunRepository,
     ) -> None:
-        """Two findings same file, same family (xss.stored, xss.reflected),
-        overlapping lines -> one group of two returned.
+        """Two findings same file and rule_id, overlapping lines
+        -> one group of two returned.
         """
         findings = [
             _make_test_finding(
@@ -96,7 +96,7 @@ class TestGetDuplicateCandidatesSameFileFamily:
             ),
             _make_test_finding(
                 file="src/app.py",
-                rule_id="xss.reflected",
+                rule_id="xss.stored",
                 line_number=12,
                 line_end=18,
             ),
@@ -109,16 +109,15 @@ class TestGetDuplicateCandidatesSameFileFamily:
         assert "groups" in result
         assert len(result["groups"]) == 1
         assert len(result["groups"][0]) == 2
-        # IDs should be sorted within the group
         assert result["groups"][0] == sorted(result["groups"][0])
 
-    def test_two_findings_same_file_same_family_within_proximity(
+    def test_two_findings_same_rule_id_within_proximity(
         self,
         run_id: int,
         finding_repo: FindingRepository,
         run_repo: RunRepository,
     ) -> None:
-        """Two findings same file, same family, but lines 5 apart -> grouped."""
+        """Two findings same file and rule_id, lines 5 apart -> grouped."""
         findings = [
             _make_test_finding(
                 file="src/app.py",
@@ -127,7 +126,7 @@ class TestGetDuplicateCandidatesSameFileFamily:
             ),
             _make_test_finding(
                 file="src/app.py",
-                rule_id="xss.reflected",
+                rule_id="xss.stored",
                 line_number=14,
             ),
         ]
@@ -138,6 +137,32 @@ class TestGetDuplicateCandidatesSameFileFamily:
 
         assert len(result["groups"]) == 1
         assert len(result["groups"][0]) == 2
+
+    def test_same_family_different_rule_id_not_grouped(
+        self,
+        run_id: int,
+        finding_repo: FindingRepository,
+        run_repo: RunRepository,
+    ) -> None:
+        """Same family prefix but different rule_id not grouped."""
+        findings = [
+            _make_test_finding(
+                file="src/app.py",
+                rule_id="xss.stored",
+                line_number=10,
+            ),
+            _make_test_finding(
+                file="src/app.py",
+                rule_id="xss.reflected",
+                line_number=12,
+            ),
+        ]
+        finding_repo.insert_findings(run_id, normalize_test_findings(findings))
+
+        service = McpIngestService(finding_repo=finding_repo, run_repo=run_repo)
+        result = service.get_duplicate_candidates(run_id)
+
+        assert result["groups"] == []
 
 
 class TestGetDuplicateCandidatesDifferentFamilies:
@@ -203,7 +228,7 @@ class TestGetDuplicateCandidatesProximityBoundary:
         finding_repo: FindingRepository,
         run_repo: RunRepository,
     ) -> None:
-        """Two findings same file, same family, but lines 20+ apart -> no groups."""
+        """Two findings same file and rule_id, lines 20+ apart -> no groups."""
         findings = [
             _make_test_finding(
                 file="src/app.py",
@@ -212,7 +237,7 @@ class TestGetDuplicateCandidatesProximityBoundary:
             ),
             _make_test_finding(
                 file="src/app.py",
-                rule_id="xss.reflected",
+                rule_id="xss.stored",
                 line_number=35,
             ),
         ]
@@ -231,7 +256,7 @@ class TestGetDuplicateCandidatesMultipleGroups:
         finding_repo: FindingRepository,
         run_repo: RunRepository,
     ) -> None:
-        """Three findings with two separate groups."""
+        """Three findings: two same rule_id close, one far -> one group."""
         findings = [
             _make_test_finding(
                 file="src/app.py",
@@ -240,12 +265,12 @@ class TestGetDuplicateCandidatesMultipleGroups:
             ),
             _make_test_finding(
                 file="src/app.py",
-                rule_id="xss.reflected",
+                rule_id="xss.stored",
                 line_number=12,
             ),
             _make_test_finding(
                 file="src/app.py",
-                rule_id="xss.reflected",
+                rule_id="xss.stored",
                 line_number=40,
             ),
         ]
@@ -255,8 +280,6 @@ class TestGetDuplicateCandidatesMultipleGroups:
         result = service.get_duplicate_candidates(run_id)
 
         assert len(result["groups"]) == 1
-        # Findings 1 and 2 group together (within proximity)
-        # Finding 3 is alone because it's too far
         assert len(result["groups"][0]) == 2
 
 
@@ -267,7 +290,7 @@ class TestGetDuplicateCandidatesLineRanges:
         finding_repo: FindingRepository,
         run_repo: RunRepository,
     ) -> None:
-        """Findings with explicit line_end values use them for range overlap."""
+        """Findings with explicit line_end use them for range overlap."""
         findings = [
             _make_test_finding(
                 file="src/app.py",
@@ -277,7 +300,7 @@ class TestGetDuplicateCandidatesLineRanges:
             ),
             _make_test_finding(
                 file="src/app.py",
-                rule_id="xss.reflected",
+                rule_id="xss.stored",
                 line_number=14,
                 line_end=20,
             ),
@@ -287,7 +310,6 @@ class TestGetDuplicateCandidatesLineRanges:
         service = McpIngestService(finding_repo=finding_repo, run_repo=run_repo)
         result = service.get_duplicate_candidates(run_id)
 
-        # Should group because ranges overlap (10-15 and 14-20)
         assert len(result["groups"]) == 1
         assert len(result["groups"][0]) == 2
 
@@ -297,7 +319,7 @@ class TestGetDuplicateCandidatesLineRanges:
         finding_repo: FindingRepository,
         run_repo: RunRepository,
     ) -> None:
-        """Finding without line_end is treated as single-line range."""
+        """Finding without line_end treated as single-line range."""
         findings = [
             _make_test_finding(
                 file="src/app.py",
@@ -307,7 +329,7 @@ class TestGetDuplicateCandidatesLineRanges:
             ),
             _make_test_finding(
                 file="src/app.py",
-                rule_id="xss.reflected",
+                rule_id="xss.stored",
                 line_number=10,
                 line_end=None,
             ),
@@ -317,7 +339,6 @@ class TestGetDuplicateCandidatesLineRanges:
         service = McpIngestService(finding_repo=finding_repo, run_repo=run_repo)
         result = service.get_duplicate_candidates(run_id)
 
-        # Both on same line -> should group
         assert len(result["groups"]) == 1
         assert len(result["groups"][0]) == 2
 

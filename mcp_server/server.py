@@ -47,10 +47,12 @@ def create_mcp_server(
     token_repo: McpTokenRepositoryPort,
     encryption_key: bytes,
     base_path: str | Path,
+    port: int = 8765,
 ) -> FastMCP:
     """Create the MCP server with triage and ingest tools."""
     server = FastMCP(
         name="Tally MCP",
+        port=port,
         instructions=(
             "Tally MCP tools: fetch_batch, submit_verdicts,"
             " skip_batch, list_projects, create_scan_run,"
@@ -227,6 +229,7 @@ def start_mcp_server(
         token_repo,
         encryption_key,
         base_path,
+        port=port,
     )
     logger.info(
         "Starting MCP server on port %d with SSE transport",

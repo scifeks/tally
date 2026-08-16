@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import secrets
 from typing import TYPE_CHECKING
 
@@ -11,6 +12,8 @@ if TYPE_CHECKING:
     from application.ports.mcp_token_repository import (
         McpTokenRepositoryPort,
     )
+
+logger = logging.getLogger(__name__)
 
 
 def validate_bearer_token(
@@ -33,7 +36,11 @@ def validate_bearer_token(
     incoming = authorization[7:]
     encrypted_tokens = token_repo.get_all_encrypted()
     for enc in encrypted_tokens:
-        stored = decrypt_value(enc, encryption_key)
+        try:
+            stored = decrypt_value(enc, encryption_key)
+        except Exception:
+            logger.warning("Skipping token that failed decryption")
+            continue
         if secrets.compare_digest(stored, incoming):
             return True
     return False
