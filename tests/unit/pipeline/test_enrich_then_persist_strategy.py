@@ -20,7 +20,8 @@ def _event(ids: list[int] | None = None) -> IngestCompleted:
 
 class TestEnrichThenPersistStrategy:
     def test_noop_when_ids_empty(self) -> None:
-        strategy = EnrichThenPersistStrategy(finding_repo=MagicMock())
+        indexer = MagicMock()
+        strategy = EnrichThenPersistStrategy(finding_repo=MagicMock(), indexer=indexer)
         mock_pipeline = MagicMock()
         with patch(
             "application.pipeline.strategies.EnrichmentPipeline",
@@ -29,18 +30,21 @@ class TestEnrichThenPersistStrategy:
             strategy.handle(_event(ids=[]))
 
         mock_pipeline.enrich.assert_not_called()
+        indexer.index_findings.assert_not_called()
 
     def test_calls_enrichment_pipeline_with_ids(self) -> None:
         mock_repo = MagicMock()
-        strategy = EnrichThenPersistStrategy(finding_repo=mock_repo)
+        indexer = MagicMock()
+        strategy = EnrichThenPersistStrategy(finding_repo=mock_repo, indexer=indexer)
         mock_pipeline = MagicMock()
+        mock_kb = MagicMock()
 
         with (
             patch(
                 "application.pipeline.strategies.EnrichmentPipeline",
                 return_value=mock_pipeline,
             ) as mock_cls,
-            patch.object(strategy, "_persist_to_chromadb"),
+            patch.object(strategy, "_get_knowledge_base", return_value=mock_kb),
         ):
             strategy.handle(_event(ids=[1, 2]))
 
@@ -48,11 +52,51 @@ class TestEnrichThenPersistStrategy:
         assert mock_cls.call_args.kwargs["finding_repo"] is mock_repo
         mock_pipeline.enrich.assert_called_once_with([1, 2])
 
-    def test_persists_to_chromadb_after_enrichment(self) -> None:
+    def test_indexes_after_enrichment(self) -> None:
         call_order: list[str] = []
-        strategy = EnrichThenPersistStrategy(finding_repo=MagicMock())
+        indexer = MagicMock()
+        indexer.index_findings.side_effect = lambda *_a, **_kw: call_order.append(
+            "index"
+        )
+        strategy = EnrichThenPersistStrategy(finding_repo=MagicMock(), indexer=indexer)
         mock_pipeline = MagicMock()
         mock_pipeline.enrich.side_effect = lambda _: call_order.append("enrich")
+        mock_kb = MagicMock()
+
+        with (
+            patch(
+                "application.pipeline.strategies.EnrichmentPipeline",
+                return_value=mock_pipeline,
+            ),
+            patch.object(strategy, "_get_knowledge_base", return_value=mock_kb),
+        ):
+            strategy.handle(_event(ids=[1]))
+
+        assert call_order == ["enrich", "index"]
+
+    def test_passes_kb_and_ids_to_indexer(self) -> None:
+        indexer = MagicMock()
+        strategy = EnrichThenPersistStrategy(finding_repo=MagicMock(), indexer=indexer)
+        mock_pipeline = MagicMock()
+        mock_kb = MagicMock()
+
+        with (
+            patch(
+                "application.pipeline.strategies.EnrichmentPipeline",
+                return_value=mock_pipeline,
+            ),
+            patch.object(strategy, "_get_knowledge_base", return_value=mock_kb),
+        ):
+            strategy.handle(_event(ids=[5]))
+
+        indexer.index_findings.assert_called_once_with(
+            mock_kb, [5], caller_label="EnrichThenPersistStrategy"
+        )
+
+    def test_skips_indexer_when_kb_init_fails(self) -> None:
+        indexer = MagicMock()
+        strategy = EnrichThenPersistStrategy(finding_repo=MagicMock(), indexer=indexer)
+        mock_pipeline = MagicMock()
 
         with (
             patch(
@@ -61,25 +105,10 @@ class TestEnrichThenPersistStrategy:
             ),
             patch.object(
                 strategy,
-                "_persist_to_chromadb",
-                side_effect=lambda *_: call_order.append("chroma"),
+                "_get_knowledge_base",
+                side_effect=RuntimeError("kb boom"),
             ),
         ):
-            strategy.handle(_event(ids=[1]))
+            strategy.handle(_event(ids=[1, 2]))
 
-        assert call_order == ["enrich", "chroma"]
-
-    def test_passes_base_path_and_project_to_persist(self) -> None:
-        strategy = EnrichThenPersistStrategy(finding_repo=MagicMock())
-        mock_pipeline = MagicMock()
-
-        with (
-            patch(
-                "application.pipeline.strategies.EnrichmentPipeline",
-                return_value=mock_pipeline,
-            ),
-            patch.object(strategy, "_persist_to_chromadb") as mock_persist,
-        ):
-            strategy.handle(_event(ids=[5]))
-
-        mock_persist.assert_called_once_with([5], "test-proj", "/tmp")
+        indexer.index_findings.assert_not_called()

@@ -121,6 +121,7 @@ def _build(
         project_repo=project_repo,  # type: ignore[arg-type]
         analyst=analyst,
         lock_query=LockQueryService(),
+        indexer=MagicMock(),
         project_id=1,
         project_name="p",
         findings_db_exists=findings_db_exists,
@@ -144,6 +145,7 @@ def _build_with_analyst(
         project_repo=project_repo,  # type: ignore[arg-type]
         analyst=analyst,
         lock_query=LockQueryService(),
+        indexer=MagicMock(),
         project_id=project_id,
         project_name="p",
         findings_db_exists=True,
@@ -232,6 +234,7 @@ class TestFindingsService:
             project_repo=project_repo,  # type: ignore[arg-type]
             analyst=analyst,
             lock_query=LockQueryService(),
+            indexer=MagicMock(),
             project_id=1,
             project_name="p",
             findings_db_exists=False,
@@ -250,6 +253,7 @@ class TestFindingsService:
             project_repo=project_repo,  # type: ignore[arg-type]
             analyst=analyst,
             lock_query=LockQueryService(),
+            indexer=MagicMock(),
             project_id=1,
             project_name="p",
             findings_db_exists=True,
@@ -267,6 +271,7 @@ class TestFindingsService:
             project_repo=project_repo,  # type: ignore[arg-type]
             analyst=analyst,
             lock_query=LockQueryService(),
+            indexer=MagicMock(),
             project_id=1,
             project_name="p",
             findings_db_exists=True,
@@ -287,6 +292,7 @@ class TestFindingsServiceCountFindingsTools:
             project_repo=project_repo,  # type: ignore[arg-type]
             analyst=analyst,
             lock_query=LockQueryService(),
+            indexer=MagicMock(),
             project_id=1,
             project_name="p",
             findings_db_exists=True,
@@ -305,6 +311,7 @@ class TestFindingsServiceCountFindingsTools:
             project_repo=project_repo,  # type: ignore[arg-type]
             analyst=analyst,
             lock_query=LockQueryService(),
+            indexer=MagicMock(),
             project_id=1,
             project_name="p",
             findings_db_exists=False,
@@ -325,6 +332,7 @@ class TestFindingsServiceDeleteFindingsForTools:
             project_repo=project_repo,  # type: ignore[arg-type]
             analyst=analyst,
             lock_query=LockQueryService(),
+            indexer=MagicMock(),
             project_id=1,
             project_name="p",
             findings_db_exists=True,
@@ -343,6 +351,7 @@ class TestFindingsServiceDeleteFindingsForTools:
             project_repo=project_repo,  # type: ignore[arg-type]
             analyst=analyst,
             lock_query=LockQueryService(),
+            indexer=MagicMock(),
             project_id=1,
             project_name="p",
             findings_db_exists=True,
@@ -364,6 +373,7 @@ class TestFindingsServicePurgeAllFindingsData:
             project_repo=project_repo,  # type: ignore[arg-type]
             analyst=analyst,
             lock_query=LockQueryService(),
+            indexer=MagicMock(),
             project_id=1,
             project_name="p",
             findings_db_exists=True,
@@ -383,6 +393,7 @@ class TestFindingsServicePurgeAllFindingsData:
             project_repo=project_repo,  # type: ignore[arg-type]
             analyst=analyst,
             lock_query=LockQueryService(),
+            indexer=MagicMock(),
             project_id=1,
             project_name="p",
             findings_db_exists=True,

@@ -160,7 +160,8 @@ class ConnectionFactory:
                     should_report    INTEGER NOT NULL DEFAULT 0,
                     business_impact  TEXT,
                     tal_id           TEXT,
-                    repo_id          INTEGER
+                    repo_id          INTEGER,
+                    duplicate_of     INTEGER
     """
 
     _FINDINGS_INDEXES = """
