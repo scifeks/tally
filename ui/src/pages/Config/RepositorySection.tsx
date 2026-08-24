@@ -690,7 +690,7 @@ export function RepositorySection({
                     }
                     placeholder={
                       !isNewRepo && selectedRepo?.authConfigured
-                        ? 'Stored — enter new value to override'
+                        ? 'Stored; enter new value to override'
                         : 'https://example.com/login'
                     }
                     className="w-full h-8 px-2 bg-background border border-border text-xs text-foreground font-mono focus:border-accent focus:outline-none"
@@ -716,7 +716,7 @@ export function RepositorySection({
                     }
                     placeholder={
                       !isNewRepo && selectedRepo?.authConfigured
-                        ? 'Stored — enter new value to override'
+                        ? 'Stored; enter new value to override'
                         : undefined
                     }
                     className="w-full h-8 px-2 bg-background border border-border text-xs text-foreground focus:border-accent focus:outline-none"
@@ -742,7 +742,7 @@ export function RepositorySection({
                     }
                     placeholder={
                       !isNewRepo && selectedRepo?.authConfigured
-                        ? 'Stored — enter new value to override'
+                        ? 'Stored; enter new value to override'
                         : undefined
                     }
                     className="w-full h-8 px-2 bg-background border border-border text-xs text-foreground focus:border-accent focus:outline-none"

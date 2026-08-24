@@ -2,33 +2,47 @@
 
 [![CI](https://github.com/scifeks/tally/actions/workflows/ci.yml/badge.svg)](https://github.com/scifeks/tally/actions/workflows/ci.yml)
 
-Tally is a security auditing platform that eliminates the noise and busy work involved in application security audits. It wraps common security tools, triages findings with AI, and generates reports, so you can get to the hard parts faster. Tally is not a replacement for manual auditing and penetration testing, nor does it guarantee finding all vulnerabilities.
+**This tool is for authorized security assessments only. Use Tally only on systems you own or have explicit written permission to test. Unauthorized access to computer systems is illegal.**
 
-## Features
+Tally is a security auditing platform that eliminates the noise and busy work involved in application security audits. It wraps 20+ security scanners across static analysis, dependency scanning, secrets detection, and web testing. It triages findings with AI, generates reports, and lets you collaborate with an LLM over your findings. Tally is not a replacement for manual auditing and penetration testing, nor does it guarantee finding all vulnerabilities.
 
-- Browser-based UI with dashboard, scan launcher, findings editor, AI triage, report builder, and RAG chat
-- Wraps tools like Semgrep, OWASP ZAP, XSStrike, Gitleaks, OSV-Scanner, and [more](docs/tools.md)
-- AI triage: an LLM agent reads each finding and its source code, then produces a verdict with severity, confidence, remediation, and attack vector
+## What Tally Does
+
+- Browser-based graphical dashboard for scanning, findings management, triage, reporting, and chat
+- Wraps 20+ security scanners across SAST, SCA, DAST, and secrets detection (see [docs/tools.md](docs/tools.md) for the full list)
+- AI triage: an LLM agent analyzes each finding with its source code, producing verdict, severity, confidence, remediation, and attack vector
 - Claude Code scanning: LLM-driven SAST across Python, PHP, JavaScript, and TypeScript with parallel scanner subagents
 - Interactive MCP triage mode: review and confirm triage verdicts in Claude Code before persistence
 - Four report formats: Markdown, HTML, JSON, and assembled PDF with LLM-drafted narrative sections
-- RAG-powered search and chat over ingested findings using any configured provider ([docs/chat.md](docs/chat.md))
-- Project-based isolation: each project has its own config, vector store, and outputs
-- Automatic tool discovery on startup: skips tools that are not installed
-- CLI REPL for terminal-based workflows and scripting
+- RAG-powered search and chat over ingested findings
+- Project-based isolation: each project has its own configuration, vector store, findings, and reports
+- Automatic tool discovery: skips tools that are not installed
+- Three interfaces: Web UI (recommended), REPL (terminal), and CLI (non-interactive)
+- Project creation from both the web UI and the REPL
 - Human-in-the-loop approval before each tool execution
 - Docker execution support for all tools
-- Header-based authentication for repository access: bearer tokens, API key pairs, and custom HTTP headers with environment variable support (see [docs/configuration.md](docs/configuration.md#repositories-json))
-- Automatic encryption of repository credentials at rest (see [docs/configuration.md](docs/configuration.md#repositories-json))
+- Header-based authentication for repository access: bearer tokens, API key pairs, and custom HTTP headers with environment variable support (see [docs/configuration.md](docs/configuration.md#authentication-optional))
+- Automatic encryption of repository credentials at rest (see [docs/configuration.md](docs/configuration.md#encryption-and-key-management))
+- DefectDojo integration for exporting findings to vulnerability management
+
+## Three Interfaces
+
+**Web UI** (recommended). Start with `ui serve` from the REPL. Tally opens a React SPA backed by FastAPI with a graphical interface for scanning, triage, reporting, and chat. See [docs/web-ui.md](docs/web-ui.md) for the full walkthrough.
+
+**REPL**. A terminal interface with interactive commands for scanning, triage, reporting, and configuration. Use the REPL when a web UI is inappropriate: remote servers, SSH sessions, or client-sensitive audits where browser exposure is a concern. See [docs/repl.md](docs/repl.md) for workflows and examples.
+
+**CLI**. A non-interactive entry point for cron jobs, CI pipelines, and scripted automation. See [docs/cli.md](docs/cli.md) for flags and examples.
 
 ## Requirements
 
 - **Python 3.10+**
 - **Node.js and npm** for the web UI frontend
-- **Ollama** running locally (`ollama serve`) with a chat model and embedding model pulled. Required for ChromaDB embeddings and for any role configured to use the `"ollama"` provider. Can be skipped if all roles are set to `"claude"` and you manage embeddings separately, but the default configuration uses Ollama.
-- **Anthropic API key**: required only when any role is set to `"claude"` in `config/global.json`. Set via `ANTHROPIC_API_KEY` environment variable or the `claude.api_key` config field.
-- Linux or macOS
-- System tools are optional. Tally skips tools that are not installed
+- **Linux or macOS**
+- **An LLM provider**: Tally requires one of the following.
+  - Ollama running locally (`ollama serve`) with a chat model and embedding model installed. See [docs/llm-providers.md](docs/llm-providers.md) for setup.
+  - Anthropic API key for Claude. Set via the `ANTHROPIC_API_KEY` environment variable or the `claude.api_key` config field.
+  - llama.cpp. See [docs/llm-providers.md](docs/llm-providers.md) for setup.
+- **Security tools are optional**. Tally skips tools that are not installed. On first run, an interactive setup wizard detects available tools and configures them.
 
 ## Quick Start
 
@@ -36,153 +50,24 @@ Tally is a security auditing platform that eliminates the noise and busy work in
 # 1. Install Python and Node.js dependencies
 bash install.sh
 
-# 2. Start Ollama (separate terminal)
-ollama pull qwen3:14b
-ollama pull nomic-embed-text
-ollama serve
-
-# 3. Edit global config (configure providers and feature inference blocks)
+# 2. Configure your LLM provider
 cp config/global-example.json config/global.json
-# edit config/global.json: configure provider blocks (ollama, llama_cpp,
-# or claude) and feature inference blocks (search_inference, chat_inference,
-# report_inference, and embeddings_inference)
+# Edit config/global.json to set your LLM provider.
+# See docs/llm-providers.md for detailed setup instructions.
 
-# 4. Start Tally (first run launches an interactive tool setup wizard)
+# 3. Start Tally (first run launches an interactive tool setup wizard)
 .venv/bin/python3 tally.py
 
-# 5. Create a project, add a repo, and run your first scan
+# 4. Create a project and add a repository
 project add
 repo add
+
+# 5. Run your first scan
 scan --tool=semgrep
 
 # 6. Launch the web UI
 ui serve
 ```
-
-## Web UI
-
-Run `ui serve` from the REPL to start the web UI. Tally opens your browser to a React SPA backed by a FastAPI server. The UI provides the full Tally workflow in a graphical interface:
-
-- **Dashboard** with project stats, recent scans, and quick-action tiles
-- **Findings** table with filtering, sorting, and inline editing of severity, status, remediation, and other fields
-- **Scans** launcher with tool selection, real-time progress tracking, and saved scan configurations
-- **Triage** runner with batch visualization and progress tracking
-- **Reports** builder with draft generation, format selection, and download
-- **Chat** with session history over your project's findings
-- **Configuration** for projects, repositories, tool overrides, and argument templates
-- **URL Lists** management for DAST scanning targets
-
-See [docs/ui.md](docs/ui.md) for the full walkthrough.
-
-## REPL Command Reference
-
-The REPL provides the same capabilities as the web UI in a terminal interface. All commands below are also available through the browser.
-
-### Project Management
-
-| Command | Description |
-|---|---|
-| `project add` | Create a new project (interactive) |
-| `project edit [<name>]` | Edit project-level settings (interactive) |
-| `project list` | List all projects |
-| `project switch <name>` | Switch active project |
-| `project info` | Show active project details |
-| `project delete <name>` | Delete a project and all its data |
-| `project key [status\|setup\|change]` | Manage per-project encryption keys |
-
-### Repository Management
-
-| Command | Description |
-|---|---|
-| `repo add` | Add a repository to the active project |
-| `repo list` | List configured repositories |
-| `repo edit <name>` | Edit a repository's configuration |
-| `repo delete <name>` | Delete a repository from the project |
-
-### Tool Management
-
-| Command | Description |
-|---|---|
-| `tool add` | Add a tool to configuration (interactive) |
-| `tool list` | List configured tools and their status |
-| `tool edit <name>` | Edit tool configuration |
-| `tool remove <name>` | Remove a tool from configuration |
-
-### Scanning
-
-| Command | Description |
-|---|---|
-| `scan` | Full scan: all configured tools across all repos |
-| `scan --tool=<tool,...>` | Run one or more specific tools (comma-separated) |
-| `scan --repo=<repo>` | Run all repo-appropriate tools on one repository |
-| `scan --domain=<domain,...>` | Run all tools in one or more domains: `code`, `web` |
-| `scan --skip-tools=<tool,...>` | Run all tools except the ones listed (comma-separated) |
-| `scan --repo=<repo> --tool=<tool,...>` | Run specific tools on one repository |
-| `scan --skip-enrichment` | Skip LLM enrichment; findings are persisted to ChromaDB without enrichment fields |
-| `run <tool> [args...]` | Execute a tool with raw arguments |
-
-### Knowledge Base
-
-| Command | Description |
-|---|---|
-| `search [--flags...]` | Structured search over ingested findings (`search --help` for options) |
-| `chat <message>` | RAG-augmented chat with the LLM |
-| `stats` | Show knowledge base statistics |
-| `purge` | Delete ALL findings, tool outputs, and reports |
-| `purge --tool=<tool,...>` | Delete findings for specific tool(s) only; reports unaffected |
-| `purge --keep-reports` | Delete all findings and tool outputs but keep generated reports |
-
-### Web UI
-
-| Command | Description |
-|---|---|
-| `ui serve` | Start the FastAPI + Vite dev server and open the web UI |
-| `ui ssl regenerate` | Regenerate the TLS certificate for the configured web_ui_host |
-
-### Triage
-
-| Command | Description |
-|---|---|
-| `triage` | Run AI triage on untriaged SAST and API findings for the active project |
-| `triage --batch` | Run batching phase only, no agent invocation |
-| `triage --dry-run` | Batch + render prompts to DEBUG log, no agent invocation |
-| `triage --rebuild-container` | Stop containers and rebuild the triage agent Docker image |
-
-### Reporting
-
-| Command | Description |
-|---|---|
-| `report` | Assemble and generate full PDF report (default) |
-| `report --format=<fmt>` | Output format: `pdf` (default), `markdown`, `html`, `json` |
-| `report --testing-type <type>` | Engagement type: `white_box` (default), `grey_box`, `black_box` |
-| `report --engagement-date <YYYY-MM-DD>` | Engagement date shown in the report |
-| `report --output=<path>` | Write report to a specific file path |
-| `report draft` | Generate LLM drafts for all six report sections |
-| `report draft <section>` | Generate a draft for one section only |
-| `report draft <section> --force` | Overwrite an existing draft without prompting |
-| `report draft --skip-triage` | Include all findings regardless of triage status |
-| `report shell` | Render a shell PDF for visual layout inspection |
-| `report shell --output <path>` | Write shell PDF to a specific file path |
-
-See [docs/report.md](docs/report.md) for the full PDF assembly workflow and argument reference.
-
-### Integrations
-
-| Command | Description |
-|---|---|
-| `sync --integration=defectdojo` | Sync all findings to DefectDojo |
-| `sync --integration=defectdojo --run-id=<id>` | Sync findings from a specific scan run |
-| `sync --integration=defectdojo --test-connection` | Verify DefectDojo connectivity and authentication |
-
-See [docs/integrations/defect-dojo.md](docs/integrations/defect-dojo.md) for setup and configuration.
-
-### Utility
-
-| Command | Description |
-|---|---|
-| `help` | Show command reference |
-| `clear` | Clear the screen |
-| `exit` / `quit` | Exit Tally |
 
 ## Docker Support
 
@@ -215,57 +100,29 @@ Tools can run locally or inside a Docker container. The execution mode is config
 }
 ```
 
-`config/commands.json` is auto-generated on first run via an interactive setup wizard. Use `tool edit <name>` to change a tool's execution mode at any time.
-
-## Startup Flags
-
-```bash
-.venv/bin/python3 tally.py --check        # Check dependencies and exit
-.venv/bin/python3 tally.py --skip-checks  # Skip dependency check (development)
-```
+`config/commands.json` is auto-generated on first run via an interactive setup wizard. Use `tool edit <name>` to change a tool's execution mode at any time. See [docs/docker.md](docs/docker.md) for optional Docker containers for npm-audit and composer-audit.
 
 ## Documentation
 
-- [docs/usage.md](docs/usage.md) - Full REPL usage guide with examples
-- [docs/cli.md](docs/cli.md) - CLI reference for scripted and automated workflows
-- [docs/ui.md](docs/ui.md) - Web UI walkthrough: dashboard, findings, scans, triage, reports, chat, and configuration
-- [docs/report.md](docs/report.md) - Report generation guide: quick reports, PDF assembly, and shell preview
+- [docs/usage.md](docs/usage.md) - Choosing an interface: web UI, REPL, or CLI
+- [docs/web-ui.md](docs/web-ui.md) - Web UI walkthrough: dashboard, findings, scans, triage, reports, chat, and configuration
+- [docs/repl.md](docs/repl.md) - REPL commands and terminal workflows
+- [docs/cli.md](docs/cli.md) - Non-interactive CLI for automation, CI pipelines, and scripted workflows
+- [docs/configuration.md](docs/configuration.md) - Config file reference
+- [docs/tools.md](docs/tools.md) - Supported tools and detection strategies
+- [docs/llm-providers.md](docs/llm-providers.md) - LLM provider setup and configuration for chat, enrichment, reports, embeddings, and triage
+- [docs/antares-shim.md](docs/antares-shim.md) - Antares CWE scanner Ollama completions shim configuration
 - [docs/chat.md](docs/chat.md) - RAG chat configuration and usage
+- [docs/report.md](docs/report.md) - Report generation guide and PDF assembly
 - [docs/triage.md](docs/triage.md) - AI triage: auto-triage and MCP triage modes, container lifecycle, and security model
 - [docs/claude-code-scanning.md](docs/claude-code-scanning.md) - Claude Code scanning: setup, skills, and MCP server
-- [docs/configuration.md](docs/configuration.md) - Config file reference
-- [docs/tools.md](docs/tools.md) - Supported tools and how each is detected at startup
-- [docs/antares-shim.md](docs/antares-shim.md) - Antares CWE scanner Ollama completions shim configuration
-- [docs/url-discovery.md](docs/url-discovery.md) - URL discovery pipeline: Katana, Noir, user-provided endpoint files, auth, merging, and downstream consumers
-- [docs/endpoint-files.md](docs/endpoint-files.md) - Supplying your own OAS3/Swagger/Postman/HAR endpoint file
+- [docs/url-discovery.md](docs/url-discovery.md) - URL discovery pipeline for DAST tools
+- [docs/endpoint-files.md](docs/endpoint-files.md) - Supplying OAS3, Swagger, Postman, or HAR endpoint files
+- [docs/docker.md](docs/docker.md) - Docker containers for npm-audit and composer-audit
+- [docs/integrations/defect-dojo.md](docs/integrations/defect-dojo.md) - DefectDojo integration for finding exports
+- [docs/adding-tool-wrappers.md](docs/adding-tool-wrappers.md) - Developer guide for adding new tool integrations
 - [docs/endpoint-file-adapter-internals.md](docs/endpoint-file-adapter-internals.md) - Developer guide for adding endpoint file format adapters
-- [docs/adding-tool-wrappers.md](docs/adding-tool-wrappers.md) - Developer guide for adding tool wrappers (requires `config/commands.json` registration to take effect)
-- [docs/integrations/defect-dojo.md](docs/integrations/defect-dojo.md) - DefectDojo integration: export findings, configuration, and field mapping
-- [docs/docker.md](docs/docker.md) - Optional Docker containers for npm-audit and composer-audit
 - [docs/restrictions.md](docs/restrictions.md) - Legal restrictions
-
-## Known Limitations
-
-### Noir framework support
-
-Noir does not support every web framework. It is skipped automatically for:
-
-- **Node.js apps.** Noir's JavaScript parser has a known defect that causes it
-  to loop indefinitely on complex Node.js codebases. Tally detects Node.js apps
-  automatically by the presence of `package.json` at the repo root and skips
-  Noir for them.
-- **Unsupported Python frameworks.** aiohttp, bottle, cherrypy, falcon, and
-  pyramid are not recognized by Noir v0.25.1. Tally detects them via the
-  repository's `dependencies_file` and skips Noir automatically.
-
-When Noir is skipped, ZAP falls back to spider-only discovery mode. You can
-supply a user-provided OAS3, OAS2/Swagger, Postman collection, or HAR file
-via `repo add` / `repo edit` to give ZAP accurate endpoint coverage regardless
-of Noir support.
-
-See [docs/url-discovery.md](docs/url-discovery.md) for the full discovery
-pipeline and [docs/endpoint-files.md](docs/endpoint-files.md) for endpoint file
-setup.
 
 ## Legal Notice (California and Colorado)
 
@@ -279,7 +136,7 @@ If you are located in **California or Colorado**, **do not download, run, or use
 
 Users are responsible for ensuring that their use of this software complies with the laws applicable in their jurisdiction.
 
-See the full policy here:  
+See the full policy here:
 [docs/restrictions.md](docs/restrictions.md)
 
 ## License

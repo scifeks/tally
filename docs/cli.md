@@ -6,7 +6,7 @@ Tally's CLI (`tally-cli.py`) is a non-interactive entry point that exposes the s
 
 ## Prerequisites
 
-Before using the CLI, you must complete the location attestation once through the interactive REPL (`python3 tally.py`). The CLI checks this attestation on every invocation and exits with code 1 if it has not been confirmed. See [docs/usage.md](usage.md) for REPL setup instructions.
+Before using the CLI, you must complete the location attestation once through the interactive REPL (`python3 tally.py`). The CLI checks this attestation on every invocation and exits with code 1 if it has not been confirmed. See [docs/repl.md](repl.md) for REPL setup instructions.
 
 You also need at least one project created through the REPL or web UI before the CLI can operate on it.
 
@@ -16,11 +16,11 @@ You also need at least one project created through the REPL or web UI before the
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
-| `--command COMMAND` | string | *(required)* | Command to execute: `scan`, `run`, `report`, `triage`, `purge`, `stats`, `integration-sync`, `ui` |
+| `--command COMMAND` | string | *(required)* | Command to execute: `scan`, `run`, `report`, `triage`, `purge`, `stats`, `integration-sync`, `ui`, `project-create`, `project-list`, `repo-add`, `repo-list`, `repo-edit`, `repo-delete` |
 | `--base-path DIR` | string | `.` | Base directory for projects |
 | `--project NAME` | string | *(required)* | Target project name |
 
-`--project` is required for all commands except `--command ui` and `--command triage --rebuild-container`.
+`--project` is required for all commands except `--command ui`, `--command project-list`, and `--command triage --rebuild-container`.
 
 ---
 
@@ -32,7 +32,7 @@ Run security scans across one or more repositories.
 
 ```
 tally --project NAME --command scan [--repo REPOS] [--tool TOOLS | --skip-tools TOOLS]
-                                    [--domain DOMAINS] [--skip-enrichment]
+                                    [--domain DOMAINS] [--since-commit COMMIT] [--skip-enrichment]
 ```
 
 | Flag | Description |
@@ -41,6 +41,7 @@ tally --project NAME --command scan [--repo REPOS] [--tool TOOLS | --skip-tools 
 | `--tool TOOLS` | Comma-separated tools to use (overrides defaults) |
 | `--skip-tools TOOLS` | Comma-separated tools to exclude |
 | `--domain DOMAINS` | Comma-separated domains (for DAST tools) |
+| `--since-commit COMMIT` | Scan only files changed since this commit |
 | `--skip-enrichment` | Skip finding enrichment after scanning |
 
 `--tool` and `--skip-tools` are mutually exclusive. Repository, tool, and domain names are validated against the project configuration; unknown names exit with code 2.
@@ -56,6 +57,9 @@ python3 tally-cli.py --project myapp --command scan --repo backend,api --tool se
 
 # Scan everything except bandit
 python3 tally-cli.py --project myapp --command scan --skip-tools bandit
+
+# Scan only files changed since a commit
+python3 tally-cli.py --project myapp --command scan --since-commit abc1234
 ```
 
 ### run
@@ -142,11 +146,11 @@ tally --command triage --rebuild-container
 
 | Flag | Description |
 |------|-------------|
-| `--batch` | Create triage batches without invoking the agent (no Docker required) |
-| `--dry-run` | Render batch prompts to the debug log without executing |
+| `--batch` | Run in batch mode (non-interactive) |
+| `--dry-run` | Preview what would be triaged without executing |
 | `--rebuild-container` | Stop containers, rebuild the triage image, and exit |
 
-Full triage (no flags) requires Docker. It builds the triage agent image if needed, starts containers, and runs triage sessions against untriaged findings. Batch mode prepares the batches without running the agent. Dry-run mode writes the rendered prompts to the debug log for inspection.
+Full triage requires Docker. It builds the triage agent image if needed, starts containers, and runs triage sessions against untriaged findings.
 
 `--rebuild-container` does not require `--project`.
 
@@ -154,8 +158,11 @@ Full triage (no flags) requires Docker. It builds the triage agent image if need
 # Full triage with Docker
 python3 tally-cli.py --project myapp --command triage
 
-# Batch mode (no Docker)
+# Batch mode triage
 python3 tally-cli.py --project myapp --command triage --batch
+
+# Preview what would be triaged
+python3 tally-cli.py --project myapp --command triage --dry-run
 
 # Rebuild the triage container image
 python3 tally-cli.py --command triage --rebuild-container
@@ -206,12 +213,13 @@ python3 tally-cli.py --project myapp --command stats
 Export findings to configured integrations. Currently supports DefectDojo.
 
 ```
-tally --project NAME --command integration-sync [--run-id ID]
+tally --project NAME --command integration-sync [--run-id ID] [--engagement-type TYPE]
 ```
 
 | Flag | Description |
 |------|-------------|
 | `--run-id ID` | Export findings from a specific scan run only |
+| `--engagement-type TYPE` | Override the engagement type for this sync |
 
 Requires DefectDojo connection settings in `config/global.json` and targeting settings in the project's `project.json`. See [docs/integrations/defect-dojo.md](integrations/defect-dojo.md) for configuration.
 
@@ -239,69 +247,129 @@ Does not require `--project`. Starts the API server and frontend dev server, the
 python3 tally-cli.py --command ui
 ```
 
-### repo-add
+### project-create
 
-Add a repository to a project with optional authentication.
+Create a new project without the interactive REPL wizard.
 
 ```
-tally --project NAME --command repo-add --name NAME --type TYPE --path PATH
-                                        [--auth-type {form,header}]
-                                        [--auth-header "Name: Value"]
-                                        [--auth-header-env "Name=ENV_VAR"]
+tally --command project-create --project NAME [--company-name NAME]
+      [--department-name NAME] [--abbreviation CODE]
 ```
 
 | Flag | Description |
 |------|-------------|
-| `--name NAME` | Repository identifier (required) |
-| `--type TYPE` | Repository type: `git`, `svn`, `local` (required) |
-| `--path PATH` | Local or remote path to repository (required) |
-| `--auth-type {form,header}` | Authentication method: `form` for login credentials, `header` for HTTP headers |
-| `--auth-header "Name: Value"` | HTTP header with inline value (repeatable). Only valid with `--auth-type header` |
-| `--auth-header-env "Name=ENV_VAR"` | HTTP header with environment variable value (repeatable). Only valid with `--auth-type header` |
-
-If `--auth-type` is omitted, no authentication is configured. When `--auth-type header` is specified, repeat `--auth-header` and `--auth-header-env` flags to add multiple headers.
+| `--company-name NAME` | Company name for report headers |
+| `--department-name NAME` | Department name (optional) |
+| `--abbreviation CODE` | Finding ID prefix, max 3 chars (optional) |
 
 ```bash
-# Add a repository without auth
-python3 tally-cli.py --project myapp --command repo-add --name backend --type git --path /repos/backend
+python3 tally-cli.py --command project-create --project myapp --company-name "Acme Corp" --abbreviation ACM
+```
+
+### project-list
+
+List all projects.
+
+```
+tally --command project-list
+```
+
+Does not require `--project`.
+
+```bash
+python3 tally-cli.py --command project-list
+```
+
+### repo-add
+
+Add a repository to a project.
+
+```
+tally --project NAME --command repo-add --repo-name NAME --repo-path PATH
+      [--languages LANGS] [--repo-type TYPES] [--base-urls URLS]
+      [--container-name NAME] [--docker-path PATH] [--dependencies-file PATH]
+      [--test-dirs DIRS] [--ignore-dirs DIRS] [--no-crawl]
+      [--graphql-paths PATHS] [--psalm-stubs STUBS] [--graphql-cop-headers JSON]
+      [--auth-type {form,header}] [--auth-header "Name: Value"]
+      [--auth-header-env "Name=ENV_VAR"]
+```
+
+| Flag | Description |
+|------|-------------|
+| `--repo-name NAME` | Repository identifier (required) |
+| `--repo-path PATH` | Filesystem path to the repository (required) |
+| `--languages LANGS` | Comma-separated languages (e.g. `python,javascript`) |
+| `--repo-type TYPES` | Comma-separated service types: `library`, `api`, `ui` |
+| `--base-urls URLS` | Comma-separated base URLs for DAST tools |
+| `--container-name NAME` | Docker container name (enables Docker mode) |
+| `--docker-path PATH` | Mount path inside the container |
+| `--dependencies-file PATH` | Dependencies file for SCA scanning |
+| `--test-dirs DIRS` | Comma-separated test directory names to exclude |
+| `--ignore-dirs DIRS` | Comma-separated directory names to skip |
+| `--no-crawl` | Disable Katana/Noir crawling for this repo |
+| `--graphql-paths PATHS` | Comma-separated GraphQL endpoint paths |
+| `--psalm-stubs STUBS` | Comma-separated Psalm stub packages |
+| `--graphql-cop-headers JSON` | JSON string of HTTP headers for graphql-cop |
+| `--auth-type {form,header}` | Authentication method: `form` for login credentials, `header` for HTTP headers |
+| `--auth-header "Name: Value"` | HTTP header with inline value (repeatable). Only valid with `--auth-type header` |
+| `--auth-header-env "Name=ENV_VAR"` | HTTP header resolved from environment variable (repeatable). Only valid with `--auth-type header` |
+
+```bash
+python3 tally-cli.py --project myapp --command repo-add --repo-name backend --repo-path /opt/code/backend --languages python --repo-type api --base-urls https://api.example.com
 
 # Add a repository with header-based auth
-python3 tally-cli.py --project myapp --command repo-add --name api --type local --path /data/api \
+python3 tally-cli.py --project myapp --command repo-add --repo-name api --repo-path /opt/code/api \
+  --languages python --repo-type api --base-urls https://api.example.com \
   --auth-type header \
   --auth-header "Authorization: Bearer abc123def456" \
   --auth-header-env "X-API-Key=MY_API_KEY"
 ```
 
+### repo-list
+
+List repositories in a project.
+
+```
+tally --project NAME --command repo-list
+```
+
+```bash
+python3 tally-cli.py --project myapp --command repo-list
+```
+
 ### repo-edit
 
-Edit an existing repository's settings and authentication.
+Edit an existing repository.
 
 ```
-tally --project NAME --command repo-edit --name NAME
-                                         [--auth-type {form,header}]
-                                         [--auth-header "Name: Value"]
-                                         [--auth-header-env "Name=ENV_VAR"]
-                                         [--clear-auth]
+tally --project NAME --command repo-edit --repo-name NAME [flags...]
 ```
+
+Accepts the same flags as `repo-add`. Only the specified flags are updated; unspecified fields keep their current values.
+
+Additionally, `repo-edit` accepts:
 
 | Flag | Description |
 |------|-------------|
-| `--name NAME` | Repository identifier to edit (required) |
-| `--auth-type {form,header}` | Change authentication method |
-| `--auth-header "Name: Value"` | Add or replace HTTP header with inline value (repeatable) |
-| `--auth-header-env "Name=ENV_VAR"` | Add or replace HTTP header with environment variable value (repeatable) |
 | `--clear-auth` | Remove all authentication settings |
 
-When changing `--auth-type`, previous auth settings are replaced. Use `--clear-auth` to remove all auth without specifying a new type.
-
 ```bash
-# Switch from form auth to header auth
-python3 tally-cli.py --project myapp --command repo-edit --name backend \
-  --auth-type header \
-  --auth-header "X-API-Token=secret123"
+python3 tally-cli.py --project myapp --command repo-edit --repo-name backend --base-urls https://api.example.com,https://staging.example.com
 
 # Remove all auth from a repository
-python3 tally-cli.py --project myapp --command repo-edit --name api --clear-auth
+python3 tally-cli.py --project myapp --command repo-edit --repo-name api --clear-auth
+```
+
+### repo-delete
+
+Delete a repository from a project.
+
+```
+tally --project NAME --command repo-delete --repo-name NAME
+```
+
+```bash
+python3 tally-cli.py --project myapp --command repo-delete --repo-name backend
 ```
 
 ---

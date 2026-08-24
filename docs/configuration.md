@@ -23,7 +23,7 @@ Each of six inference features can use a different provider independently:
 | `enrichment_inference` | Finding enrichment during ingest |
 | `report_inference` | The `report` command |
 | `embedding_inference` | ChromaDB vector embeddings |
-| `noir_inference` | NOIR security API |
+| `noir_inference` | Noir AI-assisted endpoint discovery |
 | `endpoint_extraction_inference` | LLM-based endpoint extraction from source code |
 
 Triage uses the same feature-inference pattern through `triage_inference`. The `provider` field selects which provider block supplies the base URL and default model. Optional overrides like `model` work the same way as for other features.
@@ -41,10 +41,11 @@ Triage uses the same feature-inference pattern through `triage_inference`. The `
 | `enrichment_inference` | object | Feature config for finding enrichment during ingest. See [Feature Config Fields](#feature-config-fields). |
 | `report_inference` | object | Feature config for the `report` command. See [Feature Config Fields](#feature-config-fields). |
 | `embedding_inference` | object | Feature config for ChromaDB vector embeddings. See [Feature Config Fields](#feature-config-fields). |
-| `noir_inference` | object | Feature config for NOIR security API. See [Feature Config Fields](#feature-config-fields). |
+| `noir_inference` | object | Feature config for Noir AI-assisted endpoint discovery. See [Feature Config Fields](#feature-config-fields). |
 | `endpoint_extraction_inference` | object | Feature config for LLM-based endpoint extraction. See [Feature Config Fields](#feature-config-fields). |
 | `triage_inference` | object | Feature config for AI triage. Requires Docker. See [Feature Config Fields](#feature-config-fields) and [docs/triage.md](triage.md). |
 | `antares_inference` | object | Feature config for Antares CWE scanner LLM backend. See [Feature Config Fields](#feature-config-fields) and [docs/antares-shim.md](antares-shim.md). |
+| `antares_sweep_config` | object | CWE sweep parameters for Antares. Fields: `max_cwes` (int, maximum CWE classes per sweep) and `workers` (int, maximum concurrent CWE workers). See [docs/antares-shim.md](antares-shim.md). |
 | `defectdojo` | object | DefectDojo connection settings. See [DefectDojo Fields](#defectdojo-fields) and [docs/integrations/defect-dojo.md](integrations/defect-dojo.md). |
 | `post_scan_sync` | list\[string\] | Integrations to auto-sync after each scan. Supported values: `"defectdojo"`. Default: `[]` (disabled). See [docs/integrations/defect-dojo.md](integrations/defect-dojo.md#automatic-post-scan-sync). |
 | `post_triage_sync` | list\[string\] | Integrations to auto-sync after triage. Supported values: `"defectdojo"`. Default: `[]` (disabled). See [docs/integrations/defect-dojo.md](integrations/defect-dojo.md#automatic-post-triage-sync). |
@@ -52,6 +53,10 @@ Triage uses the same feature-inference pattern through `triage_inference`. The `
 | `report_finding_prefix` | string | Default prefix for finding IDs in reports (e.g. `TAL-001`). Overridden per-project by `abbreviation`. Default: `"TAL"`. |
 | `location_attestation_confirmed` | bool | Set to `true` after confirming you are not in a restricted jurisdiction (see Legal Notice). Default: `false`. |
 | `enrichment_max_concurrency` | int | Maximum number of concurrent LLM calls during finding enrichment. See [Enrichment Concurrency](#enrichment-concurrency). Default: `4`. |
+| `triage_session_timeout_seconds` | int | Maximum duration of a single triage session in seconds. Default: `300`. |
+| `report_retention_count` | int | Maximum number of non-pinned reports retained per project. Older reports are deleted after each successful generation. Set to `0` to disable retention cleanup. Default: `10`. |
+| `chat_session_retention_count` | int | Maximum number of expired chat sessions retained per project. Older sessions and their messages are deleted after each scan-triggered sealing. Set to `0` to disable retention cleanup. Default: `20`. |
+| `blind_xss_callback_url` | string | Blind XSS callback URL. Passed to DalFox via `-b` and enables XSStrike `--blind` mode when non-empty. Must start with `http://` or `https://` if set. Default: `""`. |
 | `web_ui_host` | string | `"127.0.0.1"` | Bind address for the FastAPI server and Vite dev server. `0.0.0.0` and `::` are rejected. Use an explicit loopback or LAN IP. |
 | `web_ui_port` | int | `8080` | TCP port for the FastAPI server started by `ui serve`. |
 | `web_ui_vite_port` | int | `3000` | TCP port for the Vite dev server started by `ui serve`. |
@@ -101,7 +106,7 @@ The `ollama` and `llama_cpp` provider configs share the same schema:
 | Field | Type | Default | Description |
 |---|---|---|---|
 | `api_key` | string | `""` | Anthropic API key. Leave empty to use the `ANTHROPIC_API_KEY` environment variable instead (recommended). Also used for triage when `triage_inference.provider` is `"claude"`. |
-| `model` | string | `"claude-opus-4-5"` | Anthropic model ID (e.g. `claude-opus-4-5`, `claude-haiku-4-5-20251001`). Also controls the triage model when using the Claude Code backend. |
+| `model` | string | `"claude-opus-4-6[1m]"` | Anthropic model ID (e.g. `claude-opus-4-6`, `claude-sonnet-5`). Also controls the triage model when using the Claude Code backend. |
 | `max_tokens` | int | `1024` | Maximum tokens in the model response. |
 | `timeout_seconds` | int | `60` | Request timeout in seconds for Anthropic API calls. |
 
@@ -206,7 +211,7 @@ See [docs/integrations/defect-dojo.md](integrations/defect-dojo.md) for entity m
   },
   "claude": {
     "api_key": "",
-    "model": "claude-opus-4-5",
+    "model": "claude-opus-4-6[1m]",
     "max_tokens": 1024,
     "timeout_seconds": 60
   },
@@ -273,7 +278,7 @@ See [docs/triage.md](triage.md) for setup details and the full security model.
 {
   "claude": {
     "api_key": "",
-    "model": "claude-opus-4-5",
+    "model": "claude-opus-4-6[1m]",
     "max_tokens": 1024,
     "timeout_seconds": 60
   },
@@ -350,6 +355,67 @@ on a different host or port:
   "location_attestation_confirmed": false
 }
 ```
+
+### Example: OpenAI for Chat and Reporting
+
+OpenAI provides LLM chat and reporting capabilities but does not provide embeddings in Tally. Pair it with a local or remote embedding model like Ollama.
+
+```json
+{
+  "openai": {
+    "model": "gpt-4o",
+    "timeout_seconds": 60
+  },
+  "ollama": {
+    "base_url": "http://localhost:11434",
+    "model": "nomic-embed-text:latest"
+  },
+  "chat_inference": {
+    "provider": "openai"
+  },
+  "enrichment_inference": {
+    "provider": "openai"
+  },
+  "report_inference": {
+    "provider": "openai"
+  },
+  "embedding_inference": {
+    "provider": "ollama"
+  }
+}
+```
+
+Leave `api_key` empty in the `openai` block to have Tally read the key from the `OPENAI_API_KEY` environment variable at startup.
+
+### Example: Voyage Embeddings with Claude
+
+Voyage AI provides specialized embedding models. Pair it with Claude for chat, enrichment, and reporting capabilities.
+
+```json
+{
+  "claude": {
+    "model": "claude-opus-4-6[1m]",
+    "timeout_seconds": 60
+  },
+  "voyage": {
+    "model": "voyage-3"
+  },
+  "chat_inference": {
+    "provider": "claude"
+  },
+  "enrichment_inference": {
+    "provider": "claude"
+  },
+  "report_inference": {
+    "provider": "claude"
+  },
+  "embedding_inference": {
+    "provider": "voyage"
+  }
+}
+```
+
+Leave `api_key` empty in both the `claude` and `voyage` blocks to have Tally read them from `ANTHROPIC_API_KEY` and `VOYAGE_API_KEY` environment variables.
 
 ---
 
@@ -428,6 +494,75 @@ Supported language values for SCA tool selection:
 - `python` -> pip-audit
 - `javascript`, `typescript`, `node` -> npm-audit
 - `php` -> composer-audit
+
+#### Service Configuration
+
+A repository can contain multiple services (e.g., a REST API, a GraphQL service, and a UI). Each service has its own scan configuration. At least one service is required.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `services` | array of object | yes | List of services within this repository. Each service is scanned independently. See [Service Fields](#service-fields). |
+
+#### Service Fields
+
+Each service object in the `services` array contains:
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `name` | string | (required) | Service name used in logs and output. |
+| `relative_path` | string | `""` | Path relative to repository root. Use when a service occupies a subdirectory. |
+| `type` | array of string | `[]` | Service types: `library`, `api`, `ui`. `library` is mutually exclusive with other types. Empty list allowed. |
+| `languages` | array of string | `[]` | Programming languages used in this service. Used to select SCA tools. |
+| `docker_path` | string | `""` | Mount path for the service inside Docker containers. Required when `container_name` is set. |
+| `container_name` | string | `""` | Docker container name (as shown by `docker ps`). Required when `docker_path` is set. |
+| `base_urls` | array of string | `[]` | API base URLs for ZAP scanning. Empty list disables ZAP for this service. |
+| `test_dirs` | array of string | `[]` | Directory names to exclude from SAST and secrets results (matched by name at any depth, case-insensitive). |
+| `ignore_dirs` | array of string | `[]` | Directory names to exclude from SAST, secrets, and URL discovery (matched by name at any depth, case-insensitive). |
+| `dependencies_file` | string | `""` | Path to the Python dependencies file for pip-audit. For Docker services, use container-internal paths (e.g. `/app/requirements.txt`). For local services, use local filesystem paths (e.g. `requirements.txt`). |
+| `crawl_enabled` | bool | `true` | When `false`, skip Katana and Noir URL crawling for this service. Set when using endpoint files. |
+| `graphql_paths` | array of string | `[]` | GraphQL endpoint paths for graphql-cop scanning. When empty, common patterns (`/graphql`, `/gql`, `/api/graphql`) are matched against the URL inventory. When set, only these paths are scanned. |
+| `katana_headless` | bool or null | `null` | Override repository-level headless setting for this service. `null` uses the repository-level setting. |
+| `katana_depth` | int or null | `null` | Override repository-level crawl depth for this service (0-20). `null` uses the repository-level setting. Automatically capped at 5 when headless mode is enabled. |
+
+#### Tool-Specific Repository Fields
+
+These fields configure behavior for individual security scanners across the entire repository. Service-level overrides (for Katana only) are documented in [Service Fields](#service-fields).
+
+##### XSStrike Configuration
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `xsstrike_crawl_level` | int | `10` | Crawl depth level passed to XSStrike via `-l`. Higher values reach deeper pages but take longer. Default 10 works well for most apps. |
+| `xsstrike_headers` | object | `{}` | Extra HTTP headers passed to XSStrike via `--headers` (JSON serialized). Use to supply authentication cookies, e.g. `{"Cookie": "session=abc123"}`. |
+
+##### DalFox Configuration
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `dalfox_headers` | object | `{}` | Extra HTTP headers passed to DalFox via `-H`. Use for authentication cookies, e.g. `{"Cookie": "session=abc123"}`. |
+
+##### SQLMap Configuration
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `sqlmap_level` | int | `2` | Detection level (1-5). Higher levels test more payloads and injection points but take longer. Level 2 adds cookie and additional parameter testing. |
+| `sqlmap_risk` | int | `2` | Risk level (1-3). Higher risk enables heavier payloads; level 3 can alter data via OR-based injections. Risk 2 adds time-based blind testing while remaining safe for production targets. |
+| `sqlmap_headers` | object | `{}` | Extra HTTP headers passed to sqlmap via `--header`. Use for authentication cookies, e.g. `{"Cookie": "session=abc123"}`. |
+| `sqlmap_tamper` | string | `""` | Comma-separated tamper script names for WAF evasion (e.g. `space2comment,between`). Leave empty for default payloads. |
+
+##### Katana Configuration
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `katana_headless` | bool | `false` | Enable headless Chrome mode for Katana crawling. Slower but discovers JavaScript-rendered routes and SPA endpoints. Recommended for Node.js and SPA applications. Override per-service in [Service Fields](#service-fields). |
+| `katana_depth` | int | `5` | Katana crawl depth (`-d` flag). Headless mode automatically caps this at 5 to prevent stalls on cyclic or parameterized apps. Override per-service in [Service Fields](#service-fields). |
+| `katana_headers` | object | `{}` | Extra HTTP headers passed to Katana via `-H`. Use for authentication cookies or custom user agents, e.g. `{"Cookie": "session=abc123"}`. |
+
+##### GraphQL-Cop Configuration
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `graphql_cop_headers` | object | `{}` | Extra HTTP headers passed to graphql-cop via `-H`. Use to supply authentication tokens, e.g. `{"Authorization": "Bearer token123"}`. |
 
 #### Example
 

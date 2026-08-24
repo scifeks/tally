@@ -126,9 +126,28 @@ class Base<ToolName>Tool(ToolInterface):
         return summary.get("total_findings", len(parsed_data.get("findings", [])))
 ```
 
+### `ExecutionPass` parameters
+
+The template above shows the two required fields. `ExecutionPass` also accepts
+optional fields for tools that need environment overrides, working directory
+control, or stdin-based invocation:
+
+| Field | Type | Default | Purpose |
+|---|---|---|---|
+| `label_suffix` | str | (required) | Label for output files and progress display |
+| `kwargs` | dict | (required) | Passed as `**kwargs` to `build_command()` |
+| `cwd` | str or None | None | Working directory override for the subprocess |
+| `env` | dict or None | None | Environment variables injected into the subprocess |
+| `stdin_data` | str or None | None | Data piped to the tool's stdin |
+
+Tools that receive configuration via environment variables (e.g. endpoint URLs,
+model names, timeout values) set `env` on the pass. Tools that accept a JSON
+payload via stdin instead of command-line arguments set `stdin_data`. Both are
+forwarded through the executor to the subprocess runner.
+
 ### `always_run` vs `language_gates`
 
-| `always_run` | `language_gates` | Behaviour |
+| `always_run` | `language_gates` | Behavior |
 |---|---|---|
 | `True` | `[]` | Runs on every repo |
 | `True` | `["python"]` | Runs on every repo (`always_run` overrides gates) |
@@ -467,7 +486,7 @@ Either run `tool add` in the REPL or write the entry manually:
 ### Wrapper is registered
 
 ```bash
-.venv/bin/python -c "from application.tools.registry import tool_registry, discover_tools; discover_tools('.'); t = tool_registry.get_tool('<tool-name>'); print(t, t.check_available(), t.scan_segment)"
+.venv/bin/python -c "from application.tools.registry import ToolRegistry, discover_tools; r = ToolRegistry(); discover_tools('.', r); t = r.get_tool('<tool-name>'); print(t, t.check_available(), t.scan_segment)"
 ```
 
 ### Parse round-trip
@@ -488,6 +507,105 @@ Either run `tool add` in the REPL or write the entry manually:
 ```bash
 .venv/bin/pytest tests/unit/ -q --tb=short
 ```
+
+---
+
+## Advanced patterns
+
+Not every tool follows the simple binary-in, JSON-out pattern. This section covers
+patterns for tools with external service dependencies, non-standard output handling,
+or partial failure modes. See the Antares adapter for a real example of all three.
+
+### External service lifecycle
+
+Some tools require a companion process (e.g. an API shim or proxy) running during
+the scan. Manage the lifecycle in `build_execution_passes` (start) and
+`merge_pass_results` (stop):
+
+```python
+def build_execution_passes(self, context: ExecutionContext) -> list[ExecutionPass]:
+    self._service = start_companion_service()
+    try:
+        return [ExecutionPass(
+            label_suffix=context.repo.name,
+            kwargs={},
+            env={"SERVICE_URL": self._service.url},
+        )]
+    except Exception:
+        self._service.stop()
+        raise
+
+def merge_pass_results(self, pass_results: list[ToolResult]) -> ToolResult:
+    try:
+        return pass_results[0]
+    finally:
+        if self._service is not None:
+            self._service.stop()
+```
+
+Use a `try/finally` in `merge_pass_results` so the companion process is stopped
+even when the scan fails.
+
+### Overriding `parse_output`
+
+The default `parse_output` on `ToolInterface` reads the tool's stdout file and
+passes it to the parser. Override it when the tool writes output to non-standard
+locations (temp directories, multiple files) or when you need to post-process
+trace data:
+
+```python
+def parse_output(
+    self,
+    output: str,
+    files: dict[str, Path],
+) -> dict[str, Any]:
+    json_path = files.get("stdout")
+    if json_path is not None and json_path.exists():
+        with open(json_path, encoding="utf-8") as f:
+            data = json.load(f)
+        parsed = parse_tool_data(data)
+    else:
+        parsed = parse_tool_json_string(output)
+
+    if self._trace_dir is not None:
+        parsed["traces"] = load_traces(self._trace_dir)
+    return parsed
+```
+
+### Partial failure handling
+
+Tools that exit non-zero on partial failures (some workers failed, some
+succeeded) are marked `success=False` by the executor. If the output still
+contains valid findings, override `merge_pass_results` to recover:
+
+```python
+def merge_pass_results(self, pass_results: list[ToolResult]) -> ToolResult:
+    result = pass_results[0]
+    if (
+        not result.success
+        and result.parsed_data
+        and result.parsed_data.get("findings")
+    ):
+        result = ToolResult(
+            tool_name=result.tool_name,
+            success=True,
+            output=result.output,
+            parsed_data=result.parsed_data,
+            output_files=result.output_files,
+            timestamp=result.timestamp,
+            duration_seconds=result.duration_seconds,
+            finding_count=result.finding_count,
+            repo=result.repo,
+        )
+    return result
+```
+
+### Docker-only or local-only tools
+
+Not every tool needs both a local and a Docker wrapper. If the tool only runs
+locally (e.g. it depends on a companion service that manages its own process),
+skip the Docker wrapper file. The auto-discovery system loads whichever wrapper
+matches the `location` field in `config/commands.json`.
 
 ---
 

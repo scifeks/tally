@@ -70,7 +70,6 @@ def _write_global_config(base_path: Path) -> None:
 
 
 def _seed_finding(finding_repo: object, run_id: int, row: dict) -> tuple[int, str]:
-    """Seed a finding and return (sqlite_id, fingerprint)."""
     normalized = normalize_test_findings([row])
     finding_repo.insert_findings(  # type: ignore[union-attr]
         run_id, normalized

@@ -641,7 +641,7 @@ export interface ChatSendMessageResponse {
 
 /**
  * 202 response from `POST .../sessions/:sid/cancel`. `cancelledMessageId` is
- * always null in v1 - the assistant id is only assigned at stream_end.
+ * always null in v1; the assistant id is only assigned at stream_end.
  */
 export interface ChatCancelResponse {
   sessionId: number

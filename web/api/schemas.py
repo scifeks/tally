@@ -207,7 +207,7 @@ class ManualFindingCreateRequest(BaseModel):
 
 
 class FindingResponse(BaseModel):
-    """Serialised finding returned by the findings API.
+    """Serialized finding returned by the findings API.
 
     Defined as a permissive model to accommodate the dynamic ``meta``
     JSON blob and per-tool optional fields.

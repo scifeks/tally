@@ -19,7 +19,17 @@ configured in `config/global.json`. The capabilities probe (`GET
 /api/v1/capabilities`) returns `chat_enabled: true` when
 `chat_inference` is present.
 
+Chat retrieval requires an embedding provider (`embedding_inference`) to encode
+questions and findings for vector search. Supported embedding providers are
+`ollama`, `llama_cpp`, and `voyage`. Voyage is embedding-only and cannot be
+used for chat inference itself.
+
 ## Configuration
+
+Chat requires two provider configurations: `chat_inference` for the LLM and
+`embedding_inference` for vector retrieval. See
+[docs/configuration.md](configuration.md) for the full `embedding_inference`
+reference.
 
 To enable chat, edit `config/global.json`:
 
@@ -33,7 +43,15 @@ To enable chat, edit `config/global.json`:
 
    Other providers are `"llama_cpp"`, `"claude"`, and `"openai"`.
 
-2. Configure the provider block with the model, host, and port:
+2. Add an `embedding_inference` feature config for retrieval:
+
+   ```json
+   {
+     "embedding_inference": { "provider": "ollama" }
+   }
+   ```
+
+3. Configure the provider blocks with the model, host, and port:
 
    ```json
    {
@@ -46,11 +64,12 @@ To enable chat, edit `config/global.json`:
    }
    ```
 
-3. If using the `ollama` provider, make sure Ollama is running and the
-   configured model has been pulled:
+4. If using the `ollama` provider, make sure Ollama is running and the
+   configured models have been pulled:
 
    ```bash
    ollama pull qwen2.5:14b
+   ollama pull nomic-embed-text
    ollama serve
    ```
 
@@ -78,6 +97,24 @@ Run `ui serve` from the REPL to start the Web UI, then open the Chat
 tab. The SPA queries the same project knowledge base used by the REPL.
 The web UI supports creating, switching between, and deleting chat
 sessions, and messages stream in real time.
+
+## Document Ingest
+
+By default, chat retrieves answers from your project's scan findings. You can
+augment the RAG knowledge base with custom markdown or text documents using the
+`docs` REPL command:
+
+```
+[acme-audit]> docs add runbooks/injection-fix-guide.md
+[acme-audit]> docs list
+[acme-audit]> docs remove runbooks/injection-fix-guide.md
+```
+
+Supported file types are `.md` and `.txt`. Documents are chunked and embedded
+alongside findings, allowing chat to draw answers from both sources. This is
+useful for providing custom runbooks, remediation guides, or domain-specific
+context that improves answer quality. See [docs/repl.md](repl.md) for the
+full `docs` command reference.
 
 ## Limitations
 

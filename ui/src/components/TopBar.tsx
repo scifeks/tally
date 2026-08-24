@@ -194,10 +194,9 @@ export function TopBar() {
         </div>
 
         {/* Row 2: primary nav tabs.
-            NOTE: no overflow-* here - an overflow ancestor clips
-            absolutely-positioned descendants (e.g. the CONFIG dropdown panel),
-            which was rendering the panel as a sliver peeking from the clipped
-            edge. Dropdown content must be allowed to escape this row. */}
+            Avoid overflow-* here; overflow ancestors clip absolutely-positioned
+            descendants (e.g. the CONFIG dropdown panel), rendering it as a sliver.
+            Dropdown content must escape this row. */}
         <nav className="flex items-stretch">
           {primaryNav.map(item => (
             <NavLink

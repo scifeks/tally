@@ -18,7 +18,7 @@ Both backends run inside a Docker container with filesystem and network sandboxi
 The agent receives the finding and source content inline, produces a structured JSON
 verdict, and exits. No persistent agent state is kept between findings.
 
-Triage can also be started from the web UI. The Triage page shows batch progress in real time and lets you resume failed runs. See [docs/ui.md](ui.md) for the UI walkthrough.
+Triage can also be started from the web UI. The Triage page shows batch progress in real time and lets you resume failed runs. See [docs/web-ui.md](web-ui.md) for the UI walkthrough.
 
 ---
 
@@ -122,28 +122,6 @@ Triage: 3 sessions run, 2 success, 1 failed, 0 incomplete
 The image build message appears only on the first run. On later runs, containers
 start within a few seconds if they are not already running.
 
-### Batch-only mode
-
-```
-[acme-audit]> triage --batch
-Created 3 batches
-```
-
-Creates triage batches from untriaged findings without starting containers or
-invoking the agent. Use this to preview how findings will be grouped before
-committing to a full triage run.
-
-### Dry-run mode
-
-```
-[acme-audit]> triage --dry-run
-Rendered 3 batch prompt(s); see DEBUG log
-```
-
-Creates batches and renders the prompts that would be sent to the agent, writing
-them to the DEBUG log. No containers are started and no agent is invoked. Use this
-to inspect prompt construction or debug rendering issues.
-
 ---
 
 ## Container Lifecycle
@@ -191,8 +169,11 @@ The next `triage` call starts containers from the rebuilt image.
 
 ### What the sandbox protects against
 
-**Filesystem isolation.** The agent can only access repositories mounted into the
-container at `/workspace/repos/`. All other host files are invisible. Credential
+**Filesystem isolation.** The agent runs with a working directory and file access
+scope limited to `/workspace`. Repositories are mounted into the container at
+`/workspace/repos/`, and the agent CLI tools (for Claude Code and OpenCode) are
+invoked with `--add-dir /workspace` or `--dir /workspace` flags, restricting all
+file operations to that subtree. All other host files are invisible. Credential
 files (when using OAuth mode) are mounted read-only.
 
 **Network restriction.** A tinyproxy sidecar running in FilterDefaultDeny mode
@@ -254,19 +235,13 @@ you run. Smaller models (such as Qwen3-Coder-30B) produce more conservative
 verdicts and are more likely to miss subtle sanitization or protection patterns.
 No finding data leaves your network.
 
-### What to expect
+### Batching differences
 
-In proof-of-concept testing with 6 SAST findings across both backends:
-
-- Claude Code (Sonnet): 6/6 format adherence, 37-second median per finding
-- OpenCode (Qwen3-Coder-30B): 5/6 format adherence, 20-second median per finding
-  (one finding timed out at 120 seconds)
-- The two backends fully agreed on 1 of 5 findings where both produced results
-
-Running both backends on the same findings will produce different results. This is
-expected. The frontier model is more aggressive about identifying false positives
-when data-flow evidence supports it, while the local model tends toward more
-conservative assessments.
+Claude Code processes up to 4 findings per batch. Local models (Ollama and
+Llama.cpp) use a batch size of 1 (one finding per agent invocation) because
+smaller models perform better with isolated analysis tasks. This means a scan
+with 100 SAST findings will result in 25 agent invocations for Claude Code but
+100 for OpenCode. Batching is automatic and cannot be overridden.
 
 ---
 
