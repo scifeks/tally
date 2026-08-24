@@ -14,7 +14,7 @@ class TestFindingHistoryAPI:
         client, finding_id, _, _, _, project_id = app_client
         resp = await client.get(
             f"/api/v1/projects/{project_id}/findings/{finding_id}/history",
-            headers={"Origin": f"http://127.0.0.1:{TEST_PORT}"},
+            headers={"Origin": f"https://127.0.0.1:{TEST_PORT}"},
         )
         assert resp.status_code == 200
         body = resp.json()
@@ -31,7 +31,7 @@ class TestFindingHistoryAPI:
         )
         resp = await client.get(
             f"/api/v1/projects/{project_id}/findings/{finding_id}/history",
-            headers={"Origin": f"http://127.0.0.1:{TEST_PORT}"},
+            headers={"Origin": f"https://127.0.0.1:{TEST_PORT}"},
         )
         assert resp.status_code == 200
         body = resp.json()
@@ -53,7 +53,7 @@ class TestFindingHistoryAPI:
             )
         resp = await client.get(
             f"/api/v1/projects/{project_id}/findings/{finding_id}/history",
-            headers={"Origin": f"http://127.0.0.1:{TEST_PORT}"},
+            headers={"Origin": f"https://127.0.0.1:{TEST_PORT}"},
         )
         assert resp.status_code == 200
         assert resp.json()["total"] == 3
@@ -68,7 +68,7 @@ class TestFindingHistoryAPI:
             )
         resp = await client.get(
             f"/api/v1/projects/{project_id}/findings/{finding_id}/history",
-            headers={"Origin": f"http://127.0.0.1:{TEST_PORT}"},
+            headers={"Origin": f"https://127.0.0.1:{TEST_PORT}"},
         )
         items = resp.json()["items"]
         timestamps = [i["timestamp"] for i in items]
@@ -85,7 +85,7 @@ class TestFindingHistoryAPI:
         resp = await client.get(
             f"/api/v1/projects/{project_id}/findings/{finding_id}/history"
             "?limit=2&offset=0",
-            headers={"Origin": f"http://127.0.0.1:{TEST_PORT}"},
+            headers={"Origin": f"https://127.0.0.1:{TEST_PORT}"},
         )
         body = resp.json()
         assert body["total"] == 3
@@ -103,12 +103,12 @@ class TestFindingHistoryAPI:
         resp_page1 = await client.get(
             f"/api/v1/projects/{project_id}/findings/{finding_id}/history"
             "?limit=2&offset=0",
-            headers={"Origin": f"http://127.0.0.1:{TEST_PORT}"},
+            headers={"Origin": f"https://127.0.0.1:{TEST_PORT}"},
         )
         resp_page2 = await client.get(
             f"/api/v1/projects/{project_id}/findings/{finding_id}/history"
             "?limit=2&offset=2",
-            headers={"Origin": f"http://127.0.0.1:{TEST_PORT}"},
+            headers={"Origin": f"https://127.0.0.1:{TEST_PORT}"},
         )
         ids_p1 = {i["id"] for i in resp_page1.json()["items"]}
         ids_p2 = {i["id"] for i in resp_page2.json()["items"]}
@@ -118,7 +118,7 @@ class TestFindingHistoryAPI:
         client, _, _, _, _, project_id = app_client
         resp = await client.get(
             f"/api/v1/projects/{project_id}/findings/999999/history",
-            headers={"Origin": f"http://127.0.0.1:{TEST_PORT}"},
+            headers={"Origin": f"https://127.0.0.1:{TEST_PORT}"},
         )
         assert resp.status_code == 404
 
@@ -126,6 +126,6 @@ class TestFindingHistoryAPI:
         client, finding_id, _, _, _, _ = app_client
         resp = await client.get(
             f"/api/v1/projects/999999/findings/{finding_id}/history",
-            headers={"Origin": f"http://127.0.0.1:{TEST_PORT}"},
+            headers={"Origin": f"https://127.0.0.1:{TEST_PORT}"},
         )
         assert resp.status_code == 404

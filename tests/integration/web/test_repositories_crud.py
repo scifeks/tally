@@ -31,7 +31,7 @@ async def _auth(client: httpx.AsyncClient) -> dict[str, str]:
     resp = await client.post(
         "/api/v1/auth/exchange",
         json={"token": _HANDSHAKE},
-        headers={"origin": f"http://127.0.0.1:{_TEST_PORT}"},
+        headers={"origin": f"https://127.0.0.1:{_TEST_PORT}"},
     )
     assert resp.status_code == 200
     for name, value in resp.cookies.items():
@@ -40,7 +40,7 @@ async def _auth(client: httpx.AsyncClient) -> dict[str, str]:
     csrf_token = client.cookies["tally_csrf"]
     return {
         "X-CSRF-Token": csrf_token,
-        "Origin": f"http://127.0.0.1:{_TEST_PORT}",
+        "Origin": f"https://127.0.0.1:{_TEST_PORT}",
     }
 
 
@@ -71,7 +71,7 @@ async def repo_crud_client(tmp_path: Path):
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(
         transport=transport,
-        base_url=f"http://127.0.0.1:{_TEST_PORT}",
+        base_url=f"https://127.0.0.1:{_TEST_PORT}",
     ) as client:
         mut_headers = await _auth(client)
         yield client, mut_headers, project_id, str(repo_path)

@@ -90,15 +90,11 @@ class TestPhase6RagDraft:
         mock_generator.generate.side_effect = _capture_generate
 
         with (
-            patch(
-                "application.reporting.draft_orchestrator.make_chromadb_vector_index"
-            ),
-            patch("application.reporting.draft_orchestrator.get_embedding_provider"),
+            patch("factories.llm.create_vector_index"),
+            patch("factories.llm.create_embedding_provider"),
             patch("application.reporting.draft_orchestrator.FindingKnowledgeBase"),
             patch("application.reporting.draft_orchestrator.QueryEngine") as mock_qe,
-            patch(
-                "application.reporting.draft_orchestrator.get_llm_provider"
-            ) as mock_llm,
+            patch("factories.llm.create_llm_provider") as mock_llm,
             patch(
                 "application.reporting.draft_orchestrator.DraftQueryService"
             ) as mock_qs,
@@ -164,15 +160,11 @@ class TestPhase6RagDraft:
         mock_generator.generate.side_effect = _capture_generate
 
         with (
-            patch(
-                "application.reporting.draft_orchestrator.make_chromadb_vector_index"
-            ),
-            patch("application.reporting.draft_orchestrator.get_embedding_provider"),
+            patch("factories.llm.create_vector_index"),
+            patch("factories.llm.create_embedding_provider"),
             patch("application.reporting.draft_orchestrator.FindingKnowledgeBase"),
             patch("application.reporting.draft_orchestrator.QueryEngine") as mock_qe,
-            patch(
-                "application.reporting.draft_orchestrator.get_llm_provider"
-            ) as mock_llm,
+            patch("factories.llm.create_llm_provider") as mock_llm,
             patch(
                 "application.reporting.draft_orchestrator.DraftQueryService"
             ) as mock_qs,
@@ -231,15 +223,11 @@ class TestPhase6RagDraft:
         mock_generator.generate.return_value = "draft despite error"
 
         with (
-            patch(
-                "application.reporting.draft_orchestrator.make_chromadb_vector_index"
-            ),
-            patch("application.reporting.draft_orchestrator.get_embedding_provider"),
+            patch("factories.llm.create_vector_index"),
+            patch("factories.llm.create_embedding_provider"),
             patch("application.reporting.draft_orchestrator.FindingKnowledgeBase"),
             patch("application.reporting.draft_orchestrator.QueryEngine") as mock_qe,
-            patch(
-                "application.reporting.draft_orchestrator.get_llm_provider"
-            ) as mock_llm,
+            patch("factories.llm.create_llm_provider") as mock_llm,
             patch(
                 "application.reporting.draft_orchestrator.DraftQueryService"
             ) as mock_qs,

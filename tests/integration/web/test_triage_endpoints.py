@@ -1,4 +1,4 @@
-"""Integration tests for the Phase 6 triage endpoints."""
+"""Integration tests for triage endpoints."""
 
 from __future__ import annotations
 
@@ -32,7 +32,7 @@ def _reset_triage_state():
 
 
 def _seed_scan_run(factory, *, project_id: int) -> int:
-    """Insert a Phase 5.1 scan_runs row and return its id."""
+    """Insert a scan_runs row and return its id."""
     repo = RunRepository(factory)
     return repo.create(
         project_id=project_id,
@@ -165,6 +165,87 @@ async def test_detail_404_when_no_triage_batches(app_client) -> None:
     assert resp.json()["error"]["code"] == "NOT_FOUND"
 
 
+@pytest.mark.asyncio
+async def test_detail_returns_queued_when_handle_registered(app_client) -> None:
+    from application.locking.cancellation import CancellationToken
+
+    client, _fid, _rag, factory, _muth, project_id = app_client
+    run_id = _seed_scan_run(factory, project_id=project_id)
+    get_triage_run_registry().register(
+        scan_run_id=run_id,
+        project_id=project_id,
+        cancel_token=CancellationToken(),
+    )
+
+    resp = await client.get(f"/api/v1/projects/{project_id}/triage/{run_id}")
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["scan_run_id"] == run_id
+    assert body["project_id"] == project_id
+    assert body["status"] == "queued"
+    assert body["batches"] == []
+    assert body["total_findings"] == 0
+    assert body["processed_findings"] == 0
+
+
+@pytest.mark.asyncio
+async def test_detail_404_when_handle_belongs_to_other_project(
+    app_client,
+) -> None:
+    from application.locking.cancellation import CancellationToken
+
+    client, _fid, _rag, factory, _muth, project_id = app_client
+    run_id = _seed_scan_run(factory, project_id=project_id)
+    other_project_id = project_id + 9999
+    get_triage_run_registry().register(
+        scan_run_id=run_id,
+        project_id=other_project_id,
+        cancel_token=CancellationToken(),
+    )
+
+    resp = await client.get(f"/api/v1/projects/{project_id}/triage/{run_id}")
+    assert resp.status_code == 404, resp.text
+    assert resp.json()["error"]["code"] == "NOT_FOUND"
+
+
+@pytest.mark.asyncio
+async def test_detail_includes_cancelled_batches(app_client) -> None:
+    # After cancel_remaining flips pending/in_progress rows to the
+    # ``cancelled`` status, the detail response must still surface them
+    # so the UI can render them instead of silently dropping (TAL-237).
+    client, _fid, _rag, factory, _muth, project_id = app_client
+    run_id = _seed_scan_run(factory, project_id=project_id)
+    _seed_triage_batch(
+        factory,
+        run_id=run_id,
+        finding_ids=[1],
+        status="completed",
+        completed_at="2026-04-25T00:01:00Z",
+        started_at="2026-04-25T00:00:00Z",
+    )
+    _seed_triage_batch(factory, run_id=run_id, finding_ids=[2], status="pending")
+    _seed_triage_batch(factory, run_id=run_id, finding_ids=[3], status="in_progress")
+
+    TriageBatchRepository(factory).cancel_remaining(run_id)
+
+    resp = await client.get(f"/api/v1/projects/{project_id}/triage/{run_id}")
+    assert resp.status_code == 200, resp.text
+    statuses = sorted(b["status"] for b in resp.json()["batches"])
+    assert statuses == ["cancelled", "cancelled", "completed"]
+
+
+# GET /triage/events (SSE)
+
+
+@pytest.mark.asyncio
+async def test_sse_events_rejects_missing_scan_run_id(app_client) -> None:
+    # Defense in depth: the SSE stream must never fan out project-wide
+    # events. Callers must scope the subscription to one run (TAL-238).
+    client, *_, project_id = app_client
+    resp = await client.get(f"/api/v1/projects/{project_id}/triage/events")
+    assert resp.status_code == 422, resp.text
+
+
 # POST /triage  (dispatch)
 
 
@@ -273,6 +354,11 @@ async def test_start_triage_runs_worker_end_to_end(app_client, monkeypatch) -> N
         return {"sessions_run": 0, "success": 0, "failed": 0, "incomplete": 0}
 
     monkeypatch.setattr(triage_service, "run_triage_for_project", fake_run_triage)
+
+    from application.triage import container as _ctr
+
+    monkeypatch.setattr(_ctr, "ensure_triage_image", lambda *a, **kw: None)
+    monkeypatch.setattr(_ctr, "ensure_triage_containers", lambda *a, **kw: None)
 
     resp = await client.post(
         f"/api/v1/projects/{project_id}/triage",
@@ -424,7 +510,7 @@ def test_summarize_for_run_status_progression(app_client_sync) -> None:
 
     summary = repo.summarize_for_run(5)
     assert summary is not None
-    assert summary.status == "running"  # pending present → running
+    assert summary.status == "running"  # pending present so status = running
     assert summary.total_findings == 3
     assert summary.processed_findings == 2  # only completed batch counts
 
@@ -544,6 +630,57 @@ async def test_latest_returns_newest_run(app_client) -> None:
     assert body["project_id"] == project_id
     assert body["status"] == "running"
     assert body["total_findings"] == 2
+
+
+@pytest.mark.asyncio
+async def test_latest_404_when_newer_scan_exists(app_client) -> None:
+    """A newer scan_run makes the latest triage stale."""
+    client, _fid, _rag, factory, _muth, project_id = app_client
+    old_run = _seed_scan_run(factory, project_id=project_id)
+    _seed_triage_batch(
+        factory,
+        run_id=old_run,
+        finding_ids=[1],
+        status="completed",
+    )
+    _seed_scan_run(factory, project_id=project_id)
+
+    resp = await client.get(f"/api/v1/projects/{project_id}/triage/latest")
+    assert resp.status_code == 404, resp.text
+
+
+@pytest.mark.asyncio
+async def test_latest_404_when_terminal(app_client) -> None:
+    """A completed triage on the latest scan is terminal; returns 404."""
+    client, _fid, _rag, factory, _muth, project_id = app_client
+    run_id = _seed_scan_run(factory, project_id=project_id)
+    _seed_triage_batch(
+        factory,
+        run_id=run_id,
+        finding_ids=[1],
+        status="completed",
+    )
+
+    resp = await client.get(f"/api/v1/projects/{project_id}/triage/latest")
+    assert resp.status_code == 404, resp.text
+
+
+@pytest.mark.asyncio
+async def test_latest_200_when_still_running(app_client) -> None:
+    """A non-terminal triage on the latest scan returns 200."""
+    client, _fid, _rag, factory, _muth, project_id = app_client
+    run_id = _seed_scan_run(factory, project_id=project_id)
+    _seed_triage_batch(
+        factory,
+        run_id=run_id,
+        finding_ids=[1],
+        status="pending",
+    )
+
+    resp = await client.get(f"/api/v1/projects/{project_id}/triage/latest")
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["scan_run_id"] == run_id
+    assert resp.json()["status"] == "running"
 
 
 @pytest.mark.asyncio
@@ -689,3 +826,91 @@ def test_reset_for_resume_resets_failed_regardless_of_attempts(
 
     rows = repo.list_for_run(12)
     assert rows[0].status == "pending"
+
+
+# GET /triage/{scan_run_id} with after_batch_id filter
+
+
+@pytest.mark.asyncio
+async def test_detail_filters_by_after_batch_id(app_client) -> None:
+    client, _fid, _rag, factory, _muth, project_id = app_client
+    run_id = _seed_scan_run(factory, project_id=project_id)
+    first_id = _seed_triage_batch(factory, run_id=run_id, finding_ids=[1])
+    _seed_triage_batch(factory, run_id=run_id, finding_ids=[2])
+    _seed_triage_batch(factory, run_id=run_id, finding_ids=[3])
+
+    resp = await client.get(
+        f"/api/v1/projects/{project_id}/triage/{run_id}",
+        params={"after_batch_id": first_id},
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    ids = sorted(b["id"] for b in body["batches"])
+    assert ids == [first_id + 1, first_id + 2]
+    assert body["total_findings"] == 2
+
+
+@pytest.mark.asyncio
+async def test_detail_after_batch_id_absent_returns_all(app_client) -> None:
+    client, _fid, _rag, factory, _muth, project_id = app_client
+    run_id = _seed_scan_run(factory, project_id=project_id)
+    _seed_triage_batch(factory, run_id=run_id, finding_ids=[1])
+    _seed_triage_batch(factory, run_id=run_id, finding_ids=[2])
+
+    resp = await client.get(f"/api/v1/projects/{project_id}/triage/{run_id}")
+    assert resp.status_code == 200, resp.text
+    assert len(resp.json()["batches"]) == 2
+
+
+# GET /triage/{scan_run_id}/max-batch-id
+
+
+@pytest.mark.asyncio
+async def test_max_batch_id_route_returns_null_when_empty(app_client) -> None:
+    client, _fid, _rag, factory, _muth, project_id = app_client
+    run_id = _seed_scan_run(factory, project_id=project_id)
+    resp = await client.get(
+        f"/api/v1/projects/{project_id}/triage/{run_id}/max-batch-id"
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json() == {"max_batch_id": None}
+
+
+@pytest.mark.asyncio
+async def test_max_batch_id_route_returns_max(app_client) -> None:
+    client, _fid, _rag, factory, _muth, project_id = app_client
+    run_id = _seed_scan_run(factory, project_id=project_id)
+    _seed_triage_batch(factory, run_id=run_id, finding_ids=[1])
+    latest = _seed_triage_batch(factory, run_id=run_id, finding_ids=[2])
+    resp = await client.get(
+        f"/api/v1/projects/{project_id}/triage/{run_id}/max-batch-id"
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json() == {"max_batch_id": latest}
+
+
+# POST /triage with previous_max_batch_id
+
+
+@pytest.mark.asyncio
+async def test_start_response_includes_previous_max_batch_id(
+    app_client, monkeypatch
+) -> None:
+    from application.triage.triage_service import TriageService
+
+    client, _fid, _rag, factory, mut_headers, project_id = app_client
+    run_id = _seed_scan_run(factory, project_id=project_id)
+    prior = _seed_triage_batch(factory, run_id=run_id, finding_ids=[1])
+
+    def _noop(self, **kwargs):
+        return None
+
+    monkeypatch.setattr(TriageService, "_run_worker", _noop)
+
+    resp = await client.post(
+        f"/api/v1/projects/{project_id}/triage",
+        json={"acknowledge_injection_risk": True},
+        headers=mut_headers,
+    )
+    assert resp.status_code == 202, resp.text
+    assert resp.json()["previous_max_batch_id"] == prior

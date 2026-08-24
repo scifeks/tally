@@ -1,7 +1,5 @@
-from __future__ import annotations
+"""Re-exports from domain.pipeline.bus_event."""
 
-import uuid
+from domain.pipeline.bus_event import new_event_id
 
-
-def new_event_id() -> str:
-    return uuid.uuid4().hex
+__all__ = ["new_event_id"]

@@ -14,12 +14,6 @@ from domain.tools.base import ToolResult
 from domain.tools.execution_config import NoirProviderSnapshot, ToolExecutionConfig
 from domain.tools.interface import ExecutionContext, ToolInterface
 from domain.tools.scan_types.models import SEGMENT_ORDER
-from infrastructure.tools.wrappers.docker._docker_exec import (
-    build_docker_exec,
-)
-from infrastructure.tools.wrappers.utils.manifest_check import (
-    has_manifests_for_language,
-)
 
 _log = logging.getLogger(__name__)
 
@@ -54,10 +48,13 @@ def _build_tool_execution_config(
         except (ValueError, Exception):
             pass
 
+    extraction_enabled = gc.endpoint_extraction_inference is not None
+
     return ToolExecutionConfig(
         noir_provider=noir_snapshot,
         blind_xss_callback_url=gc.blind_xss_callback_url,
         antares_config=antares_config,
+        endpoint_extraction_enabled=extraction_enabled,
     )
 
 
@@ -65,6 +62,8 @@ def should_skip_sca_tool(
     tool: Any, service: Any, repo_path: str = ""
 ) -> tuple[bool, str]:
     """Skip SCA tools that have no dependency manifests in the service path."""
+    from factories.scanning import check_manifests_for_language
+
     if not getattr(tool, "language_gates", None):
         return False, ""
     if getattr(tool, "scan_segment", "") != "sca":
@@ -83,7 +82,7 @@ def should_skip_sca_tool(
     if not mpath:
         return True, f"no manifest found for {service.name}"
     has = any(
-        has_manifests_for_language(mpath, lang, mcontainer)
+        check_manifests_for_language(mpath, lang, mcontainer)
         for lang in tool.language_gates
     )
     if not has:
@@ -100,6 +99,9 @@ def make_context(
     service: Any,
     command_config: Any,
 ) -> ExecutionContext:
+    from core.config.schemas import build_excluded_dirs
+
+    excluded = build_excluded_dirs(service) if service else []
     return ExecutionContext(
         project_name=project_name,
         base_path=base_path,
@@ -109,6 +111,7 @@ def make_context(
         registry=registry,
         is_docker=(command_config.location == "docker" if command_config else False),
         execution_mode="scan",
+        excluded_dirs=excluded,
     )
 
 
@@ -119,6 +122,8 @@ def _build_raw_command(
     workdir: str | None = None,
 ) -> list[str]:
     """Build a command from raw CLI args using the tool's command config."""
+    from factories.scanning import build_docker_exec
+
     location = getattr(command_config, "location", None)
     if location == "docker":
         container = getattr(command_config, "container", None)

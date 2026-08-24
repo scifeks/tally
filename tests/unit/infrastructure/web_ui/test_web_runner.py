@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import TypedDict
 from unittest.mock import MagicMock, patch
 
@@ -37,7 +38,7 @@ def _serve_kwargs(
         "allowed_origins": (
             allowed_origins
             if allowed_origins is not None
-            else [f"http://{host}:{vite_port}"]
+            else [f"https://{host}:{vite_port}"]
         ),
         "project_registry": MagicMock(spec=ProjectRegistryService),
         "tool_registry": ToolRegistry(),
@@ -45,7 +46,6 @@ def _serve_kwargs(
 
 
 class TestServe:
-    @patch("infrastructure.web_ui.runner.create_web_app")
     @patch("uvicorn.run")
     @patch(
         "infrastructure.web_ui.runner.WebUiRunner._wait_for_port",
@@ -57,25 +57,23 @@ class TestServe:
         _mock_start_vite,
         _mock_wait,
         _mock_uvicorn_run,
-        _mock_factory,
         tmp_path,
         capsys,
     ) -> None:
         """serve runs without an active REPL project; the SPA picks one."""
         ui_dir = tmp_path / "ui"
         ui_dir.mkdir()
-        WebUiRunner().serve(**_serve_kwargs(str(tmp_path)))
+        WebUiRunner(MagicMock()).serve(**_serve_kwargs(str(tmp_path)))
         assert "No active project" not in capsys.readouterr().out
 
     def test_banned_host_prints_error(self, capsys, tmp_path) -> None:
-        WebUiRunner().serve(**_serve_kwargs(str(tmp_path), host="0.0.0.0"))
+        WebUiRunner(MagicMock()).serve(**_serve_kwargs(str(tmp_path), host="0.0.0.0"))
         assert "all interfaces" in capsys.readouterr().out
 
     def test_missing_ui_dir_prints_error(self, capsys, tmp_path) -> None:
-        WebUiRunner().serve(**_serve_kwargs(str(tmp_path)))
+        WebUiRunner(MagicMock()).serve(**_serve_kwargs(str(tmp_path)))
         assert "UI directory not found" in capsys.readouterr().out
 
-    @patch("infrastructure.web_ui.runner.create_web_app")
     @patch("uvicorn.run")
     @patch("infrastructure.web_ui.runner.WebUiRunner._wait_for_port")
     @patch("infrastructure.web_ui.runner.WebUiRunner._start_vite")
@@ -84,31 +82,29 @@ class TestServe:
         _mock_start_vite,
         mock_wait,
         mock_uvicorn_run,
-        mock_factory,
         tmp_path,
         capsys,
     ) -> None:
         ui_dir = tmp_path / "ui"
         ui_dir.mkdir()
         app_mock = MagicMock()
-        mock_factory.return_value = app_mock
+        mock_factory = MagicMock(return_value=app_mock)
         mock_wait.return_value = True
 
         with patch("webbrowser.open") as mock_open:
-            WebUiRunner().serve(**_serve_kwargs(str(tmp_path)))
+            WebUiRunner(mock_factory).serve(**_serve_kwargs(str(tmp_path)))
 
-        mock_uvicorn_run.assert_called_once_with(
-            app_mock, host="127.0.0.1", port=8080, log_level="warning"
-        )
+        call_kwargs = mock_uvicorn_run.call_args
+        assert call_kwargs.kwargs["host"] == "127.0.0.1"
+        assert call_kwargs.kwargs["port"] == 8080
+        assert call_kwargs.kwargs["ssl_certfile"]
+        assert call_kwargs.kwargs["ssl_keyfile"]
         out = capsys.readouterr().out
         assert "running at" in out
-        # The browser URL must carry `&fresh=1` so the SPA clears any
-        # persisted activeProjectId on each `ui serve` invocation.
         opened_url = mock_open.call_args.args[0]
-        assert opened_url.startswith("http://127.0.0.1:3000/?token=")
+        assert opened_url.startswith("https://127.0.0.1:3000/?token=")
         assert opened_url.endswith("&fresh=1")
 
-    @patch("infrastructure.web_ui.runner.create_web_app")
     @patch("uvicorn.run", side_effect=OSError("address already in use"))
     @patch(
         "infrastructure.web_ui.runner.WebUiRunner._wait_for_port",
@@ -120,17 +116,15 @@ class TestServe:
         _mock_start_vite,
         _mock_wait,
         _mock_uvicorn_run,
-        _mock_factory,
         tmp_path,
         capsys,
     ) -> None:
         ui_dir = tmp_path / "ui"
         ui_dir.mkdir()
-        WebUiRunner().serve(**_serve_kwargs(str(tmp_path)))
+        WebUiRunner(MagicMock()).serve(**_serve_kwargs(str(tmp_path)))
         out = capsys.readouterr().out
         assert "already in use" in out or "failed to start" in out
 
-    @patch("infrastructure.web_ui.runner.create_web_app")
     @patch("uvicorn.run")
     @patch(
         "infrastructure.web_ui.runner.WebUiRunner._wait_for_port",
@@ -142,16 +136,14 @@ class TestServe:
         _mock_start_vite,
         _mock_wait,
         mock_uvicorn_run,
-        _mock_factory,
         tmp_path,
     ) -> None:
         """serve calls uvicorn.run directly; no daemon thread for the server."""
         ui_dir = tmp_path / "ui"
         ui_dir.mkdir()
-        WebUiRunner().serve(**_serve_kwargs(str(tmp_path)))
+        WebUiRunner(MagicMock()).serve(**_serve_kwargs(str(tmp_path)))
         mock_uvicorn_run.assert_called_once()
 
-    @patch("infrastructure.web_ui.runner.create_web_app")
     @patch(
         "infrastructure.web_ui.runner.WebUiRunner._wait_for_port",
         return_value=False,
@@ -163,16 +155,14 @@ class TestServe:
         _mock_uvicorn_run,
         _mock_start_vite,
         _mock_wait,
-        _mock_factory,
         tmp_path,
     ) -> None:
         """KeyboardInterrupt from uvicorn propagates to the caller."""
         ui_dir = tmp_path / "ui"
         ui_dir.mkdir()
         with pytest.raises(KeyboardInterrupt):
-            WebUiRunner().serve(**_serve_kwargs(str(tmp_path)))
+            WebUiRunner(MagicMock()).serve(**_serve_kwargs(str(tmp_path)))
 
-    @patch("infrastructure.web_ui.runner.create_web_app")
     @patch(
         "infrastructure.web_ui.runner.WebUiRunner._wait_for_port",
         return_value=False,
@@ -186,18 +176,39 @@ class TestServe:
         mock_atexit,
         mock_popen,
         _mock_wait,
-        _mock_factory,
         tmp_path,
     ) -> None:
         """_start_vite registers atexit hook for Vite subprocess teardown."""
         ui_dir = tmp_path / "ui"
         ui_dir.mkdir()
         mock_popen.return_value = MagicMock()
-        runner = WebUiRunner()
+        runner = WebUiRunner(MagicMock())
         runner.serve(**_serve_kwargs(str(tmp_path)))
         mock_atexit.assert_called_once_with(runner._stop_vite)
 
-    @patch("infrastructure.web_ui.runner.create_web_app")
+    @patch("uvicorn.run")
+    @patch(
+        "infrastructure.web_ui.runner.WebUiRunner._wait_for_port",
+        return_value=False,
+    )
+    @patch("infrastructure.web_ui.runner.WebUiRunner._start_vite")
+    def test_factory_receives_configured_host(
+        self,
+        _mock_start_vite,
+        _mock_wait,
+        _mock_uvicorn_run,
+        tmp_path,
+    ) -> None:
+        """The app factory receives host so middleware can allowlist it."""
+        ui_dir = tmp_path / "ui"
+        ui_dir.mkdir()
+        mock_factory = MagicMock()
+        WebUiRunner(mock_factory).serve(
+            **_serve_kwargs(str(tmp_path), host="10.1.20.101")
+        )
+        _, kwargs = mock_factory.call_args
+        assert kwargs["host"] == "10.1.20.101"
+
     @patch(
         "infrastructure.web_ui.runner.WebUiRunner._wait_for_port",
         return_value=False,
@@ -207,7 +218,6 @@ class TestServe:
         self,
         _mock_start_vite,
         _mock_wait,
-        _mock_factory,
         tmp_path,
         capsys,
     ) -> None:
@@ -220,30 +230,43 @@ class TestServe:
             printed_before_run.append(capsys.readouterr().out)
 
         with patch("uvicorn.run", side_effect=capture_run):
-            WebUiRunner().serve(**_serve_kwargs(str(tmp_path)))
+            WebUiRunner(MagicMock()).serve(**_serve_kwargs(str(tmp_path)))
 
         assert printed_before_run, "uvicorn.run was not called"
         assert "Press Ctrl+C" in printed_before_run[0]
 
 
 class TestWriteEnvLocal:
+    _CERT = Path("/fake/cert.pem")
+    _KEY = Path("/fake/key.pem")
+
     def test_writes_expected_content(self, tmp_path) -> None:
-        WebUiRunner._write_env_local(tmp_path, "127.0.0.1", 8080, 3000)
+        WebUiRunner._write_env_local(
+            tmp_path, "127.0.0.1", 8080, 3000, self._CERT, self._KEY
+        )
         content = (tmp_path / ".env.local").read_text()
         assert "TALLY_HOST=127.0.0.1" in content
         assert "TALLY_VITE_PORT=3000" in content
-        assert "VITE_API_BASE_URL=http://127.0.0.1:8080" in content
+        assert "VITE_API_BASE_URL=https://127.0.0.1:8080" in content
+        assert "TALLY_TLS_CERT=/fake/cert.pem" in content
+        assert "TALLY_TLS_KEY=/fake/key.pem" in content
 
     def test_atomic_write_no_tmp_leftover(self, tmp_path) -> None:
-        WebUiRunner._write_env_local(tmp_path, "127.0.0.1", 8080, 3000)
+        WebUiRunner._write_env_local(
+            tmp_path, "127.0.0.1", 8080, 3000, self._CERT, self._KEY
+        )
         assert (tmp_path / ".env.local").exists()
         assert not (tmp_path / ".env.local.tmp").exists()
 
     def test_overwrite_replaces_previous(self, tmp_path) -> None:
-        WebUiRunner._write_env_local(tmp_path, "127.0.0.1", 8080, 3000)
-        WebUiRunner._write_env_local(tmp_path, "localhost", 9090, 5173)
+        WebUiRunner._write_env_local(
+            tmp_path, "127.0.0.1", 8080, 3000, self._CERT, self._KEY
+        )
+        WebUiRunner._write_env_local(
+            tmp_path, "localhost", 9090, 5173, self._CERT, self._KEY
+        )
         content = (tmp_path / ".env.local").read_text()
         assert "TALLY_HOST=localhost" in content
         assert "TALLY_VITE_PORT=5173" in content
-        assert "VITE_API_BASE_URL=http://localhost:9090" in content
+        assert "VITE_API_BASE_URL=https://localhost:9090" in content
         assert "127.0.0.1" not in content

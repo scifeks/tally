@@ -47,7 +47,7 @@ afterEach(() => {
   server.resetHandlers()
 })
 
-// ─── useTriageHistory ───────────────────────────────────────────────────────
+// --- useTriageHistory ---
 
 describe('useTriageHistory', () => {
   it('resolves with the project-1 fixture (3 runs)', async () => {
@@ -56,7 +56,7 @@ describe('useTriageHistory', () => {
     await waitFor(() => expect(result.current.isSuccess).toBe(true), { timeout: 2000 })
     expect(result.current.data).toHaveLength(3)
     expect(result.current.total).toBe(3)
-    // Mapper translates scan_run_id → scanRunId
+    // Mapper translates scan_run_id to scanRunId
     expect(result.current.data[0].scanRunId).toBe(1)
   })
 
@@ -93,7 +93,7 @@ describe('useTriageHistory', () => {
   })
 })
 
-// ─── useActiveTriage ────────────────────────────────────────────────────────
+// --- useActiveTriage ---
 
 describe('useActiveTriage', () => {
   it('resolves with the running fixture for project 1', async () => {
@@ -112,7 +112,7 @@ describe('useActiveTriage', () => {
   })
 })
 
-// ─── useLatestTriage ────────────────────────────────────────────────────────
+// --- useLatestTriage ---
 
 describe('useLatestTriage', () => {
   it('resolves with the latest fixture for project 1', async () => {
@@ -131,7 +131,7 @@ describe('useLatestTriage', () => {
   })
 })
 
-// ─── useTriageRun (detail) ──────────────────────────────────────────────────
+// --- useTriageRun (detail) ---
 
 describe('useTriageRun', () => {
   it('resolves with batches for an existing run', async () => {
@@ -148,9 +148,29 @@ describe('useTriageRun', () => {
     const { result } = renderHook(() => useTriageRun(1, null), { wrapper })
     expect(result.current.fetchStatus).toBe('idle')
   })
+
+  it('resolves with a queued placeholder on 404', async () => {
+    const { wrapper } = makeWrapper()
+    const { result } = renderHook(
+      () => useTriageRun(1, 997),
+      { wrapper },
+    )
+    await waitFor(
+      () => expect(result.current.isSuccess).toBe(true),
+      { timeout: 2000 },
+    )
+    expect(result.current.data).toMatchObject({
+      scanRunId: 997,
+      projectId: 1,
+      status: 'queued',
+      totalFindings: 0,
+      processedFindings: 0,
+      batches: [],
+    })
+  })
 })
 
-// ─── useStartTriage ─────────────────────────────────────────────────────────
+// --- useStartTriage ---
 
 describe('useStartTriage', () => {
   it('always sends acknowledge_injection_risk: true in the body', async () => {
@@ -274,7 +294,7 @@ describe('useStartTriage', () => {
   })
 })
 
-// ─── useCancelTriage ────────────────────────────────────────────────────────
+// --- useCancelTriage ---
 
 describe('useCancelTriage', () => {
   it('POSTs to the cancel endpoint and returns the cancelling status', async () => {
@@ -300,9 +320,33 @@ describe('useCancelTriage', () => {
     await waitFor(() => expect(mut.result.current.isError).toBe(true))
     expect(useUI.getState().triageMutationError?.code).toBe('TRIAGE_NOT_CANCELLABLE')
   })
+
+  it('optimistically sets active run status to cancelling', async () => {
+    const { qc, wrapper } = makeWrapper()
+    qc.setQueryData(['triage', 1, 'active'], {
+      scanRunId: 1,
+      projectId: 1,
+      status: 'running',
+      startedAt: null,
+      finishedAt: null,
+      totalFindings: 10,
+      processedFindings: 0,
+    })
+    const mut = renderHook(() => useCancelTriage(), { wrapper })
+    await act(async () => {
+      await mut.result.current.mutateAsync({
+        projectId: 1,
+        scanRunId: 1,
+      })
+    })
+    const cached = qc.getQueryData(['triage', 1, 'active']) as {
+      status: string
+    } | null
+    expect(cached?.status).toBe('cancelling')
+  })
 })
 
-// ─── useResumeTriage ────────────────────────────────────────────────────────
+// --- useResumeTriage ---
 
 describe('useResumeTriage', () => {
   it('always sends acknowledge_injection_risk: true in the body', async () => {
@@ -350,28 +394,32 @@ describe('useResumeTriage', () => {
   })
 })
 
-// ─── useTriageEvents ────────────────────────────────────────────────────────
+// --- useTriageEvents ---
 
 describe('useTriageEvents', () => {
-  it('opens an EventSource for the project triage-events endpoint', () => {
-    const { wrapper } = makeWrapper()
-    renderHook(() => useTriageEvents(1, () => undefined), { wrapper })
-    expect(MockEventSource.instances).toHaveLength(1)
-    expect(MockEventSource.instances[0].url).toContain('/projects/1/triage/events')
-    expect(MockEventSource.instances[0].url).not.toContain('scan_run_id=')
-  })
-
-  it('appends scan_run_id query param when supplied', () => {
+  it('opens an EventSource scoped to the given scan_run_id', () => {
     const { wrapper } = makeWrapper()
     renderHook(() => useTriageEvents(1, () => undefined, { scanRunId: 2010 }), {
       wrapper,
     })
+    expect(MockEventSource.instances).toHaveLength(1)
+    expect(MockEventSource.instances[0].url).toContain('/projects/1/triage/events')
     expect(MockEventSource.instances[0].url).toContain('scan_run_id=2010')
+  })
+
+  it('does not open a connection when scanRunId is null', () => {
+    const { wrapper } = makeWrapper()
+    renderHook(() => useTriageEvents(1, () => undefined, { scanRunId: null }), {
+      wrapper,
+    })
+    expect(MockEventSource.instances).toHaveLength(0)
   })
 
   it('does not open a connection when projectId is 0', () => {
     const { wrapper } = makeWrapper()
-    renderHook(() => useTriageEvents(0, () => undefined), { wrapper })
+    renderHook(() => useTriageEvents(0, () => undefined, { scanRunId: 2010 }), {
+      wrapper,
+    })
     expect(MockEventSource.instances).toHaveLength(0)
   })
 
@@ -380,16 +428,15 @@ describe('useTriageEvents', () => {
     const snaps: TriageSnapshotPayload[] = []
     const { wrapper } = makeWrapper()
     renderHook(
-      () => useTriageEvents(1, e => events.push(e), { onSnapshot: s => snaps.push(s) }),
+      () =>
+        useTriageEvents(1, e => events.push(e), {
+          scanRunId: 2010,
+          onSnapshot: s => snaps.push(s),
+        }),
       { wrapper }
     )
     const es = MockEventSource.instances[0]
     act(() => {
-      es.emitTyped('snapshot', {
-        project_id: 1,
-        scan_run_id: null,
-        active_scan_run_ids: [2010, 2011],
-      })
       es.emitTyped('snapshot', {
         project_id: 1,
         scan_run_id: 2010,
@@ -402,15 +449,16 @@ describe('useTriageEvents', () => {
       })
     })
     expect(events).toHaveLength(0)
-    expect(snaps).toHaveLength(2)
-    expect(snaps[0]).toMatchObject({ scanRunId: null, activeScanRunIds: [2010, 2011] })
-    expect(snaps[1]).toMatchObject({ scanRunId: 2010, status: 'running' })
+    expect(snaps).toHaveLength(1)
+    expect(snaps[0]).toMatchObject({ scanRunId: 2010, status: 'running' })
   })
 
   it('maps each typed event payload to a TriageLogEvent', () => {
     const events: TriageLogEvent[] = []
     const { wrapper } = makeWrapper()
-    renderHook(() => useTriageEvents(1, e => events.push(e)), { wrapper })
+    renderHook(() => useTriageEvents(1, e => events.push(e), { scanRunId: 2010 }), {
+      wrapper,
+    })
     const es = MockEventSource.instances[0]
     act(() => {
       es.emitTyped('run_started', {

@@ -15,7 +15,7 @@ class TestExchange:
         resp = await client.post(
             "/api/v1/auth/exchange",
             json={"token": "not-a-real-token"},
-            headers={"origin": f"http://127.0.0.1:{TEST_PORT}"},
+            headers={"origin": f"https://127.0.0.1:{TEST_PORT}"},
         )
         assert resp.status_code == 401
 
@@ -25,7 +25,7 @@ class TestExchange:
         resp = await client.post(
             "/api/v1/auth/exchange",
             json={"token": HANDSHAKE},
-            headers={"origin": f"http://127.0.0.1:{TEST_PORT}"},
+            headers={"origin": f"https://127.0.0.1:{TEST_PORT}"},
         )
         assert resp.status_code == 401
 
@@ -44,7 +44,7 @@ class TestExchange:
         resp = await client.post(
             "/api/v1/auth/exchange",
             json={"token": "inspect-token-1"},
-            headers={"origin": f"http://127.0.0.1:{TEST_PORT}"},
+            headers={"origin": f"https://127.0.0.1:{TEST_PORT}"},
         )
         assert resp.status_code == 200
         body = resp.json()

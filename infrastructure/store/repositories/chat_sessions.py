@@ -23,14 +23,14 @@ class ChatSessionRepository(ChatSessionRepositoryPort):
     def __init__(self, factory: ConnectionFactory) -> None:
         self._factory = factory
 
-    def create(self, *, project_id: int, title: str) -> int:
+    def create(self, *, project_id: int, title: str, mode: str = "all") -> int:
         now = datetime.now(UTC).isoformat()
         with self._factory.connect() as conn:
             cur = conn.execute(
                 "INSERT INTO chat_sessions"
-                " (project_id, title, created_at, updated_at)"
-                " VALUES (?, ?, ?, ?)",
-                (project_id, title, now, now),
+                " (project_id, title, mode, created_at, updated_at)"
+                " VALUES (?, ?, ?, ?, ?)",
+                (project_id, title, mode, now, now),
             )
             assert cur.lastrowid is not None
             return cur.lastrowid
@@ -177,6 +177,7 @@ def _row_to_session(row: Any) -> ChatSessionRow:
         id=row["id"],
         project_id=row["project_id"],
         title=row["title"],
+        mode=row["mode"],
         created_at=row["created_at"],
         updated_at=row["updated_at"],
         expired_at=row["expired_at"],

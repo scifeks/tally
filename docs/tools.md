@@ -70,18 +70,31 @@ setup instructions, and a description of how conversion works.
 
 ---
 
-## ffuf
+## LLM Endpoint Extraction
 
-ffuf is a fast web fuzzer written in Go that discovers hidden files, directories, vhosts, and parameters by brute-forcing HTTP requests with a wordlist. It runs in the `web` scan segment against configured `base_urls`.
+LLM endpoint extraction is an alternative URL discovery mechanism that complements Noir and Katana. When configured, Tally uses an LLM to read controller source code and extract HTTP routes, query parameters, and form parameters, producing parameterized URLs for DAST tools.
 
-### Requirements
+### When it triggers
 
-- **ffuf binary.** Install from `https://github.com/ffuf/ffuf` or via your package manager (`go install github.com/ffuf/ffuf/v2@latest`). The binary must be on `$PATH` or configured in `config/commands.json`.
-- **A wordlist.** ffuf needs a wordlist for brute-force discovery. Set the `FFUF_WORDLIST` environment variable to the path of your preferred wordlist, or install SecLists (`/usr/share/seclists/`). Without a wordlist, ffuf is skipped automatically.
+Endpoint extraction runs automatically during scans when both conditions are met:
 
-### How it works
+1. Noir is skipped for the repository (unsupported framework) or returns zero endpoints
+2. The `endpoint_extraction_inference` feature is configured in `config/global.json`
 
-ffuf appends `/FUZZ` to each configured `base_url` and sends one HTTP request per wordlist entry, filtering responses by status code (200, 201, 301, 302, 307, 401, 403, 405, 500). Each discovered path becomes an "exposure" finding with its HTTP status, response length, and content type.
+The scan also checks the URL inventory; if it contains endpoints, extraction is skipped to avoid redundant work.
+
+### What it produces
+
+Extracted endpoints become informational findings (same as Noir and Katana output) and feed downstream DAST tools (sqlmap, dalfox, xsstrike) that require parameterized URLs.
+
+### Provider options
+
+Choose a provider based on your needs:
+
+- **Ollama or llama.cpp.** Run inference locally at no API cost. Fast, suitable for small-to-medium codebases. Set `base_url` in the `ollama` or `llama_cpp` provider config and reference it in `endpoint_extraction_inference`.
+- **Claude API.** Higher accuracy on complex endpoint patterns and modern frameworks. Requires Anthropic API key. Set `api_key` in the `claude` provider config and reference it in `endpoint_extraction_inference`.
+
+See [docs/configuration.md](configuration.md) for examples of enabling endpoint extraction with each provider.
 
 ---
 
@@ -178,7 +191,7 @@ the URL seed mode:
 
 | Mode | Description | Default when |
 |------|-------------|--------------|
-| `provided` | Generate seeds from the user-supplied endpoint file (`oas3_path` → URL list) | `oas3_path` is set |
+| `provided` | Generate seeds from the user-supplied endpoint file (`oas3_path` -> URL list) | `oas3_path` is set |
 | `noir` | Generate seeds from the most recent Noir OAS3 output for the repository | No endpoint file |
 | `crawl` | XSStrike spiders from `base_url` directly | Fallback / third option |
 
@@ -312,19 +325,6 @@ Run `search --show-fields --tool=<tool>` to see all available fields for a tool.
 | `poc` | Proof of concept URL |
 | `severity` | Severity level (low, medium, high, critical) |
 | `url` | URL where the vulnerability was found |
-
-### ffuf
-
-| Field | Description |
-|---|---|
-| `content_type` | Response content type |
-| `finding_type` | Type of finding (exposure) |
-| `host` | Target host |
-| `length` | Response body length in bytes |
-| `redirect_location` | Redirect target URL (for 3xx responses) |
-| `severity` | Severity level (informational, low) |
-| `status` | HTTP response status code |
-| `url` | Discovered URL |
 
 ### garak
 

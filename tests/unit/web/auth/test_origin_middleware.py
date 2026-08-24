@@ -8,7 +8,7 @@ from fastapi import FastAPI
 from web.middleware.origin import OriginCheckMiddleware
 
 _PORT = 8080
-_ORIGIN = f"http://127.0.0.1:{_PORT}"
+_ORIGIN = f"https://127.0.0.1:{_PORT}"
 
 
 def _app() -> FastAPI:
@@ -96,12 +96,12 @@ async def test_localhost_origin_allowed() -> None:
     ) as c:
         resp = await c.post(
             "/api/action",
-            headers={"origin": f"http://localhost:{_PORT}"},
+            headers={"origin": f"https://localhost:{_PORT}"},
         )
     assert resp.status_code == 200
 
 
-_VITE_ORIGIN = "http://127.0.0.1:3000"
+_VITE_ORIGIN = "https://127.0.0.1:3000"
 
 
 def _app_with_extra() -> FastAPI:

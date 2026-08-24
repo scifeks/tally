@@ -52,6 +52,15 @@ const repos: RepositoryConfig[] = [
   },
 ]
 
+const reposWithFormAuth: RepositoryConfig[] = [
+  {
+    ...repos[0],
+    authConfigured: true,
+    authLoginUrl: 'https://example.com/login',
+  },
+  repos[1],
+]
+
 function renderSection(overrides: Partial<React.ComponentProps<typeof RepositorySection>> = {}) {
   const props = {
     repositories: repos,
@@ -149,6 +158,56 @@ describe('RepositorySection', () => {
       renderSection({ authSavedAt: PINNED_NOW - 5_000 })
       await user.selectOptions(screen.getByRole('combobox'), '101')
       expect(screen.queryByText(/^saved$/i)).not.toBeInTheDocument()
+    })
+  })
+
+  describe('Clear Auth', () => {
+    it('shows the Clear Auth button when form auth is configured', async () => {
+      const user = userEvent.setup()
+      renderSection({ repositories: reposWithFormAuth })
+      await user.selectOptions(screen.getByRole('combobox'), '101')
+      expect(screen.getByRole('button', { name: /clear auth/i })).toBeInTheDocument()
+    })
+
+    it('does not show the Clear Auth button when no auth is configured', async () => {
+      const user = userEvent.setup()
+      renderSection()
+      await user.selectOptions(screen.getByRole('combobox'), '101')
+      expect(
+        screen.queryByRole('button', { name: /clear auth/i })
+      ).not.toBeInTheDocument()
+    })
+
+    it('confirms before clearing auth and calls onUpdateAuth', async () => {
+      const user = userEvent.setup()
+      const onUpdateAuth = vi.fn()
+      const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
+      renderSection({
+        repositories: reposWithFormAuth,
+        onUpdateAuth,
+      })
+      await user.selectOptions(screen.getByRole('combobox'), '101')
+      await user.click(screen.getByRole('button', { name: /clear auth/i }))
+      expect(confirmSpy).toHaveBeenCalled()
+      expect(onUpdateAuth).toHaveBeenCalledWith(101, {
+        authType: 'form',
+        loginUrl: '',
+      })
+      confirmSpy.mockRestore()
+    })
+
+    it('does not clear auth when confirm is dismissed', async () => {
+      const user = userEvent.setup()
+      const onUpdateAuth = vi.fn()
+      const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false)
+      renderSection({
+        repositories: reposWithFormAuth,
+        onUpdateAuth,
+      })
+      await user.selectOptions(screen.getByRole('combobox'), '101')
+      await user.click(screen.getByRole('button', { name: /clear auth/i }))
+      expect(onUpdateAuth).not.toHaveBeenCalled()
+      confirmSpy.mockRestore()
     })
   })
 

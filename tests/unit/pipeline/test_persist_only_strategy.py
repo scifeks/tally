@@ -20,88 +20,49 @@ def _event(ids: list[int] | None = None) -> IngestCompleted:
 
 class TestPersistOnlyStrategy:
     def test_noop_when_ids_empty(self) -> None:
-        strategy = PersistOnlyStrategy(finding_repo=MagicMock())
-        with patch.object(strategy, "_persist_to_chromadb") as mock_persist:
-            strategy.handle(_event(ids=[]))
-        mock_persist.assert_not_called()
+        indexer = MagicMock()
+        strategy = PersistOnlyStrategy(finding_repo=MagicMock(), indexer=indexer)
+
+        strategy.handle(_event(ids=[]))
+
+        indexer.index_findings.assert_not_called()
 
     def test_never_calls_enrichment_pipeline(self) -> None:
-        strategy = PersistOnlyStrategy(finding_repo=MagicMock())
+        indexer = MagicMock()
+        strategy = PersistOnlyStrategy(finding_repo=MagicMock(), indexer=indexer)
+        mock_kb = MagicMock()
+
         with (
             patch(
                 "application.pipeline.strategies.EnrichmentPipeline"
             ) as mock_enrich_cls,
-            patch.object(strategy, "_persist_to_chromadb"),
+            patch.object(strategy, "_get_knowledge_base", return_value=mock_kb),
         ):
             strategy.handle(_event(ids=[1, 2]))
+
         mock_enrich_cls.assert_not_called()
 
-    def test_calls_persist_to_chromadb_with_correct_args(self) -> None:
-        strategy = PersistOnlyStrategy(finding_repo=MagicMock())
-        with patch.object(strategy, "_persist_to_chromadb") as mock_persist:
-            strategy.handle(_event(ids=[3, 4]))
-        mock_persist.assert_called_once_with([3, 4], "test-proj", "/tmp")
-
-    def test_chromadb_write_uses_kb_and_tool_handler(self) -> None:
-        """Full _persist_to_chromadb path: groups by tool/profile."""
-        mock_finding_repo = MagicMock()
-        mock_finding_repo.get_by_ids.return_value = [
-            {
-                "id": 1,
-                "tool": "gitleaks",
-                "profile": "main",
-                "fingerprint": "abc123",
-                "run_id": 10,
-                "severity": "high",
-                "segment": "secrets",
-                "status": "active",
-            },
-            {
-                "id": 2,
-                "tool": "gitleaks",
-                "profile": "main",
-                "fingerprint": "def456",
-                "run_id": 10,
-                "severity": "medium",
-                "segment": "secrets",
-                "status": "active",
-            },
-        ]
-        strategy = PersistOnlyStrategy(finding_repo=mock_finding_repo)
+    def test_calls_indexer_with_correct_args(self) -> None:
+        indexer = MagicMock()
+        strategy = PersistOnlyStrategy(finding_repo=MagicMock(), indexer=indexer)
         mock_kb = MagicMock()
-        mock_tool_handler = MagicMock()
-        mock_tool_handler.render.side_effect = lambda row: f"secret {row['id']}"
 
-        with (
-            patch.object(strategy, "_get_knowledge_base", return_value=mock_kb),
-            patch(
-                "application.pipeline.handlers.ToolHandlerFactory.load",
-                return_value=mock_tool_handler,
-            ),
+        with patch.object(strategy, "_get_knowledge_base", return_value=mock_kb):
+            strategy.handle(_event(ids=[3, 4]))
+
+        indexer.index_findings.assert_called_once_with(
+            mock_kb, [3, 4], caller_label="PersistOnlyStrategy"
+        )
+
+    def test_skips_indexer_when_kb_init_fails(self) -> None:
+        indexer = MagicMock()
+        strategy = PersistOnlyStrategy(finding_repo=MagicMock(), indexer=indexer)
+
+        with patch.object(
+            strategy,
+            "_get_knowledge_base",
+            side_effect=RuntimeError("kb boom"),
         ):
             strategy.handle(_event(ids=[1, 2]))
 
-        mock_kb.add_findings.assert_called_once_with(
-            documents=["Repository: main | secret 1", "Repository: main | secret 2"],
-            metadatas=[
-                {
-                    "tool": "gitleaks",
-                    "profile": "main",
-                    "run_id": 10,
-                    "severity": "high",
-                    "segment": "secrets",
-                    "status": "active",
-                    "fingerprint": "abc123",
-                },
-                {
-                    "tool": "gitleaks",
-                    "profile": "main",
-                    "run_id": 10,
-                    "severity": "medium",
-                    "segment": "secrets",
-                    "status": "active",
-                    "fingerprint": "def456",
-                },
-            ],
-            ids=["abc123:main", "def456:main"],
-        )
+        indexer.index_findings.assert_not_called()

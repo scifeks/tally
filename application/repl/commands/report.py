@@ -72,12 +72,6 @@ class ReportCommand:
             run_report,
         )
         from application.reporting.resolver import SectionMissingError
-        from infrastructure.reporting.jinja2_template_renderer import (
-            Jinja2TemplateRenderer,
-        )
-        from infrastructure.reporting.weasyprint_pdf_renderer import (
-            WeasyPrintPdfRenderer,
-        )
 
         testing_type, args = self._parse_value_flag(args, "--testing-type")
         engagement_date, args = self._parse_value_flag(args, "--engagement-date")
@@ -122,12 +116,17 @@ class ReportCommand:
                     self.repl.base_path,
                     self.repl.active_project,
                 )
+                from factories.reporting import (
+                    create_pdf_renderer,
+                    create_template_renderer,
+                )
+
                 run_report(
                     request,
                     prompt=RichConsolePromptAdapter(),
                     finding_repo=fr,
-                    template_renderer=Jinja2TemplateRenderer(TEMPLATES_DIR),
-                    pdf_renderer=WeasyPrintPdfRenderer(),
+                    template_renderer=create_template_renderer(TEMPLATES_DIR),
+                    pdf_renderer=create_pdf_renderer(),
                 )
         except SectionMissingError as exc:
             self.repl.console.print(f"[red]Section missing:[/red] {exc}")
@@ -325,12 +324,6 @@ class ReportCommand:
         from application.ports.pdf_renderer import PdfRenderError
         from application.reporting.assembler import TEMPLATES_DIR, ReportAssembler
         from application.reporting.resolver import SectionMissingError
-        from infrastructure.reporting.jinja2_template_renderer import (
-            Jinja2TemplateRenderer,
-        )
-        from infrastructure.reporting.weasyprint_pdf_renderer import (
-            WeasyPrintPdfRenderer,
-        )
 
         testing_type, args = self._parse_value_flag(args, "--testing-type")
         engagement_date, args = self._parse_value_flag(args, "--engagement-date")
@@ -354,12 +347,17 @@ class ReportCommand:
             self.repl.base_path,
             self.repl.active_project,
         )
+        from factories.reporting import (
+            create_pdf_renderer,
+            create_template_renderer,
+        )
+
         assembler = ReportAssembler(
             project=self.repl.active_project,
             base_path=self.repl.base_path,
             prompt=RichConsolePromptAdapter(),
-            template_renderer=Jinja2TemplateRenderer(TEMPLATES_DIR),
-            pdf_renderer=WeasyPrintPdfRenderer(),
+            template_renderer=create_template_renderer(TEMPLATES_DIR),
+            pdf_renderer=create_pdf_renderer(),
             finding_repo=fr,
             testing_type=testing_type,
             engagement_date=engagement_date,

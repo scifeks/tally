@@ -27,6 +27,7 @@ from application.repl.adapters.tool_registry_display import print_discovery_summ
 from application.repl.commands import (
     DocumentCommands,
     KnowledgeCommands,
+    McpCommands,
     ProjectCommands,
     PurgeCommand,
     ReportCommand,
@@ -79,6 +80,9 @@ _COMPLETIONS = [
     "sync",
     "ui",
     "vuln-data",
+    "mcp token create",
+    "mcp token list",
+    "mcp token revoke",
 ]
 # First tokens only for WordCompleter
 _TOP_TOKENS = sorted({c.split()[0] for c in _COMPLETIONS})
@@ -258,14 +262,21 @@ class REPL:
                 build_runtime_dependency_probes(base_path=base_path)
             )
         self._runtime_service = runtime_service
+        claude_api_key = (
+            self.config.global_config.claude.api_key
+            if self.config.global_config.claude
+            else ""
+        )
         self.triage_readiness = compute_triage_readiness(
             base_path=base_path,
             docker_available=runtime_service.is_installed("docker"),
+            claude_api_key=claude_api_key,
         )
         if web_ui_runner is None:
             from infrastructure.web_ui.runner import WebUiRunner
+            from web.server import create_web_app
 
-            web_ui_runner = WebUiRunner()
+            web_ui_runner = WebUiRunner(create_web_app)
         if tool_registry is None:
             tool_registry = ToolRegistry()
             discover_tools(tool_registry, base_path)
@@ -285,6 +296,7 @@ class REPL:
         self.ui_commands = UiCommands(self, web_ui_runner=web_ui_runner)
         self.vuln_data_commands = VulnDataCommands(self)
         self.document_commands = DocumentCommands(self)
+        self.mcp_commands = McpCommands(self)
 
     def run(self) -> None:
         """Start the REPL loop."""
@@ -332,7 +344,21 @@ class REPL:
             except EOFError:
                 break
 
+        self._cancel_active_scans()
         self.console.print("Goodbye!")
+
+    def _cancel_active_scans(self) -> None:
+        from application.tools.scan_run_registry import (
+            get_scan_run_registry,
+        )
+
+        handles = get_scan_run_registry().list_all()
+        for handle in handles:
+            handle.cancel_token.set()
+        if handles:
+            self.console.print(
+                f"[dim]Cancelling {len(handles)} active scan(s)...[/dim]"
+            )
 
     def _run_harness(self) -> None:
         """Plain-stdin REPL loop (prints sentinel before each prompt)."""
@@ -395,6 +421,7 @@ class REPL:
             "sync": self.sync_commands.cmd_sync,
             "ui": self.ui_commands.cmd_ui,
             "vuln-data": self.vuln_data_commands.cmd_vuln_data,
+            "mcp": self.mcp_commands.cmd_mcp,
         }
         handler = handlers.get(cmd)
         if handler is None:

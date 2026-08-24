@@ -36,15 +36,15 @@ Tally will:
 
 1. Generate a one-time session token.
 2. Write `ui/.env.local` with the configured host, ports, and API base URL.
-3. Start the FastAPI server on `http://<web_ui_host>:<web_ui_port>` in a background thread.
-4. Start the Vite dev server on `http://<web_ui_host>:<web_ui_vite_port>`.
+3. Start the FastAPI server on `https://<web_ui_host>:<web_ui_port>` in a background thread.
+4. Start the Vite dev server on `https://<web_ui_host>:<web_ui_vite_port>`.
 5. Wait for Vite to become reachable (polls TCP, 10-second timeout).
 6. Open your default browser at the Vite URL with the session token:
    ```
-   http://127.0.0.1:3000/?token=<token>&fresh=1
+   https://127.0.0.1:3000/?h=<token>
    ```
 
-Both servers run until you press Ctrl+C or the REPL exits.
+Both servers run until the REPL exits.
 
 If the configured port is already in use, the command prints an error and does not start a server.
 
@@ -59,6 +59,7 @@ All web UI settings live in `config/global.json`. Copy `config/global-example.js
 | `web_ui_host` | `"127.0.0.1"` | Bind address for FastAPI and Vite. `0.0.0.0` and `::` are rejected. |
 | `web_ui_port` | `8080` | FastAPI server port. |
 | `web_ui_vite_port` | `3000` | Vite dev server port. |
+| `web_ui_allowed_origins` | derived | CORS allow-list. Defaults to `["https://<web_ui_host>:<web_ui_vite_port>"]`. Override only for non-standard topologies. |
 
 **Example:**
 
@@ -70,7 +71,7 @@ All web UI settings live in `config/global.json`. Copy `config/global-example.js
 }
 ```
 
-CORS origins are derived automatically from `web_ui_host` and `web_ui_vite_port`. No manual CORS configuration is needed.
+`web_ui_allowed_origins` can be omitted. Tally derives the correct value from `web_ui_host` and `web_ui_vite_port`.
 
 ### Host constraint
 

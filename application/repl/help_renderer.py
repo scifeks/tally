@@ -339,7 +339,13 @@ _HELP_REGISTRY = [
         "ui",
         "ui serve",
         None,
-        "Start FastAPI + Vite dev server, open browser. Ctrl+C to stop.",
+        "Start HTTPS API + Vite dev server, open browser. Ctrl+C to stop.",
+    ),
+    (
+        "ui",
+        "ui ssl regenerate",
+        None,
+        "Regenerate the self-signed TLS certificate for web_ui_host.",
     ),
     # Utility
     ("utility", None, None, "Utility"),

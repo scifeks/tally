@@ -7,9 +7,11 @@ from pathlib import Path
 
 from application.rag.document_store import DocumentStore
 from application.rag.knowledge_base import FindingKnowledgeBase
-from infrastructure.embedding.factory import get_embedding_provider
-from infrastructure.llm.factory import get_llm_provider
-from infrastructure.vector.factory import make_chromadb_vector_index
+from factories.llm import (
+    create_embedding_provider,
+    create_llm_provider,
+    create_vector_index,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -29,9 +31,9 @@ def get_or_build_knowledge_base(
         return cache[project_name]
     base = Path(base_path)
     try:
-        embedding_provider = get_embedding_provider(base)
-        chat_provider = get_llm_provider("chat", base)
-        vector_index = make_chromadb_vector_index(
+        embedding_provider = create_embedding_provider(base)
+        chat_provider = create_llm_provider("chat", base)
+        vector_index = create_vector_index(
             project_name=project_name,
             base_path=base,
             embedding_provider=embedding_provider,
@@ -68,8 +70,8 @@ def get_or_build_document_store(
         return cache[project_name]
     base = Path(base_path)
     try:
-        embedding_provider = get_embedding_provider(base)
-        vector_index = make_chromadb_vector_index(
+        embedding_provider = create_embedding_provider(base)
+        vector_index = create_vector_index(
             project_name=project_name,
             base_path=base,
             embedding_provider=embedding_provider,

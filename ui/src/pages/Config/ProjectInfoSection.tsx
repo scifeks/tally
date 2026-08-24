@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Settings, RotateCcw, Save } from 'lucide-react'
+import { Settings, RotateCcw, Save, Loader2 } from 'lucide-react'
 import { cn, formatDate } from '@/lib/utils'
 import { Panel } from '@/components/tty'
 import type { ProjectInfo, ProjectInfoUpdate } from '@/lib/types'
@@ -59,7 +59,6 @@ export function ProjectInfoSection({
       return
     }
     onSave(updates)
-    setIsDirty(false)
   }
 
   const handleReset = () => {
@@ -77,17 +76,17 @@ export function ProjectInfoSection({
   }
 
   return (
-    <Panel>
+    <Panel bodyClassName="p-4">
       <SectionHeader icon={Settings} title="PROJECT INFO">
         <div className="flex items-center gap-2">
           <button
             onClick={handleReset}
-            disabled={!isDirty}
+            disabled={!isDirty || isSaving}
             className={cn(
               'flex items-center gap-1 px-3 h-7 text-[10px] uppercase tracking-wider border transition-colors',
-              isDirty
-                ? 'border-border text-muted-foreground hover:bg-muted/30'
-                : 'border-border/50 text-dim cursor-not-allowed'
+              isDirty && !isSaving
+                ? 'border-border-strong text-muted-foreground hover:border-primary/50 hover:text-foreground'
+                : 'border-border/50 text-dim opacity-40 cursor-not-allowed'
             )}
           >
             <RotateCcw className="h-3 w-3" />
@@ -98,12 +97,12 @@ export function ProjectInfoSection({
             disabled={!isDirty || isSaving}
             className={cn(
               'flex items-center gap-1 px-3 h-7 text-[10px] uppercase tracking-wider transition-colors',
-              isDirty
-                ? 'bg-accent text-background hover:bg-accent/80'
-                : 'bg-muted text-dim cursor-not-allowed'
+              isDirty && !isSaving
+                ? 'bg-accent text-background hover:bg-accent/70'
+                : 'bg-muted text-dim opacity-40 cursor-not-allowed'
             )}
           >
-            <Save className="h-3 w-3" />
+            {isSaving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}
             {isSaving ? 'Saving...' : 'Update'}
           </button>
         </div>

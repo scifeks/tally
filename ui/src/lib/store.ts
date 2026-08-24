@@ -62,9 +62,9 @@ interface UIState {
   setFindingMutationError: (err: ApiErrorPayload | null) => void
 
   /**
-   * Surface scan start/cancel failures (most importantly the 409 returned
-   * when a scan is already running for the project) so the user can't miss
-   * a rejected action. Cleared by the modal's dismiss button. Not persisted.
+   * Surface scan start/cancel failures, notably the 409 returned when a
+   * scan is already running for the project, so the user can't miss a
+   * rejected action. Cleared by the modal's dismiss button. Not persisted.
    */
   scanMutationError: ApiErrorPayload | null
   setScanMutationError: (err: ApiErrorPayload | null) => void
@@ -117,8 +117,27 @@ interface UIState {
   triageRunStatus: TriagePageStatus
   setTriageRunStatus: (status: TriagePageStatus) => void
 
+  viewedTriageRunId: number | null
+  setViewedTriageRunId: (id: number | null) => void
+
+  /**
+   * Per-(project, scan_run) boundary that hides triage batches with
+   * id <= boundary. Set on Reset and Start so a fresh attempt's view
+   * excludes prior attempts on the same scan_run. Persisted so a
+   * browser reload doesn't resurrect the hidden batches.
+   *
+   * Key format: `${projectId}:${scanRunId}`.
+   */
+  triageAttemptBoundary: Record<string, number>
+  setTriageAttemptBoundary: (projectId: number, scanRunId: number, boundary: number) => void
+  clearTriageAttemptBoundary: (projectId: number, scanRunId: number) => void
+
   scanWatchState: ScanWatchState | null
   setScanWatchState: (state: ScanWatchState | null) => void
+
+  toast: { message: string; tone: 'success' | 'error' } | null
+  showToast: (message: string, tone?: 'success' | 'error') => void
+  dismissToast: () => void
 }
 
 export const useUI = create<UIState>()(
@@ -165,8 +184,30 @@ export const useUI = create<UIState>()(
       triageRunStatus: 'idle',
       setTriageRunStatus: status => set({ triageRunStatus: status }),
 
+      viewedTriageRunId: null,
+      setViewedTriageRunId: id => set({ viewedTriageRunId: id }),
+
+      triageAttemptBoundary: {},
+      setTriageAttemptBoundary: (projectId: number, scanRunId: number, boundary: number) =>
+        set(s => ({
+          triageAttemptBoundary: {
+            ...s.triageAttemptBoundary,
+            [`${projectId}:${scanRunId}`]: boundary,
+          },
+        })),
+      clearTriageAttemptBoundary: (projectId, scanRunId) =>
+        set(s => {
+          const next = { ...s.triageAttemptBoundary }
+          delete next[`${projectId}:${scanRunId}`]
+          return { triageAttemptBoundary: next }
+        }),
+
       scanWatchState: null,
       setScanWatchState: state => set({ scanWatchState: state }),
+
+      toast: null,
+      showToast: (message, tone = 'success') => set({ toast: { message, tone } }),
+      dismissToast: () => set({ toast: null }),
     }),
     {
       // activeProjectId persists across browser reloads; the `?fresh=1`
@@ -175,6 +216,7 @@ export const useUI = create<UIState>()(
       partialize: s => ({
         activeProjectId: s.activeProjectId,
         triageInjectionAcked: s.triageInjectionAcked,
+        triageAttemptBoundary: s.triageAttemptBoundary,
       }),
     }
   )

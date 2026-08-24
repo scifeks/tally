@@ -1,7 +1,7 @@
 /**
- * Config-page hooks. Live-wired to the Phase 9 backend (project info,
- * repository CRUD + auth, tool overrides). Snake-case wire shapes are
- * kept private to this module; consumers see camelCase domain types.
+ * Config-page hooks for project info, repository CRUD + auth, tool
+ * overrides. Snake-case wire shapes are kept private to this module;
+ * consumers see camelCase domain types.
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
@@ -103,6 +103,8 @@ interface ToolCatalogItemApi {
   supports_local: boolean
   supports_docker: boolean
   description: string
+  requires_base_urls: boolean
+  requires_url_inventory: boolean
 }
 
 interface ToolCatalogResponseApi {
@@ -263,6 +265,8 @@ function mapToolCatalog(api: ToolCatalogItemApi): ToolCatalogEntry {
     name: api.name,
     supportsLocal: api.supports_local,
     supportsDocker: api.supports_docker,
+    requiresBaseUrls: api.requires_base_urls,
+    requiresUrlInventory: api.requires_url_inventory,
   }
 }
 
@@ -442,6 +446,7 @@ export function useDeleteRepository() {
 }
 
 export function useUpdateRepoAuth() {
+  const queryClient = useQueryClient()
   const setError = useUI(s => s.setConfigMutationError)
 
   return useMutation<
@@ -456,6 +461,11 @@ export function useUpdateRepoAuth() {
       })
     },
     onError: err => setError(toErrorPayload(err)),
+    onSuccess: (_, { projectId }) => {
+      queryClient.invalidateQueries({
+        queryKey: ['repositories', projectId],
+      })
+    },
   })
 }
 

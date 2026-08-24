@@ -28,10 +28,12 @@ class FindingPatchRequest(BaseModel):
     Locked fields (url, id, fingerprint, tool, etc.) are silently
     ignored if sent by the client (``extra="ignore"``).
     ``triaged_at`` and ``triaged_by`` are set automatically by the
-    server on every successful PATCH.
+    server on every successful PATCH. Pass ``triaged: false`` to clear them.
     """
 
     model_config = ConfigDict(extra="ignore")
+
+    triaged: bool | None = None
 
     # Editable named columns
     severity: str | None = None
@@ -354,6 +356,8 @@ class ToolCatalogItem(BaseModel):
     supports_local: bool
     supports_docker: bool
     description: str
+    requires_base_urls: bool = False
+    requires_url_inventory: bool = False
 
 
 class ToolCatalogResponse(BaseModel):
@@ -386,6 +390,7 @@ class CapabilitiesResponse(BaseModel):
     triage_enabled: bool
     report_retention_enabled: bool
     max_report_history: int
+    triage_backend_label: str | None
 
 
 class FindingHistoryItem(BaseModel):
@@ -650,6 +655,10 @@ class TriageStartRequest(BaseModel):
         default=None,
         validation_alias=AliasChoices("finding_ids", "findingIds"),
     )
+    scan_run_id: int | None = Field(
+        default=None,
+        validation_alias=AliasChoices("scan_run_id", "scanRunId"),
+    )
 
 
 class TriageRunSummary(BaseModel):
@@ -660,6 +669,7 @@ class TriageRunSummary(BaseModel):
     finished_at: str | None
     total_findings: int
     processed_findings: int
+    previous_max_batch_id: int | None = None
 
 
 class TriagesListResponse(BaseModel):
@@ -696,6 +706,10 @@ class TriageDetailResponse(BaseModel):
 class TriageCancelResponse(BaseModel):
     scan_run_id: int
     status: str
+
+
+class MaxBatchIdResponse(BaseModel):
+    max_batch_id: int | None
 
 
 class ReportGenerateRequest(BaseModel):
@@ -792,6 +806,7 @@ class ChatSessionSummary(BaseModel):
     id: int
     project_id: int
     title: str
+    mode: str
     created_at: str
     last_message_at: str | None
     message_count: int
@@ -806,9 +821,14 @@ class ChatSessionsListResponse(BaseModel):
 
 
 class ChatSessionCreateRequest(BaseModel):
-    """Body for ``POST /chat/sessions``. Reserved for v2 fields; empty in v1."""
+    """Body for ``POST /chat/sessions``."""
 
     model_config = ConfigDict(extra="ignore")
+
+    mode: str = Field(
+        default="all",
+        pattern=r"^(findings|documents|all)$",
+    )
 
 
 class ChatMessageResponse(BaseModel):
@@ -839,8 +859,7 @@ class ChatMessageSendRequest(BaseModel):
 
     The ``content`` field carries the user's chat turn. It must be
     non-empty after stripping; the upper bound (100k chars) keeps a
-    single user turn well below the 500k prompt-assembly ceiling
-    enforced inside ``application.chat.service``.
+    single user turn well below the 500k prompt-assembly ceiling.
     """
 
     model_config = ConfigDict(extra="ignore")
@@ -881,3 +900,24 @@ class ChatMessageCancelResponse(BaseModel):
 
     session_id: int
     cancelled_message_id: int | None
+
+
+class DocumentSource(BaseModel):
+    """One ingested document with its chunk count."""
+
+    name: str
+    chunks: int
+
+
+class DocumentListResponse(BaseModel):
+    items: list[DocumentSource]
+
+
+class DocumentUploadResponse(BaseModel):
+    filename: str
+    chunks: int
+
+
+class DocumentDeleteResponse(BaseModel):
+    filename: str
+    chunks_removed: int

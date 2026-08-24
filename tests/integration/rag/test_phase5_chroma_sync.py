@@ -13,10 +13,11 @@ import pytest
 from application.findings.analyst_service import FindingAnalystService
 from application.findings.findings_service import FindingsService
 from application.locking import LockQueryService
-from application.pipeline.chromadb_ids import chromadb_doc_id
 from application.ports.embedding_provider import EmbeddingProvider
 from application.ports.finding_event_sink import NullFindingEventSink
+from application.rag.finding_indexer import FindingIndexer
 from application.rag.knowledge_base import FindingKnowledgeBase
+from application.rag.vector_doc_ids import finding_vector_id
 from core.project_paths import ProjectPaths
 from infrastructure.store import make_store
 from infrastructure.vector.chromadb_adapter import ChromaDBVectorIndex
@@ -80,6 +81,7 @@ def _build_service(
         project_repo=project_repo,
         analyst=FindingAnalystService(finding_repo),
         lock_query=LockQueryService(),
+        indexer=FindingIndexer(finding_repo=finding_repo),
         project_id=1,
         project_name=project_name,
         findings_db_exists=True,
@@ -148,14 +150,14 @@ class TestPhase5ChromaSync:
     def test_upsert_creates_doc_with_fingerprint_id(self, phase5_env: dict) -> None:
         _patch(phase5_env)
 
-        doc_id = chromadb_doc_id(phase5_env["finding_fp"], "default")
+        doc_id = finding_vector_id(phase5_env["finding_fp"], "default")
         doc = phase5_env["kb"].get_finding(doc_id)
         assert doc is not None
 
     def test_doc_has_tool_and_profile_only(self, phase5_env: dict) -> None:
         _patch(phase5_env)
 
-        doc_id = chromadb_doc_id(phase5_env["finding_fp"], "default")
+        doc_id = finding_vector_id(phase5_env["finding_fp"], "default")
         doc = phase5_env["kb"].get_finding(doc_id)
         assert doc is not None
         meta = doc["metadata"]
@@ -180,7 +182,7 @@ class TestPhase5ChromaSync:
 
     def test_noop_when_finding_not_found(self, phase5_env: dict) -> None:
         # update_fields short-circuits to False for a non-existent id, so
-        # patch_finding returns None and never reaches _sync_to_chroma.
+        # patch_finding returns None and never reaches _sync_to_vector_index.
         service = _service_with_kb(phase5_env, phase5_env["kb"])
         result = service.patch_finding(99999, {"description": "ghost"})
         assert result is None

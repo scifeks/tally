@@ -6,7 +6,6 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from core.config.schemas import build_excluded_dirs
 from domain.tools.base import ToolResult
 from domain.tools.interface import ExecutionContext, ExecutionPass, ToolInterface
 from infrastructure.tools.parsers.gitleaks import combine_gitleaks_results
@@ -25,7 +24,7 @@ def _build_gitleaks_toml(
     lines = []
     for d in excluded_dirs:
         escaped = re.escape(d)
-        lines.append(f"    '''(^|/){escaped}/'''")
+        lines.append(f"    '''(?i)(^|/){escaped}/'''")
     paths_block = ",\n".join(lines)
     return (
         f"{extend}\n\n"
@@ -102,14 +101,14 @@ class BaseGitleaksTool(ToolInterface):
         repo_path = context.registry.get_service_path(
             self.name, context.service, context.repo.path
         )
-        exclude = build_excluded_dirs(context.service)
+        exclude = list(context.excluded_dirs)
 
         shared_kwargs: dict[str, object] = {"repo_path": repo_path}
         # .git must always be excluded: the dir scan walks the filesystem
         # and would crawl .git/objects/pack (potentially GBs of binary).
         all_excludes = [".git"] + exclude
         toml_content = _build_gitleaks_toml(all_excludes, extend_path=None)
-        if context.service.docker_path and context.repo.path:
+        if context.is_docker:
             config_file = Path(context.repo.path) / ".tally_gitleaks.toml"
             config_file.write_text(toml_content)
             container_cfg = f"{context.service.docker_path}/.tally_gitleaks.toml"

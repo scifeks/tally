@@ -29,7 +29,7 @@ async def platform_client(tmp_path: Path):
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(
         transport=transport,
-        base_url=f"http://127.0.0.1:{_TEST_PORT}",
+        base_url=f"https://127.0.0.1:{_TEST_PORT}",
     ) as client:
         yield client, app
 
@@ -40,7 +40,7 @@ class TestHealth:
         # No handshake exchange, no session cookie; endpoint must still respond.
         resp = await client.get(
             "/api/v1/health",
-            headers={"Origin": f"http://127.0.0.1:{_TEST_PORT}"},
+            headers={"Origin": f"https://127.0.0.1:{_TEST_PORT}"},
         )
         assert resp.status_code == 200
         body = resp.json()
@@ -52,7 +52,7 @@ class TestHealth:
         client, _ = platform_client
         resp = await client.get(
             "/api/v1/health",
-            headers={"Origin": f"http://127.0.0.1:{_TEST_PORT}"},
+            headers={"Origin": f"https://127.0.0.1:{_TEST_PORT}"},
         )
         assert resp.status_code == 200
         try:
@@ -73,7 +73,7 @@ class TestHealth:
 
         resp = await client.get(
             "/api/v1/health",
-            headers={"Origin": f"http://127.0.0.1:{_TEST_PORT}"},
+            headers={"Origin": f"https://127.0.0.1:{_TEST_PORT}"},
         )
         assert resp.status_code == 503
         body = resp.json()

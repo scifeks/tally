@@ -248,14 +248,18 @@ def _stub_repos_service(
 
 
 def _stub_tool_registry(names: tuple[str, ...] = ("semgrep", "gitleaks")) -> Any:
-    wrappers = [SimpleNamespace(name=n) for n in names]
-    return SimpleNamespace(get_all_tools=lambda: wrappers)
+    wrappers = {n: SimpleNamespace(name=n) for n in names}
+    return SimpleNamespace(
+        get_all_tools=lambda: list(wrappers.values()),
+        get_tool=lambda name: wrappers.get(name),
+    )
 
 
 def _stub_profiles_repo(existing: tuple[int, ...] = ()) -> Any:
     existing_set = set(existing)
     return SimpleNamespace(
-        existing_ids=lambda ids: [i for i in ids if i in existing_set]
+        existing_ids=lambda ids: [i for i in ids if i in existing_set],
+        get=lambda pid: None,
     )
 
 

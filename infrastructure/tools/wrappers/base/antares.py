@@ -7,7 +7,6 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from core.config.schemas import build_excluded_dirs
 from domain.tools.base import ToolResult
 from domain.tools.interface import (
     ExecutionContext,
@@ -106,7 +105,7 @@ class BaseAntaresTool(ToolInterface):
             context.repo.path,
         )
 
-        excluded = build_excluded_dirs(context.service)
+        excluded = context.excluded_dirs
 
         resolved = context.tool_config.antares_config
         if resolved is None:

@@ -864,3 +864,38 @@ Each repo in the project becomes its own DefectDojo Product, named
 are configured in `config/global.json`. See
 [docs/integrations/defect-dojo.md](integrations/defect-dojo.md) for
 full setup instructions and entity mapping details.
+
+---
+
+## MCP Token Management
+
+Generate bearer tokens for MCP server authentication. Tokens are required when configuring external clients (like Claude Code) to connect to the `tally mcp serve` endpoint. See [triage.md](triage.md) for the MCP triage workflow and [claude-code-scanning.md](claude-code-scanning.md) for Claude Code scanning setup.
+
+Create a token:
+
+```
+[acme-audit]> mcp token create ci-agent
+MCP token created: tly_abc123xyz789...
+Token name: ci-agent
+Warning: Copy this token now. It will not be shown again.
+```
+
+Tally stores only the token hash in the project database, never the plaintext. Save the token in a secure location.
+
+List registered tokens:
+
+```
+[acme-audit]> mcp token list
+Name        Created
+ci-agent    2024-01-15T10:30:00Z
+```
+
+Revoke a token:
+
+```
+[acme-audit]> mcp token revoke ci-agent
+Revoke token 'ci-agent'? [y/N]: y
+Token 'ci-agent' revoked.
+```
+
+Revoked tokens cannot be reactivated. Generate a new token if needed.

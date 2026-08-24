@@ -21,11 +21,16 @@ if [ "$PYTHON_MAJOR" -lt 3 ] || { [ "$PYTHON_MAJOR" -eq 3 ] && [ "$PYTHON_MINOR"
 fi
 echo "  v Python $PYTHON_VERSION"
 
-# Create venv if it does not already exist
-if [ -d ".venv" ]; then
+# Create venv if it does not already exist, or recreate if stale
+if [ -d ".venv" ] && .venv/bin/python3 --version >/dev/null 2>&1; then
     echo "  v .venv already exists, skipping creation"
 else
-    echo "  Creating .venv..."
+    if [ -d ".venv" ]; then
+        echo "  Stale .venv detected (interpreter missing or broken), recreating..."
+        rm -rf .venv
+    else
+        echo "  Creating .venv..."
+    fi
     "$PYTHON" -m venv .venv
     echo "  v .venv created"
 fi
@@ -101,6 +106,16 @@ else
         echo "  To install later: npm install -g swagger2openapi postman-to-openapi"
     fi
 fi
+
+echo ""
+echo "Generating self-signed TLS certificate for the web UI..."
+.venv/bin/python3 -c "
+from infrastructure.web_ui.tls import ensure_tls_cert
+cert, key = ensure_tls_cert('.', '127.0.0.1')
+print(f'  v Certificate: {cert}')
+print(f'  v Private key: {key}')
+"
+echo "  To regenerate for a different host, run: ui ssl regenerate"
 
 echo ""
 echo "Setup complete."

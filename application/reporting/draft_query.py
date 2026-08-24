@@ -32,38 +32,24 @@ class DraftQueryService:
     def get_filtered_findings(self, skip_triage: bool = False) -> list[Finding]:
         """Return findings eligible for report generation.
 
-        When *skip_triage* is False (default), only findings that have been
-        triaged (``triaged_by IS NOT NULL``) and marked for inclusion
-        (``should_report = 1``) are returned.
+        When *skip_triage* is False (default), only findings marked for
+        inclusion (``should_report = 1``) are returned.
 
         When *skip_triage* is True, all findings are returned regardless of
-        triage status; useful for generating drafts before triage is run.
-
-        FALSE POSITIVE FILTER WIRING POINT:
-        When a mechanism for flagging false positives is defined, apply the
-        filter here before returning. e.g.:
-            findings = [f for f in findings if not _is_false_positive(f)]
+        triage or report-inclusion status.
         """
         if skip_triage:
             return self._repo.get_all_findings()
         return self._repo.get_reportable_findings()
 
     def get_findings_for_report(self, skip_triage: bool = False) -> list[Finding]:
-        """Return findings eligible for inclusion in a generated report.
+        """Filter findings for RAG context during report generation.
 
-        ``should_report = 1`` is always required. ``skip_triage`` only
-        relaxes the requirement for non-null triage columns:
-
-        * ``skip_triage=False``: triaged_by IS NOT NULL AND should_report = 1
-        * ``skip_triage=True``: should_report = 1 (triage columns ignored)
-
-        Distinct from :meth:`get_filtered_findings`, which is used by the
-        LLM draft path and intentionally returns all findings when
-        ``skip_triage=True`` because drafts run before triage sets
-        ``should_report``.
+        Same logic as :meth:`get_filtered_findings`: ``should_report = 1``
+        when *skip_triage* is False, all findings otherwise.
         """
         if skip_triage:
-            return self._repo.get_findings_marked_for_report()
+            return self._repo.get_all_findings()
         return self._repo.get_reportable_findings()
 
     def severity_distribution(self, findings: list[Finding]) -> dict[str, int]:

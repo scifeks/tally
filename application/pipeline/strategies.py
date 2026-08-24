@@ -2,11 +2,13 @@
 
 Strategy pattern for what happens after findings are ingested to SQLite:
 
-- ``EnrichThenPersistStrategy``: runs LLM enrichment, then writes to ChromaDB.
-- ``PersistOnlyStrategy``: writes directly to ChromaDB, skipping enrichment.
+- ``EnrichThenPersistStrategy``: runs LLM enrichment, then indexes into
+  the vector index.
+- ``PersistOnlyStrategy``: indexes into the vector index, skipping
+  enrichment.
 
-Both strategies subscribe to ``IngestCompleted`` on the EventBus. Neither emits
-a further event; they are terminal pipeline steps.
+Both strategies subscribe to ``IngestCompleted`` on the EventBus. Neither
+emits a further event; they are terminal pipeline steps.
 """
 
 from __future__ import annotations
@@ -25,6 +27,7 @@ if TYPE_CHECKING:
     from application.ports.finding_repository import (
         FindingRepositoryPort,
     )
+    from application.rag.finding_indexer import FindingIndexer
 
 logger = logging.getLogger(__name__)
 
@@ -37,17 +40,19 @@ class PostIngestStrategy(Protocol):
 
 
 class EnrichThenPersistStrategy(BaseHandler):
-    """Run LLM enrichment, then persist to ChromaDB."""
+    """Run LLM enrichment, then index findings into the vector index."""
 
     def __init__(
         self,
         finding_repo: FindingRepositoryPort,
+        indexer: FindingIndexer,
         reporter: ProgressReporter | None = None,
         project_id: int | None = None,
         event_sink: ScanEventSink | None = None,
         cancel_token: CancellationToken | None = None,
     ) -> None:
         super().__init__(finding_repo=finding_repo)
+        self._indexer = indexer
         self._reporter = reporter
         self._project_id = project_id
         self._event_sink: ScanEventSink = event_sink or NullScanEventSink()
@@ -67,16 +72,45 @@ class EnrichThenPersistStrategy(BaseHandler):
             cancel_token=self._cancel_token,
         )
         pipeline.enrich(event.ids)
-        self._persist_to_chromadb(event.ids, event.project_name, event.base_path)
+        try:
+            kb = self._get_knowledge_base(event.project_name, event.base_path)
+        except Exception as exc:
+            logger.warning(
+                "EnrichThenPersistStrategy: knowledge base init failed: %s",
+                exc,
+            )
+            return
+        try:
+            self._indexer.index_findings(
+                kb, event.ids, caller_label="EnrichThenPersistStrategy"
+            )
+        except Exception as exc:
+            logger.error(
+                "EnrichThenPersistStrategy: vector index write failed: %s",
+                exc,
+            )
 
 
 class PersistOnlyStrategy(BaseHandler):
-    """Persist directly to ChromaDB, skipping enrichment."""
+    """Index findings into the vector index, skipping enrichment."""
 
-    def __init__(self, finding_repo: FindingRepositoryPort) -> None:
+    def __init__(
+        self,
+        finding_repo: FindingRepositoryPort,
+        indexer: FindingIndexer,
+    ) -> None:
         super().__init__(finding_repo=finding_repo)
+        self._indexer = indexer
 
     def handle(self, event: IngestCompleted) -> None:
         if not event.ids:
             return
-        self._persist_to_chromadb(event.ids, event.project_name, event.base_path)
+        try:
+            kb = self._get_knowledge_base(event.project_name, event.base_path)
+        except Exception as exc:
+            logger.warning(
+                "PersistOnlyStrategy: knowledge base init failed: %s",
+                exc,
+            )
+            return
+        self._indexer.index_findings(kb, event.ids, caller_label="PersistOnlyStrategy")

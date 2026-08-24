@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Literal, Protocol
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from core.config.schemas import RepoService, Repository
     from domain.tools.execution_config import ToolExecutionConfig
 
@@ -34,6 +36,7 @@ class ExecutionPass:
     cwd: str | None = None
     env: dict[str, str] | None = None
     stdin_data: str | None = None
+    output_path: Path | None = None
 
 
 @dataclass
@@ -48,15 +51,11 @@ class ExecutionContext:
     registry: RegistryLike
     is_docker: bool
     execution_mode: Literal["scan", "manual"] = "scan"
+    excluded_dirs: list[str] = field(default_factory=list)
 
 
 class ToolInterface(ABC):
-    """Polymorphic interface that all tool wrappers implement.
-
-    Wrappers inherit from both ``ToolWrapper` and
-    ``ToolInterface``.  Python MRO satisfies both ABCs; concrete classes
-    implement each abstract member once.
-    """
+    """ABC paired with ToolWrapper; concrete classes implement both via MRO."""
 
     @property
     @abstractmethod
@@ -146,6 +145,11 @@ class ToolInterface(ABC):
         Override in subclasses for tools that routinely need more (or less) time.
         """
         return None
+
+    @property
+    def findings_exit_codes(self) -> frozenset[int]:
+        """Non-zero exit codes that signal findings when ``findings_exit_ok``."""
+        return frozenset({1})
 
     @property
     def display_fields(self) -> list[str]:

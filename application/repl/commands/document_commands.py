@@ -5,10 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from core.project_paths import ProjectPaths
-from infrastructure.documents.chunker import chunk_text
-from infrastructure.embedding.factory import get_embedding_provider
-from infrastructure.vector.chromadb_adapter import ChromaDBVectorIndex
+from domain.documents.chunker import chunk_text
+from factories.llm import create_embedding_provider, create_vector_index
 
 if TYPE_CHECKING:
     from application.rag.document_store import DocumentStore
@@ -52,25 +50,16 @@ class DocumentCommands:
         if project in self._store_cache:
             return self._store_cache[project]
 
-        from application.rag.document_store import (
-            DocumentStore,
-        )
+        from application.rag.document_store import DocumentStore
 
         try:
             base = Path(self.repl.base_path)
-            embedding = get_embedding_provider(base)
-            paths = ProjectPaths.from_canonical(base, project)
-            chroma_path = paths.chroma_db
-            chroma_path.mkdir(parents=True, exist_ok=True)
-            collection_name = f"documents_{project}"
-            index = ChromaDBVectorIndex(
-                chroma_path=chroma_path,
-                collection_name=collection_name,
+            embedding = create_embedding_provider(base)
+            index = create_vector_index(
+                project_name=project,
+                base_path=base,
                 embedding_provider=embedding,
-                collection_metadata={
-                    "project": project,
-                    "hnsw:space": "cosine",
-                },
+                collection_type="documents",
             )
             store = DocumentStore(index)
             self._store_cache[project] = store

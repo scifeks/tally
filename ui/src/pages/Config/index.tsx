@@ -19,6 +19,7 @@ import { ConfigPanel } from './ConfigPanel'
 import { ProjectInfoSection } from './ProjectInfoSection'
 import { RepositorySection } from './RepositorySection'
 import { ToolOverridesSection } from './ToolOverridesSection'
+import { DocumentsSection } from './DocumentsSection'
 import { SectionHeader } from './shared'
 import { NoProjectSelectedState } from '@/components/NoProjectSelectedState'
 import { ConfigMutationErrorModal } from '@/components/ConfigMutationErrorModal'
@@ -27,6 +28,7 @@ import { ConfigMutationErrorModal } from '@/components/ConfigMutationErrorModal'
 
 export default function Config() {
   const activeProjectId = useUI(s => s.activeProjectId)
+  const showToast = useUI(s => s.showToast)
   const projectId = activeProjectId ?? 0
 
   const { data: projects = [] } = useProjects()
@@ -55,8 +57,8 @@ export default function Config() {
   }
 
   return (
-    <div className="h-full flex flex-col min-h-0 p-4 gap-4">
-      <div className="flex items-start gap-6 shrink-0">
+    <div className="h-full overflow-y-auto p-4 space-y-4">
+      <div className="flex items-start gap-6">
         <ConfigPanel active size={180} />
 
         <div className="flex-1 flex flex-col gap-2">
@@ -75,54 +77,80 @@ export default function Config() {
         </div>
       </div>
 
-      <div className="flex-1 min-h-0 overflow-y-auto space-y-4">
-        <ProjectInfoSection
-          projectInfo={projectInfo ?? null}
-          onSave={updates => updateProjectInfo.mutate({ projectId, updates })}
-          isSaving={updateProjectInfo.isPending}
+      <ProjectInfoSection
+        projectInfo={projectInfo ?? null}
+        onSave={updates =>
+          updateProjectInfo.mutate(
+            { projectId, updates },
+            { onSuccess: () => showToast('Project info updated') }
+          )
+        }
+        isSaving={updateProjectInfo.isPending}
+      />
+
+      <div className="grid grid-cols-2 gap-4">
+        <RepositorySection
+          repositories={repositories}
+          projectId={projectId}
+          onSave={(repo, isNew, endpointFile, garakConfigFile) =>
+            saveRepository.mutate(
+              { projectId, repo, isNew, endpointFile, garakConfigFile },
+              {
+                onSuccess: () => {
+                  setRepoSaveCompletedAt(Date.now())
+                  showToast(isNew ? 'Repository created' : 'Repository saved')
+                },
+              }
+            )
+          }
+          onDelete={repoId =>
+            deleteRepository.mutate(
+              { projectId, repoId },
+              { onSuccess: () => showToast('Repository deleted') }
+            )
+          }
+          onUpdateAuth={(repoId, auth) =>
+            updateRepoAuth.mutate(
+              { projectId, repoId, auth },
+              { onSuccess: () => showToast('Auth credentials saved') }
+            )
+          }
+          isSaving={saveRepository.isPending}
+          isSavingAuth={updateRepoAuth.isPending}
+          authSavedAt={updateRepoAuth.isSuccess ? Date.now() : null}
+          saveCompletedAt={repoSaveCompletedAt}
         />
 
-        <div className="grid grid-cols-2 gap-4">
-          <RepositorySection
-            repositories={repositories}
+        {toolCatalogQuery.data && toolOverridesQuery.data ? (
+          <ToolOverridesSection
+            catalog={toolCatalog}
+            overrides={toolOverrides}
             projectId={projectId}
-            onSave={(repo, isNew, endpointFile, garakConfigFile) =>
-              saveRepository.mutate(
-                { projectId, repo, isNew, endpointFile, garakConfigFile },
-                { onSuccess: () => setRepoSaveCompletedAt(Date.now()) }
+            onSave={async (override, isNew) => {
+              await saveToolOverride.mutateAsync({
+                projectId,
+                override,
+                isNew,
+              })
+              showToast(isNew ? 'Tool override created' : 'Tool override saved')
+            }}
+            onDelete={toolId =>
+              deleteToolOverride.mutate(
+                { projectId, toolId },
+                { onSuccess: () => showToast('Tool override removed') }
               )
             }
-            onDelete={repoId => deleteRepository.mutate({ projectId, repoId })}
-            onUpdateAuth={(repoId, auth) => updateRepoAuth.mutate({ projectId, repoId, auth })}
-            isSaving={saveRepository.isPending}
-            isSavingAuth={updateRepoAuth.isPending}
-            authSavedAt={updateRepoAuth.isSuccess ? Date.now() : null}
-            saveCompletedAt={repoSaveCompletedAt}
+            isSaving={saveToolOverride.isPending}
           />
-
-          {toolCatalogQuery.data && toolOverridesQuery.data ? (
-            <ToolOverridesSection
-              catalog={toolCatalog}
-              overrides={toolOverrides}
-              projectId={projectId}
-              onSave={async (override, isNew) => {
-                await saveToolOverride.mutateAsync({
-                  projectId,
-                  override,
-                  isNew,
-                })
-              }}
-              onDelete={toolId => deleteToolOverride.mutate({ projectId, toolId })}
-              isSaving={saveToolOverride.isPending}
-            />
-          ) : (
-            <Panel>
-              <SectionHeader icon={Wrench} title="TOOL OVERRIDES" />
-              <div className="text-sm text-dim py-8 text-center">Loading tool configuration…</div>
-            </Panel>
-          )}
-        </div>
+        ) : (
+          <Panel>
+            <SectionHeader icon={Wrench} title="TOOL OVERRIDES" />
+            <div className="text-sm text-dim py-8 text-center">Loading tool configuration…</div>
+          </Panel>
+        )}
       </div>
+
+      <DocumentsSection projectId={projectId} />
 
       <ConfigMutationErrorModal />
     </div>

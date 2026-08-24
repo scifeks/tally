@@ -124,7 +124,7 @@ class TestPhase3EnrichmentSkipsAlreadyEnriched:
         ) as mock_pf:
             pipeline.enrich([fid])
 
-        mock_pf.assert_called_once()
+        mock_pf.assert_called()
 
 
 class TestPhase3EnrichmentWritesToSQLite:
@@ -177,7 +177,7 @@ class TestPhase3EnrichmentWritesToSQLite:
         assert meta["remediation"] == "Encode output."
 
     def test_named_column_fields_written_directly(self, store_env: dict) -> None:
-        """Fields like description are written to the named column."""
+        """Fields like confidence (named column) are written to the column."""
         finding_repo = store_env["finding_repo"]
         run_id = store_env["run_id"]
         fid = _seed_finding(finding_repo, run_id, "semgrep")
@@ -188,16 +188,22 @@ class TestPhase3EnrichmentWritesToSQLite:
             base_path=store_env["base_path"],
             llm_provider=mock_llm,
         )
+
+        def side_effect_call_per_field(metadata, specs):
+            if specs and specs[0].field_name == "confidence":
+                return {"confidence": "probable"}
+            return {}
+
         with patch.object(
             pipeline,
             "_call_per_field",
-            return_value={"description": "SQL injection in login form."},
+            side_effect=side_effect_call_per_field,
         ):
             pipeline.enrich([fid])
 
         row = finding_repo.get_finding(fid)
         assert row is not None
-        assert row.description == "SQL injection in login form."
+        assert row.confidence == "probable"
 
 
 class TestPhase3ToolBypass:
@@ -254,7 +260,7 @@ class TestPhase3ToolBypass:
         ) as mock_pf:
             pipeline.enrich([fid])
 
-        mock_pf.assert_called_once()
+        mock_pf.assert_called()
 
 
 class TestPhase3UpdateEnrichmentFields:

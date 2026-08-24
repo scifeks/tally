@@ -36,6 +36,7 @@ def _make_context(
     repo: Repository,
     base_path: str,
     tool_config: ToolExecutionConfig | None = None,
+    excluded_dirs: list[str] | None = None,
 ) -> ExecutionContext:
     registry = MagicMock()
     repo_path = repo.path or "/repo"
@@ -54,6 +55,7 @@ def _make_context(
         tool_config=tool_config or ToolExecutionConfig(noir_provider=None),
         registry=registry,
         is_docker=False,
+        excluded_dirs=excluded_dirs or [],
     )
 
 
@@ -185,6 +187,29 @@ class TestNoirBuildExecutionPasses:
         passes = tool.build_execution_passes(ctx)
         techs: list[str] = passes[0].kwargs["techs"]
         assert "js_express" in techs
+
+    def test_lockfile_detection_populates_exclude_indicators(
+        self, tmp_path: Path
+    ) -> None:
+        src = tmp_path / "repo"
+        src.mkdir()
+        (src / "composer.json").write_text("{}")
+        (src / "vendor").mkdir()
+        repo = _make_repo(str(src))
+        ctx = _make_context(repo, str(tmp_path))
+        tool = NoirLocalTool()
+        tool.build_execution_passes(ctx)
+        assert "vendor" in tool._exclude_indicators
+
+    def test_excluded_dirs_merged_into_exclude_indicators(self, tmp_path: Path) -> None:
+        src = tmp_path / "repo"
+        src.mkdir()
+        repo = _make_repo(str(src))
+        ctx = _make_context(repo, str(tmp_path), excluded_dirs=["tests", "spec"])
+        tool = NoirLocalTool()
+        tool.build_execution_passes(ctx)
+        assert "tests" in tool._exclude_indicators
+        assert "spec" in tool._exclude_indicators
 
 
 # _compute_noir_techs
@@ -407,3 +432,111 @@ class TestNoirExecutionPassesAiConfig:
         assert "ai_provider_url" not in passes[0].kwargs
         assert "ai_model" not in passes[0].kwargs
         assert passes[0].env is None
+
+
+# parse_output filtering
+
+
+class TestNoirParseOutputFiltering:
+    def _write_oas3(self, path: Path, endpoints: dict[str, dict]) -> None:
+        import json
+
+        oas3 = {
+            "openapi": "3.0.0",
+            "info": {"title": "test", "version": "0.1"},
+            "paths": endpoints,
+        }
+        path.write_text(json.dumps(oas3))
+
+    def test_vendor_endpoints_filtered(self, tmp_path: Path) -> None:
+        report = tmp_path / "report.json"
+        self._write_oas3(
+            report,
+            {
+                "/api/users": {"get": {}},
+                "/vendor/autoload.php": {"get": {}},
+                "/api/orders": {"post": {}},
+            },
+        )
+        tool = NoirLocalTool()
+        tool._last_report_path = report
+        tool._exclude_indicators = ["vendor"]
+        parsed = tool.parse_output("", {})
+        paths = [ep["path"] for ep in parsed["endpoints"]]
+        assert "/api/users" in paths
+        assert "/api/orders" in paths
+        assert "/vendor/autoload.php" not in paths
+        assert parsed["summary"]["total_endpoints"] == 2
+
+    def test_no_filtering_when_indicators_empty(self, tmp_path: Path) -> None:
+        report = tmp_path / "report.json"
+        self._write_oas3(
+            report,
+            {
+                "/api/users": {"get": {}},
+                "/vendor/foo": {"get": {}},
+            },
+        )
+        tool = NoirLocalTool()
+        tool._last_report_path = report
+        tool._exclude_indicators = []
+        parsed = tool.parse_output("", {})
+        paths = [ep["path"] for ep in parsed["endpoints"]]
+        assert len(paths) == 2
+
+    def test_exclude_indicators_reset_after_parse(self, tmp_path: Path) -> None:
+        report = tmp_path / "report.json"
+        self._write_oas3(report, {"/api/users": {"get": {}}})
+        tool = NoirLocalTool()
+        tool._last_report_path = report
+        tool._exclude_indicators = ["vendor"]
+        tool.parse_output("", {})
+        assert tool._exclude_indicators == []
+
+    def test_filtered_oas3_written_to_disk(self, tmp_path: Path) -> None:
+        import json
+
+        report = tmp_path / "report.json"
+        self._write_oas3(
+            report,
+            {
+                "/api/users": {"get": {}},
+                "/vendor/autoload.php": {"get": {}},
+                "/api/orders": {"post": {}},
+            },
+        )
+        tool = NoirLocalTool()
+        tool._last_report_path = report
+        tool._exclude_indicators = ["vendor"]
+        tool.parse_output("", {})
+
+        raw = json.loads(report.read_text(encoding="utf-8"))
+        assert "/api/users" in raw["paths"]
+        assert "/api/orders" in raw["paths"]
+        assert "/vendor/autoload.php" not in raw["paths"]
+
+    def test_oas3_metadata_preserved_after_filtering(self, tmp_path: Path) -> None:
+        import json
+
+        report = tmp_path / "report.json"
+        oas3 = {
+            "openapi": "3.0.0",
+            "info": {"title": "test", "version": "0.1"},
+            "servers": [{"url": "http://localhost:9090"}],
+            "paths": {
+                "/api/users": {"get": {"parameters": [{"name": "id", "in": "query"}]}},
+                "/vendor/x.php": {"get": {}},
+            },
+        }
+        report.write_text(json.dumps(oas3))
+        tool = NoirLocalTool()
+        tool._last_report_path = report
+        tool._exclude_indicators = ["vendor"]
+        tool.parse_output("", {})
+
+        raw = json.loads(report.read_text(encoding="utf-8"))
+        assert raw["openapi"] == "3.0.0"
+        assert raw["info"]["title"] == "test"
+        assert raw["servers"] == [{"url": "http://localhost:9090"}]
+        params = raw["paths"]["/api/users"]["get"]["parameters"]
+        assert params == [{"name": "id", "in": "query"}]

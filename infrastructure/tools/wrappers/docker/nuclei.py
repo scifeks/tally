@@ -38,6 +38,9 @@ class NucleiDockerTool(BaseNucleiTool):
         custom_template_dir: str | None = (
             str(raw["custom_template_dir"]) if "custom_template_dir" in raw else None
         )
+        default_template_dir: str | None = (
+            str(raw["default_template_dir"]) if "default_template_dir" in raw else None
+        )
         pass_type: str | None = str(raw["pass_type"]) if "pass_type" in raw else None
         output_file: str | None = (
             str(raw["output_file"]) if "output_file" in raw else None
@@ -64,8 +67,12 @@ class NucleiDockerTool(BaseNucleiTool):
 
         tool_args.extend(["-json-export", str(output_file)])
 
-        if custom_template_dir:
+        if custom_template_dir and default_template_dir:
+            tool_args.extend(["-t", f"{default_template_dir},{custom_template_dir}"])
+        elif custom_template_dir:
             tool_args.extend(["-t", str(custom_template_dir)])
+        elif default_template_dir:
+            tool_args.extend(["-t", str(default_template_dir)])
 
         return build_docker_exec(self._container_name, self._tool_path, tool_args)
 

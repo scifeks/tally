@@ -5,13 +5,13 @@ from __future__ import annotations
 from pathlib import Path
 
 from domain.runtime.probe import RuntimeDependencyProbe
-from infrastructure.runtime.docker_probe import DockerProbe
+from factories.scanning import create_docker_probe
 
 
 def build_runtime_dependency_probes(
     *,
-    base_path: str | Path,  # kept for caller compatibility
+    base_path: str | Path,
 ) -> list[RuntimeDependencyProbe]:
     """Registers probes for configured runtimes."""
     _ = base_path
-    return [DockerProbe()]
+    return [create_docker_probe()]

@@ -6,7 +6,6 @@ import logging
 from pathlib import Path
 from time import perf_counter
 
-from application.llm_scan.factory import create_llm_scan_backend
 from application.llm_scan.prompts import build_scan_prompt
 from application.llm_scan.tree_shaker import build_tree
 from application.tools.scan_types.base import ScanType
@@ -18,6 +17,7 @@ from domain.tools.base import ToolResult
 from domain.tools.display import ToolDisplayRow
 from domain.tools.scan_types.models import ScanSummary
 from domain.tools.scan_types.resources import IExecutionResources
+from factories.llm_scan import create_llm_scan_backend
 
 logger = logging.getLogger(__name__)
 
@@ -26,22 +26,13 @@ class LlmScan(ScanType):
     """Run LLM-based security scanning on configured repositories."""
 
     def __init__(self, repo_names: list[str] | None = None) -> None:
-        """Initialize LlmScan.
-
-        Args:
-            repo_names: Optional list of repo names to scan. If None, all
-                active repos are scanned.
-
-        """
         self._repo_names = repo_names
 
     def execute(
         self, config: ScanTypeConfig, resources: IExecutionResources
     ) -> ScanSummary:
-        """Execute LLM-based security scan on configured repositories."""
         start = perf_counter()
 
-        # Get repos to scan
         repos = config.repo_repo.list_active() if config.repo_repo else []
         if not repos:
             resources.display.print_status(
@@ -57,7 +48,6 @@ class LlmScan(ScanType):
                 findings_by_tool={},
             )
 
-        # Filter to requested repos if specified
         if self._repo_names:
             repos = [r for r in repos if r.name in self._repo_names]
 
@@ -75,14 +65,12 @@ class LlmScan(ScanType):
                 findings_by_tool={},
             )
 
-        # Create backend and determine tool name
         repo_paths = {r.name: Path(r.path) for r in repos}
         backend, timeout_seconds = create_llm_scan_backend(
             app_root=Path(config.base_path),
             repo_paths=repo_paths,
         )
 
-        # Detect tool name based on backend type
         backend_class_name = type(backend).__name__
         if "Claude" in backend_class_name:
             tool_name = "claudecode"
@@ -103,18 +91,13 @@ class LlmScan(ScanType):
         total_run = total_failed = total_ingested = 0
         findings_by_tool: dict[str, int] = {}
 
-        # Scan each repo
         for repo in repos:
             resources.display.print_status(f"[bold]Repository:[/bold] {repo.name}")
 
             try:
-                # Build directory tree
                 tree = build_tree(Path(repo.path), max_depth=4)
-
-                # Build prompt
                 prompt = build_scan_prompt(tree, repo.name, str(repo.path))
 
-                # Emit tool started event
                 resources.display.print_running(tool_name, repo.name)
                 resources.event_sink.emit(
                     se.ToolStarted(
@@ -127,7 +110,6 @@ class LlmScan(ScanType):
                     )
                 )
 
-                # Run the backend scan
                 result_start = perf_counter()
                 with backend.prepare_session(
                     project=config.project_name,
@@ -142,7 +124,6 @@ class LlmScan(ScanType):
                 duration = round(perf_counter() - result_start, 1)
 
                 if scan_result.success:
-                    # Convert findings to parsed_data format
                     parsed_data = {
                         "findings": [
                             {
@@ -181,29 +162,16 @@ class LlmScan(ScanType):
                         tool_name, 0
                     ) + len(scan_result.findings)
 
-                    # Dispatch for ingest pipeline
-                    total_ingested += dispatch_and_count_ingested(
-                        resources.event_bus,
-                        ToolCompleted(
-                            tool_result,
-                            repo.name,
-                            config.run_id,
-                            config.project_name,
-                            config.base_path,
-                            repo=repo.name,
-                        ),
-                    )
-
+                    findings_count = len(scan_result.findings)
                     resources.display.print_tool_line(
                         ToolDisplayRow(
                             f"{tool_name}/{repo.name}",
                             True,
                             False,
-                            len(scan_result.findings),
+                            findings_count,
                             duration,
                         )
                     )
-                    findings_count = len(scan_result.findings)
                     resources.event_sink.emit(
                         se.ToolCompleted(
                             run_id=config.run_id or 0,
@@ -217,9 +185,20 @@ class LlmScan(ScanType):
                             exit_code=0,
                         )
                     )
+
+                    total_ingested += dispatch_and_count_ingested(
+                        resources.event_bus,
+                        ToolCompleted(
+                            tool_result,
+                            repo.name,
+                            config.run_id,
+                            config.project_name,
+                            config.base_path,
+                            repo=repo.name,
+                        ),
+                    )
                     total_run += 1
                 else:
-                    # Scan failed
                     tool_result = ToolResult(
                         tool_name=tool_name,
                         success=False,

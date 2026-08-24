@@ -28,8 +28,6 @@ function collectFreshFiles(template: ArgumentTemplate): Record<string, File> {
   return out
 }
 
-// ─── Tool Overrides Section ───────────────────────────────────────────────────
-
 export function ToolOverridesSection({
   catalog,
   overrides,
@@ -73,13 +71,14 @@ export function ToolOverridesSection({
         setArgsMode(existing.argsMode ?? 'stock')
       } else {
         const tool = catalog.find(t => t.id === selectedToolId)
+        const defaultArgs = 'stock'
         setForm({
           toolId: selectedToolId,
-          argsMode: 'stock',
+          argsMode: defaultArgs,
           type: 'repo',
           location: tool?.supportsLocal ? 'local' : 'docker',
         })
-        setArgsMode('stock')
+        setArgsMode(defaultArgs)
       }
       setIsDirty(false)
       setTemplatesExpanded(false)
@@ -190,7 +189,7 @@ export function ToolOverridesSection({
   const canSelectDocker = selectedTool?.supportsDocker ?? true
 
   return (
-    <Panel>
+    <Panel bodyClassName="p-4">
       <SectionHeader icon={Wrench} title="TOOL OVERRIDES">
         <div className="flex items-center gap-2">
           {overrides.length > 0 && (
@@ -221,7 +220,7 @@ export function ToolOverridesSection({
                 onChange={e => {
                   if (e.target.value) setSelectedToolId(e.target.value)
                 }}
-                className="h-7 pl-2 pr-6 bg-background border border-accent/50 text-xs text-accent appearance-none cursor-pointer focus:border-accent focus:outline-none"
+                className="h-7 pl-2 pr-6 bg-background border border-accent/50 text-xs text-accent appearance-none cursor-pointer hover:border-accent hover:shadow-[0_0_8px_rgba(57,255,20,0.2)] focus:border-accent focus:outline-none transition-all"
               >
                 <option value="">+ Add Override</option>
                 {availableForAdd.map(t => (
@@ -260,6 +259,13 @@ export function ToolOverridesSection({
               </span>
             )}
           </div>
+
+          {(selectedTool.requiresBaseUrls || selectedTool.requiresUrlInventory) && (
+            <div className="space-y-1 text-xs text-yellow-600 dark:text-yellow-400">
+              {selectedTool.requiresBaseUrls && <div>Requires base URLs</div>}
+              {selectedTool.requiresUrlInventory && <div>Requires URL discovery</div>}
+            </div>
+          )}
 
           {/* Type / Location / Args row */}
           <div className="grid grid-cols-3 gap-4">
@@ -512,7 +518,7 @@ export function ToolOverridesSection({
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setSelectedToolId(null)}
-                className="flex items-center gap-1 px-3 h-8 text-[10px] uppercase tracking-wider border border-border text-muted-foreground hover:bg-muted/30 transition-colors"
+                className="flex items-center gap-1 px-3 h-8 text-[10px] uppercase tracking-wider border border-border-strong text-muted-foreground hover:border-primary/50 hover:text-foreground transition-colors"
               >
                 Cancel
               </button>
@@ -530,8 +536,8 @@ export function ToolOverridesSection({
                   argsMode === 'custom' ||
                     (form.location === 'local' && form.path) ||
                     (form.location === 'docker' && form.container?.name && form.container?.toolPath)
-                    ? 'bg-accent text-background hover:bg-accent/80'
-                    : 'bg-muted text-dim cursor-not-allowed'
+                    ? 'bg-accent text-background hover:bg-accent/70'
+                    : 'bg-muted text-dim opacity-40 cursor-not-allowed'
                 )}
               >
                 <Save className="h-3 w-3" />

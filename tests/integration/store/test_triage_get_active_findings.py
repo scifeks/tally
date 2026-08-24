@@ -103,7 +103,7 @@ def _make_api_finding(
     return {
         "tool": tool,
         "repo": repo,
-        "segment": "api",
+        "segment": "web",
         "url": url,
         "severity": severity,
         "risk_type": risk_type,
@@ -123,10 +123,10 @@ class TestGetActiveFindings:
             _make_sast_finding(tool="semgrep", repo="r1"),  # duplicate
             _make_api_finding(tool="zap", repo="r1"),
         ]
-        _seed_findings(run_repo, finding_repo, findings, factory)
-        combos = repo.get_active_finding_combos(frozenset())
+        run_id = _seed_findings(run_repo, finding_repo, findings, factory)
+        combos = repo.get_active_finding_combos(run_id, frozenset())
         assert ("semgrep", "r1", "sast") in combos
-        assert ("zap", "r1", "api") in combos
+        assert ("zap", "r1", "web") in combos
         assert len([c for c in combos if c == ("semgrep", "r1", "sast")]) == 1
 
     def test_excludes_skip_tools(
@@ -136,8 +136,34 @@ class TestGetActiveFindings:
         run_repo: RunRepository,
         finding_repo: FindingRepository,
     ) -> None:
-        _seed_findings(
+        run_id = _seed_findings(
             run_repo, finding_repo, [_make_sast_finding(tool="nmap")], factory
         )
-        combos = repo.get_active_finding_combos(frozenset({"nmap"}))
+        combos = repo.get_active_finding_combos(run_id, frozenset({"nmap"}))
         assert not any(c[0] == "nmap" for c in combos)
+
+    def test_scopes_to_run_id(
+        self,
+        factory: ConnectionFactory,
+        repo: TriageBatchRepository,
+        run_repo: RunRepository,
+        finding_repo: FindingRepository,
+    ) -> None:
+        run1 = _seed_findings(
+            run_repo,
+            finding_repo,
+            [_make_sast_finding(tool="semgrep", repo="r1")],
+            factory,
+        )
+        run2 = _seed_findings(
+            run_repo,
+            finding_repo,
+            [_make_api_finding(tool="zap", repo="r1")],
+            factory,
+        )
+        combos1 = repo.get_active_finding_combos(run1, frozenset())
+        combos2 = repo.get_active_finding_combos(run2, frozenset())
+        assert ("semgrep", "r1", "sast") in combos1
+        assert ("zap", "r1", "web") not in combos1
+        assert ("zap", "r1", "web") in combos2
+        assert ("semgrep", "r1", "sast") not in combos2

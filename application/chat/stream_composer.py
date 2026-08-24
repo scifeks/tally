@@ -10,7 +10,7 @@ from application.rag.knowledge_base_cache import (
     get_or_build_knowledge_base,
 )
 from application.rag.query import QueryEngine
-from infrastructure.llm.factory import get_llm_provider
+from factories.llm import create_llm_provider
 
 if TYPE_CHECKING:
     from application.ports.llm_provider import LLMProvider
@@ -31,10 +31,12 @@ class ChatStreamComposer:
         query_engine: QueryEngine,
         provider: LLMProvider,
         model_name: str,
+        document_store: DocumentStore | None = None,
     ) -> None:
         self._query_engine = query_engine
         self._provider = provider
         self._model_name = model_name
+        self._document_store = document_store
 
     @classmethod
     def for_project(
@@ -65,7 +67,7 @@ class ChatStreamComposer:
                 row.name,
                 base_path,
             )
-        provider = get_llm_provider("chat", base_path)
+        provider = create_llm_provider("chat", base_path)
         return cls(
             query_engine=QueryEngine(
                 knowledge_base,
@@ -73,6 +75,7 @@ class ChatStreamComposer:
             ),
             provider=provider,
             model_name=provider.model,
+            document_store=doc_store,
         )
 
     @property
@@ -86,3 +89,7 @@ class ChatStreamComposer:
     @property
     def model_name(self) -> str:
         return self._model_name
+
+    @property
+    def document_store(self) -> DocumentStore | None:
+        return self._document_store

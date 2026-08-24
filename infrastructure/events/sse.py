@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import json
 
-from application.events.types import BusEvent
 from core.security.redaction import redact_config
+from domain.pipeline.bus_event import BusEvent
 
 
 def format_sse_frame(event: BusEvent) -> str:

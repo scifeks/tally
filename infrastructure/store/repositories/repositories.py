@@ -1,16 +1,9 @@
-"""CRUD for the per-project repositories table.
-
-Each row carries all Repository pydantic fields (scalars as columns;
-list/dict fields and auth as TEXT-as-JSON), plus id, mutable name,
-url_seed_file path, and created_at/deleted_at lifecycle stamps.
-
-Soft deletion via deleted_at; list_active and get_by_name filter
-deleted_at IS NULL by default.
-"""
+"""CRUD for the per-project repositories table."""
 
 from __future__ import annotations
 
 import json
+from collections.abc import Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -262,3 +255,14 @@ class RepositoryRepository(ProjectRepoRepositoryPort):
                 "UPDATE repositories SET deleted_at = NULL WHERE id = ?",
                 (repo_id,),
             )
+
+    def update_auth_json_bulk(self, updates: Sequence[tuple[int, str]]) -> None:
+        """Write pre-encrypted auth_json values in a single transaction."""
+        if not updates:
+            return
+        with self._factory.connect() as conn:
+            for repo_id, encrypted in updates:
+                conn.execute(
+                    "UPDATE repositories SET auth_json = ? WHERE id = ?",
+                    (encrypted, repo_id),
+                )

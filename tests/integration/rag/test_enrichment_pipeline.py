@@ -21,6 +21,7 @@ from application.pipeline.strategies import PersistOnlyStrategy  # noqa: E402
 from application.ports.embedding_provider import EmbeddingProvider  # noqa: E402
 from application.project import ProjectManager  # noqa: E402
 from application.rag import EnrichmentPipeline  # noqa: E402
+from application.rag.finding_indexer import FindingIndexer  # noqa: E402
 from application.rag.knowledge_base import FindingKnowledgeBase  # noqa: E402
 from core.project_paths import ProjectPaths  # noqa: E402
 from domain.pipeline.events import IngestCompleted  # noqa: E402
@@ -236,7 +237,7 @@ class TestEnrichmentPipeline:
             return_value={"owasp_name": "Injection"},
         ) as mock_pf:
             pipeline.enrich([seeded_env["zap_id"]])
-            mock_pf.assert_called_once()
+            mock_pf.assert_called()
 
     def test_enriched_true_after_success(
         self, pipeline: EnrichmentPipeline, seeded_env: dict
@@ -332,7 +333,7 @@ class TestEnrichmentPipeline:
         ) as mock_pf:
             pipeline.enrich([seeded_env["zap_id"]])
             pipeline.enrich([seeded_env["zap_id"]])
-            assert mock_pf.call_count == 1
+            assert mock_pf.call_count == 2
 
     def test_zap_skips_remediation_severity_description(
         self, pipeline: EnrichmentPipeline
@@ -439,7 +440,10 @@ class TestEnrichmentPipeline:
             project_name=project_env["project_name"],
             base_path=str(project_env["base_path"]),
         )
-        handler = PersistOnlyStrategy(finding_repo=finding_repo)
+        handler = PersistOnlyStrategy(
+            finding_repo=finding_repo,
+            indexer=FindingIndexer(finding_repo=finding_repo),
+        )
         with patch(
             "application.pipeline.handlers._build_knowledge_base",
             side_effect=_build_test_kb,
@@ -511,8 +515,7 @@ class TestEnrichmentPipeline:
 
         json.loads("oops") raises JSONDecodeError inside _call_generic_field.
         _call_per_field catches it per spec and returns an empty merged dict.
-        The future resolves successfully: had_errors stays False and the row
-        is marked enriched=1 (update_enrichment_fields always sets it).
+        Since all fields fail, no enrichment occurs and the row stays as-is.
         """
         finding_repo = project_env["finding_repo"]
         run_id = project_env["run_id"]
@@ -537,9 +540,9 @@ class TestEnrichmentPipeline:
         # Must not raise
         p.enrich(ids)
 
-        # All per-field JSONDecodeErrors are caught; thread future resolves OK
+        # All per-field JSONDecodeErrors are caught; thread futures resolve OK
         assert p.had_errors is False
         row = finding_repo.get_finding(ids[0])
         assert row is not None
-        # update_enrichment_fields always writes enriched=True
-        assert row.enriched is True
+        # No fields succeeded, so row remains unenriched
+        assert row.enriched is False

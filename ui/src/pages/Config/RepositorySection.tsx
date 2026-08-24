@@ -266,16 +266,25 @@ export function RepositorySection({
       onUpdateAuth(selectedId, payload)
     } else {
       const validHeaders = auth.authHeaders.filter(h => h.header)
-      if (validHeaders.length === 0) return
       const payload: RepositoryAuthUpdate = {
-        authType: 'header',
         authHeaders: validHeaders.map(h => ({
           header: h.header,
           value: h.value,
           value_env: h.valueEnv,
         })),
       }
+      if (validHeaders.length > 0) {
+        payload.authType = 'header'
+      }
       onUpdateAuth(selectedId, payload)
+    }
+  }
+
+  const handleClearFormAuth = () => {
+    if (selectedId === null || isNewRepo) return
+    if (confirm('Clear authentication credentials? This cannot be undone.')) {
+      onUpdateAuth(selectedId, { authType: 'form', loginUrl: '' })
+      setAuth(EMPTY_AUTH)
     }
   }
 
@@ -293,7 +302,7 @@ export function RepositorySection({
     !repoName || !localPath || (formServices[0]?.type.length ?? 0) === 0 || isSaving
 
   return (
-    <Panel>
+    <Panel bodyClassName="p-4">
       <SectionHeader icon={Database} title="REPOSITORIES">
         <div className="flex items-center gap-2">
           <div className="relative">
@@ -313,7 +322,7 @@ export function RepositorySection({
           </div>
           <button
             onClick={() => setSelectedId(NEW_REPO_ID)}
-            className="flex items-center gap-1 px-2 h-7 text-[10px] uppercase tracking-wider border border-border text-muted-foreground hover:bg-muted/30 transition-colors"
+            className="flex items-center gap-1 px-2 h-7 text-[10px] uppercase tracking-wider border border-border text-muted-foreground hover:border-accent/60 hover:text-accent transition-colors"
           >
             <Plus className="h-3 w-3" />
             New
@@ -450,7 +459,7 @@ export function RepositorySection({
                     setEndpointFileUpload(file)
                     setIsDirty(true)
                   }}
-                  className="w-full h-8 px-2 bg-background border border-border text-xs text-foreground font-mono focus:border-accent focus:outline-none file:mr-2 file:py-1 file:px-2 file:bg-muted file:border-0 file:text-[10px] file:uppercase file:text-muted-foreground"
+                  className="w-full h-8 px-2 pt-1.5 bg-background border border-border text-xs text-foreground font-mono focus:border-accent focus:outline-none file:mr-2 file:py-0.5 file:px-2 file:bg-muted file:border-0 file:text-[10px] file:uppercase file:text-muted-foreground"
                 />
                 {existingEndpointFile && !endpointFileUpload && (
                   <div className="text-[9px] text-accent mt-1">
@@ -478,7 +487,7 @@ export function RepositorySection({
                     setGarakConfigUpload(file)
                     setIsDirty(true)
                   }}
-                  className="w-full h-8 px-2 bg-background border border-border text-xs text-foreground font-mono focus:border-accent focus:outline-none file:mr-2 file:py-1 file:px-2 file:bg-muted file:border-0 file:text-[10px] file:uppercase file:text-muted-foreground"
+                  className="w-full h-8 px-2 pt-1.5 bg-background border border-border text-xs text-foreground font-mono focus:border-accent focus:outline-none file:mr-2 file:py-0.5 file:px-2 file:bg-muted file:border-0 file:text-[10px] file:uppercase file:text-muted-foreground"
                 />
                 {existingGarakFile && !garakConfigUpload && (
                   <div className="text-[9px] text-accent mt-1">
@@ -601,7 +610,7 @@ export function RepositorySection({
             <div className="flex items-center gap-2">
               <button
                 onClick={handleReset}
-                className="flex items-center gap-1 px-3 h-8 text-[10px] uppercase tracking-wider border border-border text-muted-foreground hover:bg-muted/30 transition-colors"
+                className="flex items-center gap-1 px-3 h-8 text-[10px] uppercase tracking-wider border border-border-strong text-muted-foreground hover:border-primary/50 hover:text-foreground transition-colors"
               >
                 <RotateCcw className="h-3 w-3" />
                 Reset
@@ -612,8 +621,8 @@ export function RepositorySection({
                 className={cn(
                   'flex items-center gap-1 px-4 h-8 text-[10px] uppercase tracking-wider transition-colors',
                   !saveDisabled
-                    ? 'bg-accent text-background hover:bg-accent/80'
-                    : 'bg-muted text-dim cursor-not-allowed'
+                    ? 'bg-accent text-background hover:bg-accent/70'
+                    : 'bg-muted text-dim opacity-40 cursor-not-allowed'
                 )}
               >
                 <Save className="h-3 w-3" />
@@ -797,7 +806,7 @@ export function RepositorySection({
                       authHeaders: [...prev.authHeaders, { header: '', value: '', valueEnv: '' }],
                     }))
                   }}
-                  className="flex items-center gap-1 px-3 h-8 text-[10px] uppercase tracking-wider border border-border text-muted-foreground hover:bg-muted/30 transition-colors"
+                  className="flex items-center gap-1 px-3 h-8 text-[10px] uppercase tracking-wider border border-border text-muted-foreground hover:border-accent/60 hover:text-accent transition-colors"
                 >
                   <Plus className="h-3 w-3" />
                   Add Header
@@ -806,33 +815,45 @@ export function RepositorySection({
             )}
 
             {!isNewRepo && (
-              <div className="flex items-center justify-end gap-2 mt-4">
-                {authJustSaved && (
-                  <span className="text-[10px] text-accent flex items-center gap-1">
-                    <Check className="h-3 w-3" />
-                    Saved
-                  </span>
-                )}
-                <button
-                  onClick={handleSaveAuth}
-                  disabled={
-                    isSavingAuth ||
-                    (auth.authType === 'form' && !auth.loginUrl) ||
-                    (auth.authType === 'header' &&
-                      auth.authHeaders.filter(h => h.header).length === 0)
-                  }
-                  className={cn(
-                    'flex items-center gap-1 px-3 h-8 text-[10px] uppercase tracking-wider transition-colors',
-                    (auth.authType === 'form' && auth.loginUrl) ||
-                      (auth.authType === 'header' &&
-                        auth.authHeaders.filter(h => h.header).length > 0)
-                      ? 'bg-accent text-background hover:bg-accent/80'
-                      : 'bg-muted text-dim cursor-not-allowed'
+              <div className="flex items-center justify-between gap-2 mt-4">
+                <div>
+                  {authJustSaved && (
+                    <span className="text-[10px] text-accent flex items-center gap-1">
+                      <Check className="h-3 w-3" />
+                      Saved
+                    </span>
                   )}
-                >
-                  <Save className="h-3 w-3" />
-                  {isSavingAuth ? 'Saving...' : 'Save Auth'}
-                </button>
+                </div>
+                <div className="flex items-center gap-2">
+                  {auth.authType === 'form' && auth.loginUrl && (
+                    <button
+                      onClick={handleClearFormAuth}
+                      disabled={isSavingAuth}
+                      className={cn(
+                        'flex items-center gap-1 px-3 h-8 text-[10px] uppercase tracking-wider border transition-colors',
+                        !isSavingAuth
+                          ? 'border-crit text-crit hover:bg-crit/10'
+                          : 'border-border text-dim opacity-40 cursor-not-allowed'
+                      )}
+                    >
+                      <Trash2 className="h-3 w-3" />
+                      Clear Auth
+                    </button>
+                  )}
+                  <button
+                    onClick={handleSaveAuth}
+                    disabled={isSavingAuth || (auth.authType === 'form' && !auth.loginUrl)}
+                    className={cn(
+                      'flex items-center gap-1 px-3 h-8 text-[10px] uppercase tracking-wider transition-all',
+                      !isSavingAuth && (auth.authType === 'header' || auth.loginUrl)
+                        ? 'bg-accent text-background hover:bg-accent/70'
+                        : 'bg-muted text-dim opacity-40 cursor-not-allowed'
+                    )}
+                  >
+                    <Save className="h-3 w-3" />
+                    {isSavingAuth ? 'Saving...' : 'Save Auth'}
+                  </button>
+                </div>
               </div>
             )}
           </div>

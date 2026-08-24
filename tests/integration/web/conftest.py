@@ -66,7 +66,7 @@ async def _authenticate(client: httpx.AsyncClient) -> dict[str, str]:
     resp = await client.post(
         "/api/v1/auth/exchange",
         json={"token": HANDSHAKE},
-        headers={"origin": f"http://127.0.0.1:{TEST_PORT}"},
+        headers={"origin": f"https://127.0.0.1:{TEST_PORT}"},
     )
     assert resp.status_code == 200, f"exchange failed: {resp.text}"
     # httpx stores Secure cookies in the jar but won't send them over plain
@@ -78,7 +78,7 @@ async def _authenticate(client: httpx.AsyncClient) -> dict[str, str]:
     csrf_token = client.cookies["tally_csrf"]
     return {
         "X-CSRF-Token": csrf_token,
-        "Origin": f"http://127.0.0.1:{TEST_PORT}",
+        "Origin": f"https://127.0.0.1:{TEST_PORT}",
     }
 
 
@@ -123,7 +123,7 @@ async def app_client(tmp_path: Path):
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(
         transport=transport,
-        base_url=f"http://127.0.0.1:{TEST_PORT}",
+        base_url=f"https://127.0.0.1:{TEST_PORT}",
     ) as client:
         mut_headers = await _authenticate(client)
         yield client, finding_id, kb_mock, factory, mut_headers, project_id

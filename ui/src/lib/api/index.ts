@@ -47,6 +47,7 @@ export {
   useCancelTriage,
   useResumeTriage,
   useTriageEvents,
+  fetchTriageMaxBatchId,
   mapTriageRun,
   mapTriageBatch,
 } from './useTriage'
@@ -55,6 +56,10 @@ export type {
   UseTriageEventsOptions,
   UseTriageHistoryOptions,
 } from './useTriage'
+
+// Platform hooks (cross-project)
+export { useCapabilities } from './useCapabilities'
+export type { Capabilities } from './useCapabilities'
 
 // Runtime / installed-tools hooks (cross-project)
 export { useRuntimeDependencies, useInstalledTools } from './useRuntime'
@@ -138,6 +143,10 @@ export {
   useDeleteToolOverride,
 } from './useConfig'
 
+// Document hooks
+export { useDocuments, useUploadDocument, useDeleteDocument } from './useDocuments'
+export type { UploadDocumentVariables, DeleteDocumentVariables } from './useDocuments'
+
 // Saved scans
 export {
   useSavedScans,
@@ -164,3 +173,6 @@ export type {
   ToolArgProfileWriteInput,
   ArgProfileArg,
 } from './useToolArgProfiles'
+
+// Global settings hooks
+export { useBrowseFilesystem } from './useGlobalSettings'

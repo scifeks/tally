@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from infrastructure.vulnerability_data.factory import (
-    get_vulnerability_data_service,
+from factories.vulnerability_data import (
+    create_vulnerability_data_service,
 )
 
 if TYPE_CHECKING:
@@ -28,7 +28,7 @@ class VulnDataCommands:
     def _update(self) -> None:
         self.repl.console.print("Downloading vulnerability reference data...")
         try:
-            svc = get_vulnerability_data_service(self.repl.base_path)
+            svc = create_vulnerability_data_service(self.repl.base_path)
             counts = svc.update()
             self.repl.console.print(
                 f"[green]Updated:[/green] {counts.cwe:,} CWE "
@@ -38,7 +38,7 @@ class VulnDataCommands:
             self.repl.console.print(f"[red]Download failed:[/red] {exc}")
 
     def _status(self) -> None:
-        svc = get_vulnerability_data_service(self.repl.base_path)
+        svc = create_vulnerability_data_service(self.repl.base_path)
         if not svc.is_loaded():
             self.repl.console.print(
                 "[yellow]No vulnerability data "

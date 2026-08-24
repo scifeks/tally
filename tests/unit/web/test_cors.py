@@ -13,7 +13,7 @@ from web.server import create_app
 
 _PORT = 8765
 _TOKEN = "testtoken"
-_VITE_ORIGIN = "http://127.0.0.1:3000"
+_VITE_ORIGIN = "https://127.0.0.1:3000"
 _EVIL_ORIGIN = "http://evil.example.com"
 
 

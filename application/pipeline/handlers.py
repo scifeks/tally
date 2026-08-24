@@ -1,11 +1,9 @@
-"""Pipeline handlers: IngestHandler (and BaseHandler with shared ChromaDB logic)."""
+"""Pipeline handlers: IngestHandler and BaseHandler (shared KB cache)."""
 
 from __future__ import annotations
 
 import logging
-from collections import defaultdict
-from collections.abc import Mapping
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from application.pipeline.fingerprint import compute_fingerprint
 from application.rag.ingestor import (
@@ -16,16 +14,17 @@ from application.rag.knowledge_base import FindingKnowledgeBase
 from domain.findings.normalization import (
     NormalizedFinding,
     normalise_finding_for_insert,
-    prepare_row_for_render,
 )
 from domain.pipeline.events import (
     EventBus,
     IngestCompleted,
     ToolCompleted,
 )
-from infrastructure.embedding.factory import get_embedding_provider
-from infrastructure.llm.factory import get_llm_provider
-from infrastructure.vector.factory import make_chromadb_vector_index
+from factories.llm import (
+    create_embedding_provider,
+    create_llm_provider,
+    create_vector_index,
+)
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -42,15 +41,15 @@ logger = logging.getLogger(__name__)
 
 
 def _build_knowledge_base(project_name: str, base_path: Path) -> FindingKnowledgeBase:
-    embedding_provider = get_embedding_provider(base_path)
+    embedding_provider = create_embedding_provider(base_path)
     logger.info(
         "Embedding provider: %s model=%s url=%s",
         type(embedding_provider).__name__,
         getattr(embedding_provider, "_model", "?"),
         getattr(embedding_provider, "_base_url", "?"),
     )
-    chat_provider = get_llm_provider("chat", base_path)
-    vector_index = make_chromadb_vector_index(
+    chat_provider = create_llm_provider("chat", base_path)
+    vector_index = create_vector_index(
         project_name=project_name,
         base_path=base_path,
         embedding_provider=embedding_provider,
@@ -64,7 +63,7 @@ def _build_knowledge_base(project_name: str, base_path: Path) -> FindingKnowledg
 
 
 class BaseHandler:
-    """Shared FindingKnowledgeBase cache for ChromaDB persistence."""
+    """Shared per-project knowledge-base cache for vector-index-backed strategies."""
 
     def __init__(self, finding_repo: FindingRepositoryPort) -> None:
         self._finding_repo = finding_repo
@@ -92,64 +91,6 @@ class BaseHandler:
                     "error closing knowledge base for %s",
                     getattr(kb, "_project_name", "unknown"),
                 )
-
-    def _persist_to_chromadb(
-        self, ids: list[int], project_name: str, base_path: str
-    ) -> None:
-        """Write findings to ChromaDB by their SQLite IDs."""
-        from application.pipeline.chromadb_ids import chromadb_doc_id
-
-        try:
-            kb = self._get_knowledge_base(project_name, base_path)
-        except Exception as exc:
-            logger.warning(
-                "%s: knowledge base init failed: %s",
-                type(self).__name__,
-                exc,
-            )
-            return
-
-        try:
-            rows = self._finding_repo.get_by_ids(ids)
-            grouped: defaultdict[tuple[str, str], list[dict]] = defaultdict(list)
-            for row in rows:
-                grouped[(row["tool"], row["profile"])].append(row)
-            for (tool, profile), group_rows in grouped.items():
-                handler = ToolHandlerFactory.load(tool)
-                if handler is None:
-                    continue
-                texts = [
-                    f"Repository: {profile} | "
-                    f"{handler.render(prepare_row_for_render(row))}"
-                    for row in group_rows
-                ]
-                metadatas: list[Mapping[str, Any]] = [
-                    {
-                        "tool": tool,
-                        "profile": profile,
-                        "run_id": row.get("run_id", 0),
-                        "severity": row.get("severity", ""),
-                        "segment": row.get("segment", ""),
-                        "status": row.get("status", "active"),
-                        "fingerprint": row.get("fingerprint", ""),
-                    }
-                    for row in group_rows
-                ]
-                doc_ids = [
-                    chromadb_doc_id(row.get("fingerprint", ""), profile)
-                    for row in group_rows
-                ]
-                kb.add_findings(
-                    documents=texts,
-                    metadatas=metadatas,
-                    ids=doc_ids,
-                )
-        except Exception as exc:
-            logger.error(
-                "%s: ChromaDB write error: %s",
-                type(self).__name__,
-                exc,
-            )
 
 
 class IngestHandler(BaseHandler):

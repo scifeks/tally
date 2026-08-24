@@ -11,6 +11,7 @@ import { __setEventSourceFactory } from '@/lib/api/sse'
 import { server } from '../../handlers'
 import { MockEventSource } from '../../helpers/sse'
 import { setCookie, clearAllCookies } from '../../helpers/cookies'
+import chatMessagesSession101Fixture from '../../fixtures/chat/messages-session-101.json'
 
 function renderChat() {
   const qc = new QueryClient({
@@ -97,7 +98,6 @@ describe('Chat page - send + stream golden path', () => {
     const user = userEvent.setup()
     renderChat()
 
-    // Wait for sessions + messages to load.
     await waitFor(() =>
       expect(screen.getByText(/most severe XSS finding/i)).toBeInTheDocument()
     )
@@ -107,10 +107,8 @@ describe('Chat page - send + stream golden path', () => {
     await user.keyboard('What is the CVSS?')
     await user.click(screen.getByRole('button', { name: /send message/i }))
 
-    // Optimistic user turn appears.
     await waitFor(() => expect(screen.getByText('What is the CVSS?')).toBeInTheDocument())
 
-    // SSE subscribes.
     await waitFor(() =>
       expect(
         MockEventSource.instances.some(es => es.url.includes('/chat/stream?session_id=101'))
@@ -148,8 +146,6 @@ describe('Chat page - send + stream golden path', () => {
         content: 'CVSS 9.8',
       })
     })
-    // After stream_end, the streamingOverlay clears and persisted query
-    // is invalidated - UI returns to "CONNECTED" state.
     await waitFor(() => expect(screen.getByText(/CONNECTED/i)).toBeInTheDocument())
   })
 })
@@ -246,11 +242,9 @@ describe('Chat page - sealed session UX (12.7)', () => {
     )
     await user.click(screen.getByTestId('chat-session-103'))
 
-    // Prominent badge in the session header.
     const badge = await screen.findByTestId('sealed-badge')
     expect(badge).toHaveTextContent(/sealed/i)
 
-    // Banner above the messages explains the cause and offers a CTA.
     const banner = screen.getByTestId('sealed-banner')
     expect(banner).toHaveTextContent(/scan ran since this chat started/i)
     expect(banner).toHaveTextContent(/start a new chat/i)
@@ -260,7 +254,7 @@ describe('Chat page - sealed session UX (12.7)', () => {
     const inputPanel = screen.getByTestId('sealed-input-panel')
     expect(inputPanel).toHaveTextContent(/session sealed/i)
     expect(
-      within(inputPanel).getByRole('button', { name: /start new chat/i })
+      within(inputPanel).getByRole('button', { name: /new chat/i })
     ).toBeInTheDocument()
 
     // The active-session textarea must NOT render for a sealed session.
@@ -325,6 +319,43 @@ describe('Chat page - no duplication after stream_end', () => {
         chunk: 'reply text',
       })
     })
+    // After stream_end the component invalidates the messages cache,
+    // so the refetch must return the new messages alongside the originals.
+    server.use(
+      http.get(
+        '/api/v1/projects/:projectId/chat/sessions/:sessionId/messages',
+        ({ request }) => {
+          const url = new URL(request.url)
+          const offset = Number(url.searchParams.get('offset') ?? 0)
+          const limit = Number(url.searchParams.get('limit') ?? 50)
+          const items = [
+            ...chatMessagesSession101Fixture.items,
+            {
+              id: 7776,
+              session_id: 101,
+              role: 'user',
+              content: 'Defer test prompt',
+              model: null,
+              timestamp: '2026-04-30T14:02:00+00:00',
+              citations: null,
+            },
+            {
+              id: 7777,
+              session_id: 101,
+              role: 'assistant',
+              content: 'reply text',
+              model: 'claude-sonnet-4-6',
+              timestamp: '2026-04-30T14:02:05+00:00',
+              citations: null,
+            },
+          ]
+          const total = items.length
+          const slice = items.slice(offset, offset + limit)
+          return HttpResponse.json({ items: slice, total, offset, limit })
+        }
+      )
+    )
+
     act(() => {
       es.emitTyped('stream_end', {
         project_id: 1,
@@ -355,6 +386,7 @@ describe('Chat page - new session button', () => {
             id: 999,
             project_id: 1,
             title: '2026-04-28 13:00',
+            mode: 'all',
             created_at: '2026-04-28T13:00:00+00:00',
             last_message_at: null,
             message_count: 0,
@@ -371,6 +403,7 @@ describe('Chat page - new session button', () => {
       expect(screen.getByText(/Triage walkthrough — XSS findings/)).toBeInTheDocument()
     )
     await user.click(screen.getByRole('button', { name: /New Chat/i }))
+    await user.click(screen.getByText('Findings'))
     await waitFor(() => expect(posted).toBe(true))
   })
 })

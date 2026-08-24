@@ -35,7 +35,9 @@ ENV/
 # Project-specific
 projects/*
 !projects/.gitkeep
-logs/**/*.log
+logs/**
+!logs/**/
+!logs/**/.gitkeep
 config/global.json
 
 # OS
@@ -57,14 +59,24 @@ MagicMock
 
 #Roadmap and arch decisions
 /docs/roadmap
+/docs/decisions/
 /docs/superpowers/
 
-#Claude MCP stuff
-.claude/
+#Claude MCP stuff — track the tally-scan-* skill family, agents, and shared dev skills
+.claude/*
+!.claude/agents/
+.claude/agents/*
+!.claude/agents/tally-scan-*
+!.claude/skills/
+.claude/skills/*
+!.claude/skills/tally-scan-*/
+!.claude/skills/external-service-integration/
+!.claude/skills/new-tool-wrapper/
 
 tmp/
 
 # Frontend
+ui/logs/
 ui/node_modules/
 ui/docs/roadmap
 ui-old/

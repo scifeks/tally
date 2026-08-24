@@ -82,6 +82,7 @@ def _patch_chat_deps(monkeypatch, *, provider: _FakeProvider) -> None:
         query_engine=_StubQueryEngine(),
         provider=provider,
         model_name=provider.model,
+        document_store=None,
     )
     monkeypatch.setattr(
         "application.chat.session_service.ChatStreamComposer.for_project",
@@ -264,7 +265,7 @@ async def test_cancel_without_csrf_returns_403(app_client) -> None:
     sid = _seed_session(factory, project_id=project_id)
     resp = await client.post(
         f"/api/v1/projects/{project_id}/chat/sessions/{sid}/cancel",
-        headers={"Origin": "http://127.0.0.1:12345"},
+        headers={"Origin": "https://127.0.0.1:12345"},
     )
     assert resp.status_code == 403
 
@@ -276,10 +277,10 @@ async def test_cancel_unauthenticated_returns_401(tmp_path) -> None:
     app = build_test_app(tmp_path, "test-handshake-abc123xyz", port=12345)
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(
-        transport=transport, base_url="http://127.0.0.1:12345"
+        transport=transport, base_url="https://127.0.0.1:12345"
     ) as client:
         resp = await client.post(
             "/api/v1/projects/1/chat/sessions/1/cancel",
-            headers={"Origin": "http://127.0.0.1:12345"},
+            headers={"Origin": "https://127.0.0.1:12345"},
         )
     assert resp.status_code == 401

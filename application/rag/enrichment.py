@@ -18,7 +18,7 @@ from domain.tools.constants import (
     SEVERITY_LEVELS,
 )
 from domain.tools.enrichment import FieldEnrichmentSpec, PromptStrategy
-from infrastructure.llm.factory import get_llm_provider
+from factories.llm import create_llm_provider
 
 from .ingestor import ToolHandlerFactory
 from .prompts import get_dedicated_prompt
@@ -30,6 +30,38 @@ if TYPE_CHECKING:
     from application.ports.vulnerability_data import VulnerabilityDataPort
 
 logger = logging.getLogger(__name__)
+
+_CODE_FENCE_RE = re.compile(r"^```(?:json)?\s*\n?(.*?)\n?```\s*$", re.DOTALL)
+
+
+def _extract_json_object(text: str) -> dict[str, Any]:
+    """Parse a JSON object from LLM output, tolerating code fences."""
+    s = text.strip()
+    m = _CODE_FENCE_RE.match(s)
+    if m:
+        s = m.group(1).strip()
+
+    try:
+        obj = json.loads(s)
+        if isinstance(obj, dict):
+            return obj
+    except json.JSONDecodeError:
+        pass
+
+    decoder = json.JSONDecoder()
+    pos = 0
+    while True:
+        brace = s.find("{", pos)
+        if brace == -1:
+            raise json.JSONDecodeError("no JSON object found", s, 0)
+        try:
+            obj, _ = decoder.raw_decode(s, brace)
+            if isinstance(obj, dict):
+                return obj
+        except json.JSONDecodeError:
+            pass
+        pos = brace + 1
+
 
 # Legacy batch-path prompt (used when builder has no enrichment_fields).
 # Sends full document text and requests all missing fields at once.
@@ -247,7 +279,7 @@ class EnrichmentPipeline:
     def _provider(self) -> LLMProvider:
         """Return the LLM provider, resolving from config on first access."""
         if self._llm_provider is None:
-            self._llm_provider = get_llm_provider("enrichment", self._base_path)
+            self._llm_provider = create_llm_provider("enrichment", self._base_path)
         return self._llm_provider
 
     @property
@@ -255,11 +287,11 @@ class EnrichmentPipeline:
         """Return vulnerability data service, resolving lazily on first access."""
         if self._vuln_data_service is None:
             try:
-                from infrastructure.vulnerability_data.factory import (
-                    get_vulnerability_data_service,
+                from factories.vulnerability_data import (
+                    create_vulnerability_data_service,
                 )
 
-                svc = get_vulnerability_data_service(self._base_path)
+                svc = create_vulnerability_data_service(self._base_path)
                 if svc.is_loaded():
                     self._vuln_data_service = svc
             except Exception:
@@ -277,13 +309,7 @@ class EnrichmentPipeline:
             return self._max_workers
 
     def enrich(self, ids: list[int]) -> None:
-        """Enrich a list of SQLite finding IDs in place.
-
-        Phase 1 (sequential): Fetch rows from SQLite, build work list.
-        Phase 2 (concurrent): Run LLM calls in a thread pool.
-        Phase 3 (sequential): Write validated fields back to SQLite.
-        Failures on individual findings are logged but do not stop the pipeline.
-        """
+        """Enrich finding IDs in place; individual failures are logged and skipped."""
         from domain.pipeline import scan_events as se
 
         if not ids:
@@ -323,40 +349,88 @@ class EnrichmentPipeline:
         completed = 0
         n_work = len(work_items)
 
+        self._reporter.report(f"    Enriching findings... 0/{n_work}")
+        self._event_sink.emit(
+            se.EnrichmentProgress(
+                run_id=self._run_id or 0,
+                project_id=self._project_id,
+                message=f"Enriching findings... 0/{n_work}",
+                enriched_count=0,
+                total_to_enrich=n_work,
+            )
+        )
+
         # Pre-resolve LLM provider once before spawning threads
         _ = self._provider
 
         cancelled = False
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            future_to_row = {
-                executor.submit(
-                    self._call_llm_worker, text, meta, legacy_fields, specs
-                ): row
-                for row, text, meta, legacy_fields, specs in work_items
-            }
-            for future in as_completed(future_to_row):
-                row = future_to_row[future]
-                completed += 1
-                self._reporter.report(f"    Enriching findings... {completed}/{n_work}")
-                self._event_sink.emit(
-                    se.EnrichmentProgress(
-                        run_id=self._run_id or 0,
-                        project_id=self._project_id,
-                        message=f"Enriching findings... {completed}/{n_work}",
-                        enriched_count=completed,
-                        total_to_enrich=n_work,
+            # One future per field; progress emits per finding once
+            # all its fields complete.
+            future_to_key: dict[Any, tuple[int, FieldEnrichmentSpec | None]] = {}
+            fields_expected: dict[int, int] = {}
+            fields_done: dict[int, int] = {}
+            merged: dict[int, dict[str, Any]] = {}
+            row_by_id: dict[int, dict[str, Any]] = {}
+
+            for row, text, meta, lf, specs in work_items:
+                fid = row["id"]
+                row_by_id[fid] = row
+                fields_done[fid] = 0
+                merged[fid] = {}
+                if specs is not None:
+                    fields_expected[fid] = len(specs)
+                    for spec in specs:
+                        f = executor.submit(
+                            self._enrich_single_field,
+                            meta,
+                            spec,
+                        )
+                        future_to_key[f] = (fid, spec)
+                else:
+                    fields_expected[fid] = 1
+                    f = executor.submit(
+                        self._call_llm_worker,
+                        text,
+                        meta,
+                        lf,
+                        specs,
                     )
-                )
+                    future_to_key[f] = (fid, None)
+
+            for future in as_completed(future_to_key):
+                fid, spec = future_to_key[future]
                 try:
-                    validated = future.result()
-                    updates.append((row, validated))
+                    result = future.result()
+                    if spec is not None and result is not None:
+                        merged[fid][spec.field_name] = result
+                    elif spec is None:
+                        merged[fid] = result or {}
                 except Exception as exc:
-                    logger.error("Enrichment failed for id %s: %s", row.get("id"), exc)
+                    logger.error(
+                        "Enrichment failed for id %s: %s",
+                        fid,
+                        exc,
+                    )
                     self._had_errors = True
+                fields_done[fid] += 1
+                if fields_done[fid] >= fields_expected[fid]:
+                    if merged[fid]:
+                        updates.append((row_by_id[fid], merged[fid]))
+                    completed += 1
+                    self._reporter.report(
+                        f"    Enriching findings... {completed}/{n_work}"
+                    )
+                    self._event_sink.emit(
+                        se.EnrichmentProgress(
+                            run_id=self._run_id or 0,
+                            project_id=self._project_id,
+                            message=(f"Enriching findings... {completed}/{n_work}"),
+                            enriched_count=completed,
+                            total_to_enrich=n_work,
+                        )
+                    )
                 if self._cancel_token is not None and self._cancel_token.is_set():
-                    # Stop launching new Ollama calls and let in-flight
-                    # workers wind down. Findings collected up to this
-                    # point are persisted in Phase 3 below.
                     executor.shutdown(wait=False, cancel_futures=True)
                     cancelled = True
                     break
@@ -403,6 +477,15 @@ class EnrichmentPipeline:
         assert legacy_fields is not None
         raw = self._call_llm(doc_text, metadata, legacy_fields)
         return self._validate_response(raw, legacy_fields)
+
+    def _enrich_single_field(
+        self,
+        metadata: dict[str, Any],
+        spec: FieldEnrichmentSpec,
+    ) -> str | None:
+        """Thread-safe worker for one enrichment field."""
+        result = self._call_per_field(metadata, [spec])
+        return result.get(spec.field_name)
 
     # Per-field enrichment path
 
@@ -537,7 +620,7 @@ class EnrichmentPipeline:
             field_definition=field_def,
             context=context,
         )
-        content = self._provider.complete(prompt, temperature=0.1, num_predict=500)
+        content = self._provider.complete(prompt, temperature=0.1, think=False)
         if not content:
             logger.warning(
                 "LLM returned empty response for field %r; "
@@ -547,7 +630,7 @@ class EnrichmentPipeline:
                 source_values,
             )
             return None
-        raw = json.loads(content)
+        raw = _extract_json_object(content)
         validated = self._validate_response(raw, [spec.field_name])
         return validated.get(spec.field_name)
 
@@ -561,7 +644,7 @@ class EnrichmentPipeline:
         Returns the validated field value, or None if the response is invalid.
         """
         prompt = get_dedicated_prompt(spec.field_name, source_values)
-        content = self._provider.complete(prompt, temperature=0.1, num_predict=500)
+        content = self._provider.complete(prompt, temperature=0.1, think=False)
         if not content:
             logger.warning(
                 "LLM returned empty response for field %r; "
@@ -571,19 +654,12 @@ class EnrichmentPipeline:
                 source_values,
             )
             return None
-        raw = json.loads(content)
+        raw = _extract_json_object(content)
         validated = self._validate_response(raw, [spec.field_name])
         return validated.get(spec.field_name)
 
     def _get_fields_to_enrich(self, metadata: dict[str, Any]) -> list[str]:
-        """Return enrichment field names that still need values.
-
-        Compatibility shim over ``_get_enrichment_plan``: for tools using the
-        per-field path returns the field names from each active spec; for tools
-        using the legacy batch path returns the field list directly.
-        Used by tests and external callers; production enrichment uses
-        ``_get_enrichment_plan`` directly.
-        """
+        """Return enrichment field names that still need values."""
         legacy_fields, specs = self._get_enrichment_plan(metadata)
         if specs is not None:
             return [s.field_name for s in specs]
@@ -602,7 +678,7 @@ class EnrichmentPipeline:
             document_text=doc_text,
             fields_to_enrich=", ".join(fields),
         )
-        content = self._provider.complete(prompt, temperature=0.1, num_predict=500)
+        content = self._provider.complete(prompt, temperature=0.1, think=False)
         return json.loads(content or "")
 
     def _validate_response(

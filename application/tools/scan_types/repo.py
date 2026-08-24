@@ -242,23 +242,9 @@ class RepoScan(ScanType):
                     result = normalize_success(result, tool)
                     result.repo = self.repo_name
                     results.append(result)
-                    findings = tool.count_findings(result.parsed_data or {})
-                    findings_by_tool[result.tool_name] = (
-                        findings_by_tool.get(result.tool_name, 0) + findings
-                    )
                     if result.success:
                         total_run += 1
-                        total_ingested += dispatch_and_count_ingested(
-                            resources.event_bus,
-                            ToolCompleted(
-                                result,
-                                repo.name,
-                                config.run_id,
-                                config.project_name,
-                                config.base_path,
-                                repo=repo.name,
-                            ),
-                        )
+                        findings = tool.count_findings(result.parsed_data or {})
                         resources.display.print_tool_line(
                             ToolDisplayRow(
                                 tool_name,
@@ -275,7 +261,7 @@ class RepoScan(ScanType):
                                 segment=seg,
                                 repo=repo.name,
                                 tool=tool_name,
-                                message=f"{tool_name} on {repo.name} complete",
+                                message=(f"{tool_name} on {repo.name} complete"),
                                 findings_count=findings,
                                 duration=result.duration_seconds,
                                 exit_code=0,
@@ -290,9 +276,7 @@ class RepoScan(ScanType):
                                 "    [dim]ZAP will fall back to spider-only "
                                 "mode for this repository.[/dim]"
                             )
-                    else:
-                        total_failed += 1
-                        total_ingested += dispatch_and_count_ingested(
+                        ingested = dispatch_and_count_ingested(
                             resources.event_bus,
                             ToolCompleted(
                                 result,
@@ -303,6 +287,12 @@ class RepoScan(ScanType):
                                 repo=repo.name,
                             ),
                         )
+                        total_ingested += ingested
+                        findings_by_tool[result.tool_name] = (
+                            findings_by_tool.get(result.tool_name, 0) + ingested
+                        )
+                    else:
+                        total_failed += 1
                         resources.display.print_tool_line(
                             ToolDisplayRow(
                                 tool_name, False, False, 0, result.duration_seconds
@@ -319,6 +309,17 @@ class RepoScan(ScanType):
                                 exit_code=1,
                                 duration=result.duration_seconds,
                             )
+                        )
+                        total_ingested += dispatch_and_count_ingested(
+                            resources.event_bus,
+                            ToolCompleted(
+                                result,
+                                repo.name,
+                                config.run_id,
+                                config.project_name,
+                                config.base_path,
+                                repo=repo.name,
+                            ),
                         )
 
             all_services_results.extend(results)

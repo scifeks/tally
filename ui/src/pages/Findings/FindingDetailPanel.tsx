@@ -4,7 +4,12 @@ import { EditableText, EditableSelect } from '@/components/Editable'
 import { cn, formatRelative } from '@/lib/utils'
 import type { Finding, Severity, Status } from '@/lib/types'
 import { useUI } from '@/lib/store'
-import { useStartTriage, useRuntimeDependencies, useDeleteFinding } from '@/lib/api'
+import {
+  useStartTriage,
+  useRuntimeDependencies,
+  useDeleteFinding,
+  useCapabilities,
+} from '@/lib/api'
 import { TriagePromptInjectionWarningModal } from '@/components/TriagePromptInjectionWarningModal'
 import {
   SEV_ORDER,
@@ -51,7 +56,7 @@ export function FindingDetailPanel({
   onDelete,
 }: {
   finding: Finding | null
-  onUpdate: (patch: Partial<Finding>) => void
+  onUpdate: (patch: Partial<Finding> & { triaged?: boolean }) => void
   projectId: number | null
   onDelete?: () => void
 }) {
@@ -59,6 +64,7 @@ export function FindingDetailPanel({
   const triageInjectionAcked = useUI(s => s.triageInjectionAcked)
   const { mutate: startTriageMutation, isPending: isTriagePending } = useStartTriage()
   const { data: runtimeDeps } = useRuntimeDependencies()
+  const { data: capabilities } = useCapabilities()
   const claudeDep = runtimeDeps?.dependencies.find(d => d.name === 'claude')
   const claudeMissing = claudeDep !== undefined && !claudeDep.installed
   const [showInjectionWarning, setShowInjectionWarning] = useState(false)
@@ -198,21 +204,24 @@ export function FindingDetailPanel({
           />
         </div>
 
+        {/* Editable description */}
         <div>
-          <div className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground mb-2">
-            description
+          <div className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground mb-1 flex items-center gap-2">
+            <span>description</span>
+            <span className="text-dim normal-case tracking-normal">{'// click to edit'}</span>
           </div>
-          <div className="border border-border p-3 text-foreground leading-relaxed bg-muted/30 whitespace-pre-wrap">
-            {finding.description ? (
-              finding.description
-            ) : (
-              <span className="text-dim">{'// no description provided'}</span>
-            )}
-          </div>
+          <EditableText
+            value={finding.description ?? ''}
+            onChange={next => onUpdate({ description: next })}
+            multiline
+            placeholder="// add description..."
+            ariaLabel="Edit finding description"
+          />
         </div>
 
         <TriagePromptInjectionWarningModal
           open={showInjectionWarning}
+          providerLabel={capabilities?.triageBackendLabel ?? null}
           onAccept={handleAcceptInjectionWarning}
           onCancel={() => setShowInjectionWarning(false)}
         />
@@ -222,31 +231,62 @@ export function FindingDetailPanel({
             onClick={handleTriageClick}
             disabled={triageDisabled}
             className={cn(
-              'text-[11px] uppercase tracking-wider py-1.5 border border-accent text-accent hover:bg-muted',
-              triageDisabled && 'opacity-40 cursor-not-allowed hover:bg-transparent'
+              'text-[11px] uppercase tracking-wider py-1.5 border transition-colors',
+              triageDisabled
+                ? 'border-border text-dim opacity-40 cursor-not-allowed'
+                : 'border-accent text-accent hover:bg-accent/15 hover:shadow-[0_0_10px_rgba(57,255,20,0.25)]'
             )}
           >
             &gt; triage
           </button>
           <button
             onClick={() => onUpdate({ status: 'fixed' })}
-            className="text-[11px] uppercase tracking-wider py-1.5 border border-border-strong text-foreground hover:bg-muted"
+            className="text-[11px] uppercase tracking-wider py-1.5 border border-border-strong text-foreground hover:border-primary/50 hover:bg-muted/50 transition-colors"
           >
             mark fixed
           </button>
           <button
             onClick={() => onUpdate({ status: 'false_positive' })}
-            className="text-[11px] uppercase tracking-wider py-1.5 border border-border text-muted-foreground hover:bg-muted"
+            className="text-[11px] uppercase tracking-wider py-1.5 border border-border text-muted-foreground hover:border-primary/50 hover:text-foreground transition-colors"
           >
             false-pos
           </button>
           <button
             onClick={() => onUpdate({ status: 'wont_fix' })}
-            className="text-[11px] uppercase tracking-wider py-1.5 border border-border text-muted-foreground hover:bg-muted"
+            className="text-[11px] uppercase tracking-wider py-1.5 border border-border text-muted-foreground hover:border-primary/50 hover:text-foreground transition-colors"
           >
             wontfix
           </button>
+          <button
+            onClick={() => onUpdate({ shouldReport: !finding.shouldReport })}
+            className={cn(
+              'text-[11px] uppercase tracking-wider py-1.5 border transition-colors',
+              finding.shouldReport
+                ? 'border-accent text-accent hover:bg-accent/15 hover:shadow-[0_0_10px_rgba(57,255,20,0.25)]'
+                : 'border-border text-muted-foreground hover:border-primary/50 hover:text-foreground'
+            )}
+          >
+            reportable
+          </button>
+          <button
+            onClick={() => onUpdate({ triaged: !finding.triagedBy })}
+            className={cn(
+              'text-[11px] uppercase tracking-wider py-1.5 border transition-colors',
+              finding.triagedBy
+                ? 'border-accent text-accent hover:bg-accent/15 hover:shadow-[0_0_10px_rgba(57,255,20,0.25)]'
+                : 'border-border text-muted-foreground hover:border-primary/50 hover:text-foreground'
+            )}
+          >
+            triaged
+          </button>
         </div>
+
+        {finding.triagedBy && (
+          <div className="text-[10px] text-muted-foreground">
+            triaged by {finding.triagedBy}{' '}
+            {finding.triagedAt ? formatRelative(finding.triagedAt) : ''}
+          </div>
+        )}
 
         {finding.tool === 'manual' && (
           <div className="border-t border-border pt-3 mt-1">

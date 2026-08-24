@@ -17,10 +17,10 @@ from core.config import Repository
 from core.config.schemas.repo_service import RepoService
 from core.config.schemas.repository import RepoAuth
 from core.project_paths import ProjectPaths
-from infrastructure.tools.wrappers.utils.manifest_check import (
-    LANGUAGE_MANIFESTS,
-    has_dependency_manifests,
-    has_dependency_manifests_docker,
+from factories.scanning import (
+    check_dependency_manifests,
+    check_dependency_manifests_docker,
+    get_manifest_constants,
 )
 
 if TYPE_CHECKING:
@@ -59,18 +59,18 @@ def _sca_manifest_notification(repo: Repository) -> None:
     if not repo.services:
         return
     service = repo.services[0]
-    sca_langs = set(LANGUAGE_MANIFESTS)
+    sca_langs = set(get_manifest_constants())
     repo_langs = {lang.lower() for lang in (service.languages or [])}
     if not repo_langs & sca_langs:
         return
     if service.container_name:
-        found = has_dependency_manifests_docker(
+        found = check_dependency_manifests_docker(
             service.container_name,
             service.docker_path,
             service.languages or [],
         )
     else:
-        found = has_dependency_manifests(repo.path, service.languages or [])
+        found = check_dependency_manifests(repo.path, service.languages or [])
     if not found:
         print(
             "  Note: no dependency manifests found for the configured"
@@ -230,6 +230,12 @@ def _interview_form_auth(
         default=current.password if current else "",
     )
 
+    verify_ssl_str = _prompt(
+        "  Verify SSL certificates? (y/n)",
+        default="y" if (not current or current.verify_ssl) else "n",
+    )
+    verify_ssl = verify_ssl_str.lower() != "n"
+
     return RepoAuth(
         auth_type="form",
         login_url=login_url,
@@ -238,6 +244,7 @@ def _interview_form_auth(
         credentials_env=credentials_env,
         username=username,
         password=password,
+        verify_ssl=verify_ssl,
     )
 
 
@@ -379,7 +386,7 @@ class InteractiveProjectWizard:
 
             count = len(interview_results)
             repo_str = f"{count} {'repository' if count == 1 else 'repositories'}"
-            print(f"\n✓ Project '{name}' created with {repo_str}")
+            print(f"\nProject '{name}' created with {repo_str}")
 
             return name
 
@@ -417,9 +424,7 @@ class InteractiveProjectWizard:
                     paths=paths,
                 )
                 persisted = self._service.get(project_id, persisted.id)
-            print(
-                f"\n✓ Repository '{persisted.name}' added to project '{project_name}'"
-            )
+            print(f"\nRepository '{persisted.name}' added to project '{project_name}'")
             return persisted
         except KeyboardInterrupt:
             print("\n\n[Canceled]")
@@ -850,7 +855,7 @@ class InteractiveProjectWizard:
             base_url=base_url,
         )
         self._service.record_seed_file(project_id, repo_id, str(target))
-        print(f"\n  ✓ Endpoint file ingested: {target}")
+        print(f"\nEndpoint file ingested: {target}")
 
     def _interview_company_name(self) -> str:
         """Prompt for company name."""
@@ -959,7 +964,7 @@ class InteractiveProjectWizard:
                 fresh.department_name = department_name
                 fresh.abbreviation = abbreviation
                 self._manager.config.save_project_config(project_name, fresh)
-            print(f"\n✓ Project '{project_name}' updated")
+            print(f"\nProject '{project_name}' updated")
             return True
 
         except KeyboardInterrupt:

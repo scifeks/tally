@@ -71,6 +71,7 @@ def build_parser() -> argparse.ArgumentParser:
             "stats",
             "integration-sync",
             "ui",
+            "mcp",
             "project-create",
             "project-list",
             "repo-add",
@@ -212,6 +213,14 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         metavar="TYPE",
         help="Engagement type override (integration-sync only)",
+    )
+
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=None,
+        metavar="PORT",
+        help="Port override for ui or mcp commands",
     )
 
     parser.add_argument(

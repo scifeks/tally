@@ -11,6 +11,8 @@ Tally is a security auditing platform that eliminates the noise and busy work in
 - Browser-based graphical dashboard for scanning, findings management, triage, reporting, and chat
 - Wraps 20+ security scanners across SAST, SCA, DAST, and secrets detection (see [docs/tools.md](docs/tools.md) for the full list)
 - AI triage: an LLM agent analyzes each finding with its source code, producing verdict, severity, confidence, remediation, and attack vector
+- Claude Code scanning: LLM-driven SAST across Python, PHP, JavaScript, and TypeScript with parallel scanner subagents
+- Interactive MCP triage mode: review and confirm triage verdicts in Claude Code before persistence
 - Four report formats: Markdown, HTML, JSON, and assembled PDF with LLM-drafted narrative sections
 - RAG-powered search and chat over ingested findings
 - Project-based isolation: each project has its own configuration, vector store, findings, and reports
@@ -112,7 +114,8 @@ Tools can run locally or inside a Docker container. The execution mode is config
 - [docs/antares-shim.md](docs/antares-shim.md) - Antares CWE scanner Ollama completions shim configuration
 - [docs/chat.md](docs/chat.md) - RAG chat configuration and usage
 - [docs/report.md](docs/report.md) - Report generation guide and PDF assembly
-- [docs/triage.md](docs/triage.md) - AI triage setup, container lifecycle, and security model
+- [docs/triage.md](docs/triage.md) - AI triage: auto-triage and MCP triage modes, container lifecycle, and security model
+- [docs/claude-code-scanning.md](docs/claude-code-scanning.md) - Claude Code scanning: setup, skills, and MCP server
 - [docs/url-discovery.md](docs/url-discovery.md) - URL discovery pipeline for DAST tools
 - [docs/endpoint-files.md](docs/endpoint-files.md) - Supplying OAS3, Swagger, Postman, or HAR endpoint files
 - [docs/docker.md](docs/docker.md) - Docker containers for npm-audit and composer-audit

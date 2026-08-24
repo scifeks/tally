@@ -29,7 +29,7 @@ class TestEnrichmentWriteBack:
         mock_repo.get_by_ids.return_value = [_row(1, tool="semgrep")]
         mock_llm = MagicMock()
         pipeline = _make_pipeline(mock_repo, mock_llm)
-        pipeline._call_llm_worker = MagicMock(return_value={"risk_type": "xss"})  # type: ignore[method-assign]
+        pipeline._call_per_field = MagicMock(return_value={"risk_type": "xss"})  # type: ignore[method-assign]
 
         pipeline.enrich([1])
 
@@ -48,7 +48,7 @@ class TestEnrichmentWriteBack:
         ]
         mock_llm = MagicMock()
         pipeline = _make_pipeline(mock_repo, mock_llm)
-        pipeline._call_llm_worker = MagicMock(return_value={"risk_type": "xss"})  # type: ignore[method-assign]
+        pipeline._call_per_field = MagicMock(return_value={"risk_type": "xss"})  # type: ignore[method-assign]
 
         pipeline.enrich([1, 2, 3])
 
@@ -95,7 +95,7 @@ class TestEnrichmentWriteBack:
         mock_repo.get_by_ids.return_value = [_row(1, tool="semgrep")]
         mock_llm = MagicMock()
         pipeline = _make_pipeline(mock_repo, mock_llm)
-        pipeline._call_llm_worker = MagicMock(side_effect=RuntimeError("LLM down"))  # type: ignore[method-assign]
+        pipeline._call_per_field = MagicMock(side_effect=RuntimeError("LLM down"))  # type: ignore[method-assign]
 
         pipeline.enrich([1])
 

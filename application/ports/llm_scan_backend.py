@@ -3,31 +3,16 @@
 from __future__ import annotations
 
 from contextlib import AbstractContextManager
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol, runtime_checkable
+
+from domain.findings.llm_finding import LlmFinding
 
 
 @dataclass(frozen=True)
 class PreparedLlmScanSession:
     cwd: Path
-
-
-@dataclass
-class LlmFinding:
-    file_path: str
-    description: str
-    severity: str
-    confidence: str
-    finding_type: list[str]
-    segment: str
-    reasoning: str = ""
-    remediation: str = ""
-    rule_id: str = ""
-    line_number: int | None = None
-    cwe: list[str] = field(default_factory=list)
-    attack_vector: str = ""
-    code_snippet: str = ""
 
 
 @dataclass(frozen=True)

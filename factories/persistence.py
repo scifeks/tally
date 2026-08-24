@@ -61,6 +61,7 @@ if TYPE_CHECKING:
     from application.ports.finding_repository import (
         FindingRepositoryPort,
     )
+    from application.ports.global_commands import GlobalCommandsPort
     from application.ports.project_repo_repository import (
         ProjectRepoRepositoryPort,
     )
@@ -283,6 +284,7 @@ def create_findings_service(
     )
     from application.findings.findings_service import FindingsService
     from application.locking import LockQueryService
+    from application.rag.finding_indexer import FindingIndexer
 
     row, paths = _resolve_project(registry, project_id)
     findings_db_exists = paths.findings_db.exists()
@@ -297,6 +299,7 @@ def create_findings_service(
         project_repo=project_repo,
         analyst=analyst,
         lock_query=LockQueryService(),
+        indexer=FindingIndexer(finding_repo=finding_repo),
         project_id=project_id,
         project_name=row.name,
         findings_db_exists=findings_db_exists,
@@ -362,6 +365,8 @@ def create_scans_service(
 def create_triage_service(
     registry: ProjectRegistryService,
     project_id: int,
+    *,
+    repo_paths: dict[str, Path] | None = None,
 ) -> TriageService:
     """Build a TriageService for a project."""
     from application.triage.triage_service import TriageService
@@ -373,6 +378,7 @@ def create_triage_service(
         triage_repo=TriageBatchRepository(factory),
         finding_repo=FindingRepository(factory),
         audit_repo=AuditRepository(factory),
+        repo_paths=repo_paths,
     )
 
 
@@ -402,3 +408,13 @@ def create_url_list_service(
         paths=paths,
         project_name=row.name,
     )
+
+
+def create_global_commands_repo(
+    config_path: Path,
+) -> GlobalCommandsPort:
+    from infrastructure.store.repositories.global_commands import (
+        GlobalCommandsRepository,
+    )
+
+    return GlobalCommandsRepository(config_path)

@@ -7,3 +7,4 @@ class Capabilities:
     triage_enabled: bool
     report_retention_enabled: bool
     max_report_history: int
+    triage_backend_label: str | None
