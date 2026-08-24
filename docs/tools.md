@@ -7,7 +7,6 @@ Tally is designed for authorized security assessments. Run these tools only agai
 | Tool | Category | What it does |
 |---|---|---|
 | [Antares](https://github.com/IBM/Antares) | SAST | CWE vulnerability localization using LLM agent investigation; identifies files likely to contain specific CWE weaknesses by exploring the codebase with a small language model. Requires endpoint configuration; see [docs/antares-shim.md](antares-shim.md) |
-| [ffuf](https://github.com/ffuf/ffuf) | DAST | Fast web fuzzer for discovering hidden files, directories, and parameters via wordlist-based brute-force |
 | [Nuclei](https://github.com/projectdiscovery/nuclei) | DAST | Template-based vulnerability scanner; known CVE fingerprinting, misconfiguration detection, and DAST fuzzing |
 | [OWASP ZAP](https://github.com/zaproxy/zaproxy) | DAST | Dynamic web/API security scanning |
 | [XSStrike](https://github.com/s0md3v/XSStrike) | DAST | XSS-focused dynamic scanner; context-aware payload generation and WAF evasion to complement ZAP |
