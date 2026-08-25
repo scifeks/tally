@@ -1,9 +1,4 @@
 {
-  "antares": {
-    "type": "repo",
-    "location": "local",
-    "path": "/usr/local/bin/antares"
-  },
   "composer-audit": {
     "type": "repo",
     "location": "docker",
@@ -17,30 +12,10 @@
     "location": "local",
     "path": "/usr/bin/dalfox"
   },
-  "garak": {
-    "type": "repo",
-    "location": "local",
-    "path": "/home/justin/.local/bin/garak"
-  },
-  "gitleaks": {
-    "type": "repo",
-    "location": "local",
-    "path": "/usr/local/bin/gitleaks"
-  },
   "graphql-cop": {
     "type": "api",
     "location": "local",
     "path": "/usr/bin/graphql-cop"
-  },
-  "katana": {
-    "type": "api",
-    "location": "local",
-    "path": "/usr/bin/katana"
-  },
-  "noir": {
-    "type": "repo",
-    "location": "local",
-    "path": "/usr/bin/noir"
   },
   "npm-audit": {
     "type": "repo",
@@ -63,7 +38,7 @@
   "retire": {
     "type": "repo",
     "location": "local",
-    "path": "/home/justin/.nvm/versions/node/v24.14.1/bin/retire"
+    "path": "/usr/bin/retire"
   },
   "semgrep": {
     "type": "repo",
@@ -74,15 +49,5 @@
     "type": "api",
     "location": "local",
     "path": "/usr/bin/sqlmap"
-  },
-  "xsstrike": {
-    "type": "api",
-    "location": "local",
-    "path": "/usr/bin/xsstrike"
-  },
-  "zap": {
-    "type": "api",
-    "location": "local",
-    "path": "/usr/share/zaproxy/zap.sh"
   }
 }
