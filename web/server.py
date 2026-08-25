@@ -115,9 +115,16 @@ def create_app(
 
     try:
         cfg = ConfigManager(base_path).global_config
-        claude_api_key = cfg.claude.api_key if cfg.claude else ""
     except (FileNotFoundError, PermissionError):
-        claude_api_key = ""
+        cfg = None
+
+    claude_api_key = cfg.claude.api_key if cfg and cfg.claude else ""
+
+    from infrastructure.tools.burp.probe import (
+        probe_burp_availability,
+    )
+
+    app.state.burp_available = probe_burp_availability(cfg.burp if cfg else None)
 
     triage_readiness = compute_triage_readiness(
         base_path=base_path,

@@ -7,6 +7,7 @@ Tally is designed for authorized security assessments. Run these tools only agai
 | Tool | Category | What it does |
 |---|---|---|
 | [Antares](https://github.com/IBM/Antares) | SAST | CWE vulnerability localization using LLM agent investigation; identifies files likely to contain specific CWE weaknesses by exploring the codebase with a small language model. Requires endpoint configuration; see [docs/antares-shim.md](antares-shim.md) |
+| [Burp Suite](https://portswigger.net/burp) | DAST | Web vulnerability scanner using crawl-and-audit; connects to a running Burp instance via REST API |
 | [Nuclei](https://github.com/projectdiscovery/nuclei) | DAST | Template-based vulnerability scanner; known CVE fingerprinting, misconfiguration detection, and DAST fuzzing |
 | [OWASP ZAP](https://github.com/zaproxy/zaproxy) | DAST | Dynamic web/API security scanning |
 | [XSStrike](https://github.com/s0md3v/XSStrike) | DAST | XSS-focused dynamic scanner; context-aware payload generation and WAF evasion to complement ZAP |
@@ -513,3 +514,5 @@ Three detection strategies are used:
 1. **PATH lookup** (`shutil.which`). Used by most tools (antares, semgrep, gitleaks, osv-scanner, pip-audit, npm-audit, composer-audit). A tool is available if its binary is on `$PATH`.
 2. **Configured path** (`Path.exists`). Used by OWASP ZAP. Checks the absolute path set in `config/commands.json` (e.g. `/usr/share/zaproxy/zap.sh`), which allows ZAP to be detected even when not on `$PATH`.
 3. **Python import** (`importlib.util.find_spec`). Used by tree-sitter. Checks that `tree_sitter` and `tree_sitter_language_pack` are importable in the active environment.
+
+Burp Suite uses a different detection strategy: Tally checks for a `burp` section in `config/global.json` and probes the configured REST API endpoint at startup. No binary on PATH is required.
