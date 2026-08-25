@@ -172,6 +172,11 @@ def discover_tools(
         )
         _discover_fallback(registry, wrappers_dir)
 
+    try:
+        register_burp_tool(registry, base_path)
+    except Exception:
+        logger.debug("Burp registration skipped", exc_info=True)
+
 
 def _discover_from_config(
     registry: ToolRegistry, commands_config, wrappers_dir: Path

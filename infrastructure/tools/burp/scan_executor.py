@@ -44,7 +44,13 @@ class BurpScanExecutor:
         sink = event_sink or NullScanEventSink()
         timestamp = ToolResult.now_iso()
 
-        request = BurpScanRequest(urls=config.urls)
+        scan_configurations = None
+        if config.config_name:
+            scan_configurations = [config.config_name]
+        request = BurpScanRequest(
+            urls=config.urls,
+            scan_configurations=scan_configurations,
+        )
         task_id = self._client.create_scan(request)
         _log.info("Burp scan created: task_id=%s", task_id)
 

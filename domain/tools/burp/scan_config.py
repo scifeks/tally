@@ -11,3 +11,4 @@ class BurpScanConfig:
 
     urls: list[str] = field(default_factory=list)
     timeout: int | None = None
+    config_name: str | None = None

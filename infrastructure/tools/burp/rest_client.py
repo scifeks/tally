@@ -108,6 +108,10 @@ class BurpRestClient:
         payload: dict[str, Any] = {"urls": request.urls}
         if request.name is not None:
             payload["name"] = request.name
+        if request.scan_configurations:
+            payload["scan_configurations"] = [
+                {"name": n} for n in request.scan_configurations
+            ]
         return payload
 
     @staticmethod

@@ -105,6 +105,9 @@ class ScanService:
         saved_scan_id: int | None = None,
         since_commit: str | None = None,
         git_diff: GitDiffPort | None = None,
+        burp_urls: list[str] | None = None,
+        burp_config_name: str | None = None,
+        burp_timeout: int | None = None,
     ) -> ScanHandle:
         """Start a scan and return a ScanHandle.
 
@@ -174,6 +177,9 @@ class ScanService:
                 "snapshots": snapshots,
                 "since_commit": since_commit,
                 "git_diff": git_diff,
+                "burp_urls": burp_urls,
+                "burp_config_name": burp_config_name,
+                "burp_timeout": burp_timeout,
             },
             name=f"scan-run-{run_id}",
             daemon=True,
@@ -209,6 +215,9 @@ class ScanService:
         snapshots: dict[str, str] | None = None,
         since_commit: str | None = None,
         git_diff: GitDiffPort | None = None,
+        burp_urls: list[str] | None = None,
+        burp_config_name: str | None = None,
+        burp_timeout: int | None = None,
     ) -> None:
         from application.pipeline.factory import PipelineFactory
         from factories.scanning import reset_scan_scoped_state
@@ -234,6 +243,30 @@ class ScanService:
                 event_sink=event_sink,
                 cancel_token=cancel_token,
             )
+            http_runner = None
+            if burp_urls:
+                from core.config.manager import ConfigManager
+                from infrastructure.tools.burp.rest_client import (
+                    BurpRestClient,
+                )
+                from infrastructure.tools.http_runner import (
+                    HttpToolRunner,
+                )
+
+                cfg = ConfigManager(base_path)
+                burp_cfg = cfg.global_config.burp
+                if burp_cfg is not None:
+                    client = BurpRestClient(
+                        burp_cfg.base_url,
+                        api_key=burp_cfg.api_key,
+                    )
+                    http_runner = HttpToolRunner(
+                        burp_client=client,
+                    )
+            if burp_urls and http_runner is None:
+                raise ValueError(
+                    "Burp scan requested but Burp is not configured in global config"
+                )
             orchestrator = ScanOrchestrator(
                 project=project_name,
                 tool_registry=tool_registry,
@@ -252,15 +285,23 @@ class ScanService:
                 repo_repo=repo_repo,
                 since_commit=since_commit,
                 git_diff=git_diff,
+                http_runner=http_runner,
             )
             setup_ok = True
 
-            summary = orchestrator.run_scoped_scan(
-                repo_names=list(repo_ids) or None,
-                tool_names=list(tool_ids) or None,
-                domains=list(domains) or None,
-                skip_tools=set(skip_tool_ids) or None,
-            )
+            if burp_urls and http_runner:
+                summary = orchestrator.run_burp_scan(
+                    urls=burp_urls,
+                    timeout=burp_timeout,
+                    config_name=burp_config_name,
+                )
+            else:
+                summary = orchestrator.run_scoped_scan(
+                    repo_names=list(repo_ids) or None,
+                    tool_names=list(tool_ids) or None,
+                    domains=list(domains) or None,
+                    skip_tools=set(skip_tool_ids) or None,
+                )
             _persist_tool_counts(run_repo, run_id, summary.findings_by_tool)
             future.set_result(summary)
             try:

@@ -277,6 +277,38 @@ export function useCancelScan() {
   })
 }
 
+export function useStartBurpScan() {
+  const queryClient = useQueryClient()
+  const setError = useUI(s => s.setScanMutationError)
+
+  return useMutation<Scan, ApiError, { projectId: number; configName?: string; timeout?: number }>({
+    mutationFn: async ({ projectId, configName, timeout }) => {
+      const body: Record<string, unknown> = {}
+      if (configName) body.configName = configName
+      if (timeout) body.timeout = timeout
+      const data = await apiFetch<ScanRunSummaryApi>(REST_ENDPOINTS.burpScan(projectId), {
+        method: 'POST',
+        body,
+      })
+      return mapScan(data)
+    },
+    onError: err => {
+      const payload: ApiErrorPayload = {
+        code: err.code,
+        message: err.message,
+        details: err.details,
+        status: err.status,
+      }
+      setError(payload)
+    },
+    onSuccess: (_, { projectId }) => {
+      queryClient.invalidateQueries({
+        queryKey: ['scans', projectId],
+      })
+    },
+  })
+}
+
 // ─── SSE event handling ─────────────────────────────────────────────────────
 
 const SCAN_EVENT_TYPES: readonly ScanLogEventType[] = [

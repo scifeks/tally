@@ -37,11 +37,13 @@ class BurpScanType(ScanType):
         urls: list[str],
         cancel_token: CancellationToken | None = None,
         timeout: int | None = None,
+        config_name: str | None = None,
     ) -> None:
         self._http_runner = http_runner
         self._urls = urls
         self._cancel_token = cancel_token
         self._timeout = timeout
+        self._config_name = config_name
 
     def execute(
         self,
@@ -65,7 +67,11 @@ class BurpScanType(ScanType):
             )
         )
 
-        scan_config = BurpScanConfig(urls=self._urls, timeout=self._timeout)
+        scan_config = BurpScanConfig(
+            urls=self._urls,
+            timeout=self._timeout,
+            config_name=self._config_name,
+        )
         result = self._http_runner.execute_burp(
             scan_config,
             cancel_token=self._cancel_token,

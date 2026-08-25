@@ -12,6 +12,7 @@ class BurpScanRequest:
 
     urls: list[str]
     name: str | None = None
+    scan_configurations: list[str] | None = None
 
 
 @dataclass(frozen=True)

@@ -298,6 +298,7 @@ class ScanOrchestrator:
         self,
         urls: list[str],
         timeout: int | None = None,
+        config_name: str | None = None,
     ) -> ScanSummary:
         from application.tools.scan_types.burp import BurpScanType
 
@@ -311,6 +312,7 @@ class ScanOrchestrator:
                 urls=urls,
                 cancel_token=self._cancel_token,
                 timeout=timeout,
+                config_name=config_name,
             ).execute(
                 self._make_config(),
                 self._make_resources(),

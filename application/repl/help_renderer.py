@@ -94,6 +94,14 @@ _HELP_REGISTRY = [
     # Manual Run
     ("run", None, None, "Manual Run"),
     ("run", "run", "<tool> [args...]", "Execute a tool with raw arguments"),
+    # Burp
+    ("burp", None, None, "Burp Suite"),
+    (
+        "burp",
+        "burp scan",
+        "[config_name]",
+        "Start a Burp crawl-and-audit scan using project base URLs",
+    ),
     # Tools
     ("tool", None, None, "Tools"),
     ("tool", "tool add", None, "Add a tool to the active configuration"),
