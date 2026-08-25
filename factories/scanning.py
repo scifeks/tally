@@ -6,6 +6,7 @@ from application.ports.git_diff import GitDiffPort
 from application.ports.subprocess_runner import SubprocessRunnerPort
 from application.tools.scan_service import ScanService
 from domain.runtime.probe import RuntimeDependencyProbe
+from infrastructure.tools.cli_runner import CliToolRunner
 from infrastructure.tools.runner import SubprocessRunner
 from infrastructure.vcs.git_diff_adapter import GitDiffAdapter
 
@@ -28,7 +29,7 @@ def get_scan_service() -> ScanService:
     global _SERVICE
     if _SERVICE is None:
         _SERVICE = ScanService(
-            subprocess_runner=SubprocessRunner(),
+            cli_tool_runner=CliToolRunner(SubprocessRunner()),
         )
     return _SERVICE
 

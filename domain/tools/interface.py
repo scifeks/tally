@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
+from enum import Enum
 from typing import TYPE_CHECKING, Any, Literal, Protocol
 
 if TYPE_CHECKING:
@@ -13,6 +14,13 @@ if TYPE_CHECKING:
     from domain.tools.execution_config import ToolExecutionConfig
 
 from domain.tools.base import ToolResult
+
+
+class TransportType(Enum):
+    """How a tool communicates with its backing engine."""
+
+    CLI = "cli"
+    HTTP = "http"
 
 
 class RegistryLike(Protocol):
@@ -155,3 +163,12 @@ class ToolInterface(ABC):
     def display_fields(self) -> list[str]:
         """Optional ordered list of field names to show in result tables."""
         return []
+
+    @property
+    def transport(self) -> TransportType:
+        """Transport used to execute this tool.
+
+        CLI tools run via subprocess; HTTP tools poll a remote API.
+        All existing tools default to CLI.
+        """
+        return TransportType.CLI

@@ -16,7 +16,7 @@ from application.locking import HolderMismatch, LockRegistry, get_registry
 from application.locking.cancellation import CancellationToken
 from application.ports.progress_reporter import ProgressReporter
 from application.ports.scan_event_sink import ScanEventSink
-from application.ports.subprocess_runner import SubprocessRunnerPort
+from application.ports.tool_runner import CliToolRunnerPort
 from application.ports.user_prompt import UserPromptPort
 from application.tools.executor import ToolExecutor
 from application.tools.factory import ToolWrapperFactory
@@ -70,11 +70,11 @@ class ScanService:
     def __init__(
         self,
         *,
-        subprocess_runner: SubprocessRunnerPort,
+        cli_tool_runner: CliToolRunnerPort,
         lock_registry: LockRegistry | None = None,
         scan_run_registry: ScanRunRegistry | None = None,
     ) -> None:
-        self._subprocess_runner = subprocess_runner
+        self._cli_runner = cli_tool_runner
         self._lock_registry = lock_registry or get_registry()
         self._scan_run_registry = scan_run_registry or get_scan_run_registry()
 
@@ -221,7 +221,7 @@ class ScanService:
                 project_name=project_name,
                 base_path=Path(base_path),
                 prompt=prompt,
-                subprocess_runner=self._subprocess_runner,
+                cli_tool_runner=self._cli_runner,
                 reporter=reporter,
             )
             pipeline_bus = PipelineFactory.create(
@@ -283,18 +283,17 @@ class ScanService:
                 )
         except Exception as exc:
             if not setup_ok:
-                # Setup-stage failure (pipeline build, orchestrator
-                # construction): the orchestrator never ran so it never
-                # persisted or emitted anything. The service is the only
-                # path through which the API/REPL can learn, so write the
-                # row + emit RunFailed here.
+                # Setup-stage failure: pipeline build or orchestrator
+                # construction failed before any scan work began. The
+                # orchestrator never ran so it never persisted or emitted
+                # anything. Write the failed status and emit RunFailed.
                 logger.exception("scan run %d setup failed", run_id)
                 _safe_persist_failed(run_repo, run_id)
                 _safe_emit_run_failed(event_sink, run_id, project_id, exc)
             else:
-                # Body-stage failure: ScanOrchestrator._run already
-                # persisted 'cancelled' / 'failed' and emitted the
-                # matching SSE event. Propagate via the future.
+                # Body-stage failure: orchestrator ran and already
+                # persisted terminal status and emitted corresponding
+                # SSE event. Propagate via the future.
                 logger.exception("scan run %d failed", run_id)
             future.set_exception(exc)
         finally:
