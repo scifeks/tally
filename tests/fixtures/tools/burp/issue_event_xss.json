@@ -1,0 +1,30 @@
+{
+  "type": "issue_found",
+  "issue": {
+    "name": "Reflected cross-site scripting",
+    "origin": "https://goat.justinc.app",
+    "path": "/WebGoat/search",
+    "severity": "high",
+    "confidence": "certain",
+    "description": "User input is reflected in the response without encoding.",
+    "remediation": "Encode all user input before including it in responses.",
+    "type_index": 2097920,
+    "serial_number": "1234",
+    "evidence": [
+      {
+        "type": "FirstOrderEvidence",
+        "request_response": {
+          "request": [
+            {"type": "DataSegment", "data": "R0VUIC9XZWJHb2F0L3NlYXJjaD9xPTxzY3JpcHQ+IGhUVFAvMS4x"}
+          ],
+          "response": [
+            {"type": "DataSegment", "data": "SFRUUC8xLjEgMjAwIE9L"},
+            {"type": "HighlightSegment", "data": "PHNjcmlwdD4="},
+            {"type": "DataSegment", "data": "PC9ib2R5Pg=="}
+          ]
+        }
+      }
+    ],
+    "fingerprint": ":type=REFLECTED_XSS:origin=https%3A%2F%2Fgoat.justinc.app:path=%2FWebGoat%2Fsearch:variant=1"
+  }
+}
