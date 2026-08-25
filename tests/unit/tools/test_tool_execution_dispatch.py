@@ -1,5 +1,5 @@
 """Unit tests for tool execution dispatch: port contract,
-CLI runner, HTTP stub, and transport routing."""
+CLI runner, HTTP runner, and transport routing."""
 
 from __future__ import annotations
 
@@ -174,12 +174,20 @@ class TestHttpToolRunner:
         runner = HttpToolRunner()
         assert runner is not None
 
-    def test_execute_raises_not_implemented(self) -> None:
+    def test_execute_burp_without_client_returns_failure(self) -> None:
         from infrastructure.tools.http_runner import HttpToolRunner
 
         runner = HttpToolRunner()
-        with pytest.raises(NotImplementedError):
-            runner.execute()
+        result = runner.execute_burp(
+            config=MagicMock(),
+            cancel_token=None,
+            event_sink=None,
+            run_id=0,
+            project_id=None,
+        )
+        assert result.success is False
+        assert result.tool_name == "burp"
+        assert result.output == "Burp client not configured"
 
 
 class _StubCliRunner(CliToolRunnerPort):

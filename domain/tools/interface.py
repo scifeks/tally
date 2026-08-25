@@ -105,15 +105,23 @@ class ToolInterface(ABC):
         """Binary names to try with shutil.which during setup auto-detection."""
         ...
 
-    @abstractmethod
     def build_execution_passes(self, context: ExecutionContext) -> list[ExecutionPass]:
-        """Return one ExecutionPass per subprocess invocation required."""
-        ...
+        """Return one ExecutionPass per subprocess invocation.
 
-    @abstractmethod
+        HTTP-transport tools do not use execution passes.
+        """
+        raise NotImplementedError(
+            f"{type(self).__name__} must implement build_execution_passes"
+        )
+
     def merge_pass_results(self, pass_results: list[ToolResult]) -> ToolResult:
-        """Combine results from all passes into a single ToolResult."""
-        ...
+        """Combine results from all passes into a single ToolResult.
+
+        HTTP-transport tools do not use execution passes.
+        """
+        raise NotImplementedError(
+            f"{type(self).__name__} must implement merge_pass_results"
+        )
 
     @abstractmethod
     def count_findings(self, parsed_data: dict[str, Any]) -> int:
