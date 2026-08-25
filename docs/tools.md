@@ -309,6 +309,19 @@ Run `search --show-fields --tool=<tool>` to see all available fields for a tool.
 | `rule_id` | Primary CWE ID |
 | `severity` | Severity level (low, medium, high, critical) |
 
+### burp
+
+| Field | Description |
+|---|---|
+| `alert_name` | Burp issue name (e.g. Cross-site request forgery) |
+| `confidence` | Confidence level (confirmed) |
+| `evidence` | Decoded HTTP request/response evidence |
+| `finding_type` | Type of finding (vulnerability) |
+| `fingerprint_type` | Burp issue type from fingerprint |
+| `method` | HTTP method (empty for most Burp findings) |
+| `severity` | Severity level (informational, low, medium, high) |
+| `url` | Full URL where the issue was found |
+
 ### dalfox
 
 | Field | Description |
