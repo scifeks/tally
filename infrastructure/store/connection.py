@@ -190,6 +190,7 @@ class ConnectionFactory:
             "chat_sessions",
             "chat_messages",
             "url_findings",
+            "organizer_ingested_items",
         }
     )
 
@@ -494,6 +495,14 @@ class ConnectionFactory:
 
                 CREATE INDEX IF NOT EXISTS idx_saved_scan_arg_profiles_profile
                     ON saved_scan_arg_profiles (arg_profile_id);
+
+                CREATE TABLE IF NOT EXISTS organizer_ingested_items (
+                    project_id  INTEGER NOT NULL,
+                    item_id     INTEGER NOT NULL,
+                    ingested_at TEXT    NOT NULL
+                                  DEFAULT (datetime('now')),
+                    PRIMARY KEY (project_id, item_id)
+                );
             """)
             from infrastructure.store.migrations import run_pending
 
