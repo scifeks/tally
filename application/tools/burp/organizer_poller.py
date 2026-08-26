@@ -52,7 +52,10 @@ class OrganizerPoller:
         """Loop until cancellation. Returns total items ingested."""
         total = 0
         while not cancel_token.is_set():
-            total += self.poll_once()
+            try:
+                total += self.poll_once()
+            except Exception:
+                logger.exception("Poll cycle failed")
             cancel_token.wait(self._poll_interval)
         return total
 
