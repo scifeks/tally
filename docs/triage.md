@@ -2,7 +2,7 @@
 
 ## Overview
 
-Triage uses an AI agent to assess SAST and API findings from your scans. The agent
+Triage uses an AI agent to assess SAST, API, and DAST findings from your scans. The agent
 reads the finding metadata and the associated source file, then produces a
 **verdict** with confidence level, severity, finding type, reasoning, remediation
 guidance, attack vector, and call stack. SCA findings are not triaged because they
@@ -98,7 +98,7 @@ unless explicitly overridden.
 
 ## Running Triage
 
-Run triage on all untriaged SAST and API findings in the active project:
+Run triage on all untriaged SAST, API, and DAST findings in the active project:
 
 ```
 [acme-audit]> triage
@@ -320,7 +320,7 @@ Claude Code connects to the MCP server, retrieves untriaged findings, streams th
 
 When you invoke `/tally-triage`, Claude Code:
 
-1. Fetches untriaged SAST and API findings from your active project
+1. Fetches untriaged SAST, API, and DAST findings from your active project
 2. Groups findings into batches
 3. Sends each batch to the triage agent
 4. Displays the verdicts and waits for your approval
@@ -372,9 +372,9 @@ The triage agent reads both formats and extracts the evidence needed to guide so
 
 DAST verdicts use the standard triage verdict schema with one required addition:
 
-- `finding_id`, `confidence`, `finding_type`, `severity`, `access_required`, `exploitation_complexity`, `user_interaction`, `reasoning`, `remediation` — same as SAST verdicts.
-- `attack_vector` — the HTTP method, endpoint path, and vulnerable parameter (example: `POST /api/user?id=1 (id parameter)`)
-- `call_stack` — required, and must be non-empty. A JSON array of strings, each in the format `file:line function_name`, that traces every file and function from request entry to the vulnerable operation.
+- `finding_id`, `confidence`, `finding_type`, `severity`, `access_required`, `exploitation_complexity`, `user_interaction`, `reasoning`, `remediation` are the same as SAST verdicts.
+- `attack_vector` is the HTTP method, endpoint path, and vulnerable parameter (example: `POST /api/user?id=1 (id parameter)`).
+- `call_stack` is required and must be non-empty. A JSON array of strings, each in the format `file:line function_name`, that traces every file and function from request entry to the vulnerable operation.
 
 The `call_stack` field is mandatory and distinguishes DAST verdicts from other finding types. The agent must examine the source tree to populate this field before returning a verdict.
 

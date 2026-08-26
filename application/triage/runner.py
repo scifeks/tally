@@ -22,7 +22,7 @@ from application.triage.batching import (
     batch_size_for_segment,
     compute_batches,
 )
-from application.triage.prompts import sast_trace
+from application.triage.prompts import dast_trace, sast_trace
 from application.triage.verdict import (
     SourceNotExaminedError,
     Verdict,
@@ -53,6 +53,7 @@ if TYPE_CHECKING:
 
 _PROMPT_RENDERERS: dict[str, Callable[..., str]] = {
     "sast": sast_trace.render,
+    "web": dast_trace.render,
 }
 
 _log = logging.getLogger(__name__)

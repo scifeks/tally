@@ -11,7 +11,7 @@ from application.triage.batching import (
     batch_size_for_segment,
     compute_batches,
 )
-from application.triage.prompts import api_trace, sast_trace
+from application.triage.prompts import api_trace, dast_trace, sast_trace
 from domain.findings.normalization import (
     build_triage_meta,
     normalise_finding_type,
@@ -32,6 +32,7 @@ if TYPE_CHECKING:
 _PROMPT_RENDERERS: dict[str, Callable[..., str]] = {
     "api": api_trace.render,
     "sast": sast_trace.render,
+    "web": dast_trace.render,
 }
 
 _log = logging.getLogger(__name__)
