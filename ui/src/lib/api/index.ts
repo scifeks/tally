@@ -34,6 +34,7 @@ export {
   useProjectScanConfig,
   useStartScan,
   useCancelScan,
+  useStartBurpScan,
   useScanEvents,
 } from './useScans'
 

@@ -27,6 +27,7 @@ from web.api._redact import install_redaction_middleware
 from web.api.arg_profiles import arg_profiles_v1_router
 from web.api.auth import router as auth_router
 from web.api.burp_poll import v1_router as burp_poll_v1_router
+from web.api.burp_scan import v1_router as burp_scan_v1_router
 from web.api.chat import v1_router as chat_projects_v1_router
 from web.api.config import router as config_router
 from web.api.documents import v1_router as documents_v1_router
@@ -116,9 +117,16 @@ def create_app(
 
     try:
         cfg = ConfigManager(base_path).global_config
-        claude_api_key = cfg.claude.api_key if cfg.claude else ""
     except (FileNotFoundError, PermissionError):
-        claude_api_key = ""
+        cfg = None
+
+    claude_api_key = cfg.claude.api_key if cfg and cfg.claude else ""
+
+    from infrastructure.tools.burp.probe import (
+        probe_burp_availability,
+    )
+
+    app.state.burp_available = probe_burp_availability(cfg.burp if cfg else None)
 
     triage_readiness = compute_triage_readiness(
         base_path=base_path,
@@ -144,6 +152,7 @@ def create_app(
     app.include_router(runtime_v1_router, prefix="/api/v1")
     app.include_router(platform_v1_router, prefix="/api/v1")
     app.include_router(scans_projects_v1_router, prefix="/api/v1/projects")
+    app.include_router(burp_scan_v1_router, prefix="/api/v1/projects")
     app.include_router(triage_projects_v1_router, prefix="/api/v1/projects")
     app.include_router(burp_poll_v1_router, prefix="/api/v1/projects")
     app.include_router(reports_projects_v1_router, prefix="/api/v1/projects")

@@ -32,6 +32,7 @@ from factories.scanning import (
     create_subprocess_runner,
     get_scan_service,
 )
+from infrastructure.tools.cli_runner import CliToolRunner
 
 if TYPE_CHECKING:
     from application.repl.interface import REPL
@@ -326,7 +327,7 @@ class ScanCommands:
             project_name=self.repl.active_project,
             base_path=Path(self.repl.base_path),
             prompt=RichConsolePromptAdapter(),
-            subprocess_runner=create_subprocess_runner(),
+            cli_tool_runner=CliToolRunner(create_subprocess_runner()),
             reporter=StdoutProgressReporter(),
         )
         result = executor.execute(
@@ -491,6 +492,6 @@ class ScanCommands:
                 ],
             }
             Path(export_path).write_text(json.dumps(data, indent=2, default=str))
-            self.repl.console.print(f"[green]✓ Exported to:[/green] {export_path}")
+            self.repl.console.print(f"[green]Exported to:[/green] {export_path}")
         except Exception as exc:
             self.repl.console.print(f"[red]Export failed:[/red] {exc}")

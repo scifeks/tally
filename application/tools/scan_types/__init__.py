@@ -1,4 +1,5 @@
 from application.tools.scan_types.base import ScanType
+from application.tools.scan_types.burp import BurpScanType
 from application.tools.scan_types.full import FullScan
 from application.tools.scan_types.llm_scan import LlmScan
 from application.tools.scan_types.models import ScanTypeConfig
@@ -16,6 +17,7 @@ from domain.tools.scan_types import (
 
 __all__ = [
     "SEGMENT_ORDER",
+    "BurpScanType",
     "ExecutionResources",
     "FullScan",
     "LlmScan",

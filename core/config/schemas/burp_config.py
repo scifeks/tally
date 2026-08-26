@@ -1,11 +1,19 @@
 """Burp Suite connection configuration."""
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class BurpConfig(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
+    base_url: str = Field(
+        default="http://localhost:1337",
+        description="Burp REST API base URL",
+    )
+    api_key: str = Field(
+        default="",
+        description="Optional Burp REST API key",
+    )
     mcp_url: str = Field(
         default="",
         description=(
@@ -17,3 +25,10 @@ class BurpConfig(BaseModel):
         ge=5,
         description="Seconds between Organizer poll cycles",
     )
+
+    @field_validator("base_url")
+    @classmethod
+    def validate_url(cls, v: str) -> str:
+        if not v.startswith(("http://", "https://")):
+            raise ValueError("base_url must start with http:// or https://")
+        return v.rstrip("/")

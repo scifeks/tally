@@ -13,6 +13,7 @@ from application.tools.executor import DEFAULT_TIMEOUT, ToolExecutor
 from core.project_paths import ProjectPaths
 from factories.persistence import create_overrides_repo
 from factories.scanning import create_subprocess_runner
+from infrastructure.tools.cli_runner import CliToolRunner
 
 if TYPE_CHECKING:
     from argparse import Namespace
@@ -86,7 +87,7 @@ def _cmd_run_inner(
             project_name=project_name,
             base_path=Path(base_path),
             prompt=CliPromptAdapter(),
-            subprocess_runner=create_subprocess_runner(),
+            cli_tool_runner=CliToolRunner(create_subprocess_runner()),
             reporter=CliProgressReporter(),
         )
         result = executor.execute(

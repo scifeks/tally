@@ -98,9 +98,11 @@ After initial setup, most users work primarily through the web UI.
 
 | Interface | How to scan |
 |---|---|
-| Web UI | Open the Scans page, configure advanced options if needed, click Start. Progress streams in real time. |
-| REPL | `scan` for a full scan, or `scan --tool=semgrep --repo=backend` to scope it. Tally prompts before each tool runs. |
+| Web UI | Open the Scans page, configure advanced options if needed, click Start. Progress streams in real time. Or click the orange Burp button to run a Burp crawl-and-audit scan (when configured). |
+| REPL | `scan` for a full scan, or `scan --tool=semgrep --repo=backend` to scope it. Tally prompts before each tool runs. Use `burp scan` to run a Burp crawl-and-audit scan with an optional config name. |
 | CLI | `python3 tally-cli.py --project myapp --command scan`. All prompts auto-approved. |
+
+Burp scans require Burp Suite Professional running with REST API enabled and a `burp` section configured in `config/global.json`.
 
 ### Triage
 

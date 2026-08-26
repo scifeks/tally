@@ -169,6 +169,14 @@ Create a new saved scan by configuring advanced options and clicking "Save scan"
 
 After a scan completes, the page shows detailed timing and status for each tool run grouped by domain (SAST, SCA, WEB, SECRETS). Expand each tool group to see per-repo or per-host timing information.
 
+### Burp scan
+
+When Burp Suite is configured and reachable, an orange **Burp** button appears on the scan page. Click it and select **Burp Scan** from the dropdown. You can optionally enter a scan configuration name that matches a configuration in your Burp Suite installation. Click **Start** to begin the scan.
+
+Burp scans use the base URLs from all configured repository services in the active project. If no base URLs are configured, the endpoint returns an error.
+
+Scan progress and findings appear in the same live log and history tabs used by other scans.
+
 ### Poll Burp
 
 When Burp Suite's MCP URL is configured (`burp.mcp_url` in `config/global.json`), an orange **Poll Burp** button appears on the Scans page. Clicking it starts a continuous polling loop that fetches items from Burp's Organizer and ingests them as findings.

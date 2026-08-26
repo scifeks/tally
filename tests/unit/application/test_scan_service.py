@@ -16,7 +16,7 @@ import pytest
 
 from application.locking.exceptions import JobBusy
 from application.locking.registry import LockRegistry
-from application.ports.subprocess_runner import SubprocessRunnerPort
+from application.ports.tool_runner import CliToolRunnerPort
 from application.tools.scan_run_registry import ScanRunRegistry
 from application.tools.scan_service import ScanService
 
@@ -34,7 +34,7 @@ def scan_run_registry() -> ScanRunRegistry:
 @pytest.fixture
 def service(registry: LockRegistry, scan_run_registry: ScanRunRegistry) -> ScanService:
     svc = ScanService(
-        subprocess_runner=MagicMock(spec=SubprocessRunnerPort),
+        cli_tool_runner=MagicMock(spec=CliToolRunnerPort),
         lock_registry=registry,
         scan_run_registry=scan_run_registry,
     )
