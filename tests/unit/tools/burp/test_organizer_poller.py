@@ -2,25 +2,14 @@
 
 from __future__ import annotations
 
-import sys
-from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
 
-_TALLY_ROOT = Path(__file__).resolve().parents[4]
-if str(_TALLY_ROOT) not in sys.path:
-    sys.path.insert(0, str(_TALLY_ROOT))
-
-from application.tools.burp.organizer_poller import (  # noqa: E402
-    OrganizerPoller,
-)
-from domain.locking.cancellation import (  # noqa: E402
-    CancellationToken,
-)
-from domain.tools.burp.mcp_ports import (  # noqa: E402
-    OrganizerItem,
-)
+from application.tools.burp.note_enrichment import NoteClassification
+from application.tools.burp.organizer_poller import OrganizerPoller
+from domain.locking.cancellation import CancellationToken
+from domain.tools.burp.mcp_ports import OrganizerItem
 
 
 def _item(id: int, notes: str = "", request: str = "GET / HTTP/1.1") -> OrganizerItem:
@@ -189,3 +178,116 @@ class TestRun:
 
         total = poller.run(token)
         assert total == 0
+
+
+@pytest.fixture()
+def enrichment() -> MagicMock:
+    mock = MagicMock()
+    mock.classify.return_value = NoteClassification(
+        vulnerability_type="idor",
+        cwe="CWE-639",
+        severity="high",
+    )
+    return mock
+
+
+@pytest.fixture()
+def enriching_poller(
+    fetcher: MagicMock,
+    state_repo: MagicMock,
+    ingest: MagicMock,
+    enrichment: MagicMock,
+) -> OrganizerPoller:
+    return OrganizerPoller(
+        fetcher=fetcher,
+        state_repo=state_repo,
+        ingest_service=ingest,
+        project_id=1,
+        note_enrichment=enrichment,
+    )
+
+
+class TestNormalizationAndEnrichment:
+    def test_enriches_items_with_notes(
+        self,
+        enriching_poller: OrganizerPoller,
+        fetcher: MagicMock,
+        ingest: MagicMock,
+        enrichment: MagicMock,
+    ) -> None:
+        fetcher.fetch_items.return_value = [_item(1, notes="IDOR via user ID")]
+        enriching_poller.poll_once()
+
+        enrichment.classify.assert_called_once_with("IDOR via user ID")
+        payload = ingest.submit_finding.call_args[0][1]
+        assert payload["severity"] == "high"
+        assert payload["cwe"] == ["CWE-639"]
+        assert payload["finding_type"] == ["vulnerability"]
+        assert payload["meta"]["vulnerability_type"] == "idor"
+
+    def test_skips_enrichment_for_empty_notes(
+        self,
+        enriching_poller: OrganizerPoller,
+        fetcher: MagicMock,
+        ingest: MagicMock,
+        enrichment: MagicMock,
+    ) -> None:
+        fetcher.fetch_items.return_value = [_item(1, notes="")]
+        enriching_poller.poll_once()
+
+        enrichment.classify.assert_not_called()
+        payload = ingest.submit_finding.call_args[0][1]
+        assert payload["severity"] == "informational"
+        assert payload["cwe"] == ["CWE-0"]
+        assert payload["finding_type"] == ["informational"]
+
+    def test_failed_classification_uses_placeholders(
+        self,
+        enriching_poller: OrganizerPoller,
+        fetcher: MagicMock,
+        ingest: MagicMock,
+        enrichment: MagicMock,
+    ) -> None:
+        enrichment.classify.return_value = None
+        fetcher.fetch_items.return_value = [_item(1, notes="ambiguous")]
+        enriching_poller.poll_once()
+
+        payload = ingest.submit_finding.call_args[0][1]
+        assert payload["severity"] == "informational"
+        assert payload["cwe"] == ["CWE-0"]
+
+    def test_payload_includes_normalized_http(
+        self,
+        poller: OrganizerPoller,
+        fetcher: MagicMock,
+        ingest: MagicMock,
+    ) -> None:
+        fetcher.fetch_items.return_value = [
+            OrganizerItem(
+                id=1,
+                status="New",
+                request="POST /login HTTP/1.1\r\nHost: example.test\r\n",
+                response="HTTP/1.1 302 Found\r\n",
+                notes="",
+            )
+        ]
+        poller.poll_once()
+
+        meta = ingest.submit_finding.call_args[0][1]["meta"]
+        assert meta["method"] == "POST"
+        assert meta["url"] == "/login"
+        assert meta["host"] == "example.test"
+        assert meta["status_code"] == 302
+
+    def test_no_enrichment_dependency_ingests_unclassified(
+        self,
+        poller: OrganizerPoller,
+        fetcher: MagicMock,
+        ingest: MagicMock,
+    ) -> None:
+        fetcher.fetch_items.return_value = [_item(1, notes="has a note")]
+        poller.poll_once()
+
+        payload = ingest.submit_finding.call_args[0][1]
+        assert payload["severity"] == "informational"
+        assert payload["finding_type"] == ["informational"]
