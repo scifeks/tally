@@ -7,7 +7,10 @@ import logging
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
-from application.triage.batching import compute_batches
+from application.triage.batching import (
+    batch_size_for_segment,
+    compute_batches,
+)
 from application.triage.prompts import api_trace, sast_trace
 from domain.findings.normalization import (
     build_triage_meta,
@@ -261,7 +264,10 @@ class McpTriageService:
                 run_id, tool, repo, segment
             )
             if findings:
-                batches = compute_batches(findings)
+                batches = compute_batches(
+                    findings,
+                    max_findings_per_batch=(batch_size_for_segment(segment)),
+                )
                 self._triage_repo.create_batches(run_id, batches)
 
     def _get_run_id_for_batch(self, batch_id: int) -> int:

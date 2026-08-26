@@ -18,7 +18,10 @@ from application.ports.triage_event_sink import (
     TriageEventSink,
 )
 from application.tools.registry import ToolRegistry
-from application.triage.batching import compute_batches
+from application.triage.batching import (
+    batch_size_for_segment,
+    compute_batches,
+)
 from application.triage.prompts import sast_trace
 from application.triage.verdict import (
     SourceNotExaminedError,
@@ -170,7 +173,12 @@ class TriageRunner:
                 )
                 batches = compute_batches(
                     findings,
-                    max_findings_per_batch=self._max_findings_per_batch,
+                    max_findings_per_batch=(
+                        batch_size_for_segment(
+                            segment,
+                            default=(self._max_findings_per_batch),
+                        )
+                    ),
                 )
                 created = self._triage_repo.create_batches(run_id, batches)
                 _log.info(

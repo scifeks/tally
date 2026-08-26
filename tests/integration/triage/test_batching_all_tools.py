@@ -17,7 +17,10 @@ _TALLY_ROOT = Path(__file__).resolve().parents[3]
 if str(_TALLY_ROOT) not in sys.path:
     sys.path.insert(0, str(_TALLY_ROOT))
 
-from application.triage.batching import compute_batches  # noqa: E402
+from application.triage.batching import (  # noqa: E402
+    batch_size_for_segment,
+    compute_batches,
+)
 from infrastructure.store.connection import ConnectionFactory  # noqa: E402
 from infrastructure.store.repositories.findings import (  # noqa: E402
     FindingRepository,
@@ -206,7 +209,7 @@ class TestBatchingAllTools:
         all_ids = [f["id"] for b in batches for f in b]
         assert len(all_ids) == 3
 
-    def test_web_batches_excluded(self, tmp_path: Path) -> None:
+    def test_web_batches_are_size_one(self, tmp_path: Path) -> None:
         factory, run_repo, finding_repo, triage_repo = _make_repos(tmp_path)
         findings = [
             _make_web_finding(
@@ -220,9 +223,16 @@ class TestBatchingAllTools:
         ]
         run_id = _seed_findings(run_repo, finding_repo, findings, factory)
 
-        batches = _batch_for(triage_repo, run_id, "graphql-cop", "myrepo", "web")
+        findings = triage_repo.fetch_active_findings_for_batching(
+            run_id, "graphql-cop", "myrepo", "web"
+        )
+        batches = compute_batches(
+            findings,
+            max_findings_per_batch=batch_size_for_segment("web"),
+        )
 
-        assert batches == []
+        assert len(batches) == 2
+        assert all(len(b) == 1 for b in batches)
 
     @pytest.mark.parametrize(
         ("tool", "segment", "builder"),
@@ -286,13 +296,16 @@ class TestBatchingAllTools:
             fetched = triage_repo.fetch_active_findings_for_batching(
                 run_id, tool, repo, segment
             )
-            batches = compute_batches(fetched)
+            batches = compute_batches(
+                fetched,
+                max_findings_per_batch=batch_size_for_segment(segment),
+            )
             created = triage_repo.create_batches(run_id, batches)
             batch_counts[f"{tool}/{segment}"] = len(created)
 
         assert batch_counts["semgrep/sast"] >= 1
-        assert batch_counts["graphql-cop/web"] == 0
-        assert batch_counts["zap/web"] == 0
+        assert batch_counts["graphql-cop/web"] == 1
+        assert batch_counts["zap/web"] == 1
         assert batch_counts["gitleaks/secrets"] == 0
         assert batch_counts["composer-audit/sca"] == 0
 

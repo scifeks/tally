@@ -4,8 +4,11 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from unittest.mock import MagicMock
+
+if TYPE_CHECKING:
+    from application.tools.registry import ToolRegistry
 
 import httpx
 import pytest_asyncio
@@ -19,7 +22,7 @@ from tests.finding_helpers import normalize_test_findings
 
 
 def _seed_global_config(base_path: Path) -> None:
-    """Write a minimal ``<base>/config/global.json`` so ConfigManager loads."""
+    """Write minimal config files so bootstrap and tool discovery work."""
     config_dir = base_path / "config"
     config_dir.mkdir(parents=True, exist_ok=True)
     (config_dir / "global.json").write_text(
@@ -37,6 +40,21 @@ def _seed_global_config(base_path: Path) -> None:
             }
         )
     )
+
+
+def _seed_test_tools(base_path: Path, tool_registry: ToolRegistry) -> None:
+    """Inject gitleaks into commands.json and re-discover."""
+    from application.tools.registry import discover_tools
+
+    commands_path = base_path / "config" / "commands.json"
+    existing = json.loads(commands_path.read_text()) if commands_path.exists() else {}
+    existing["gitleaks"] = {
+        "type": "repo",
+        "location": "local",
+        "path": "gitleaks",
+    }
+    commands_path.write_text(json.dumps(existing))
+    discover_tools(tool_registry, str(base_path))
 
 
 TEST_PORT = 12345
@@ -105,6 +123,7 @@ async def app_client(tmp_path: Path):
     kb_mock.get.return_value = [{"id": "doc-1", "metadata": {}}]
 
     app = build_test_app(tmp_path, HANDSHAKE, port=TEST_PORT)
+    _seed_test_tools(tmp_path, app.state.tool_registry)
     # Seed the per-project knowledge base cache so chroma sync uses the mock.
     app.state.knowledge_base_cache = {"testproject": kb_mock}
 
