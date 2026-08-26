@@ -13,9 +13,10 @@ class TestPromptRenderers:
         assert isinstance(result, str)
         assert result
 
-    def test_web_segment_not_registered(self) -> None:
-        with pytest.raises(KeyError):
-            _PROMPT_RENDERERS["web"]
+    def test_web_segment_renders_strings(self) -> None:
+        result = _PROMPT_RENDERERS["web"]({"id": 1}, project="demo")
+        assert isinstance(result, str)
+        assert result
 
     def test_unknown_segment_raises_key_error(self) -> None:
         with pytest.raises(KeyError):

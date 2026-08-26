@@ -2,7 +2,7 @@
 
 ## Overview
 
-Triage uses an AI agent to assess SAST and API findings from your scans. The agent
+Triage uses an AI agent to assess SAST, API, and DAST findings from your scans. The agent
 reads the finding metadata and the associated source file, then produces a
 **verdict** with confidence level, severity, finding type, reasoning, remediation
 guidance, attack vector, and call stack. SCA findings are not triaged because they
@@ -98,7 +98,7 @@ unless explicitly overridden.
 
 ## Running Triage
 
-Run triage on all untriaged SAST and API findings in the active project:
+Run triage on all untriaged SAST, API, and DAST findings in the active project:
 
 ```
 [acme-audit]> triage
@@ -320,7 +320,7 @@ Claude Code connects to the MCP server, retrieves untriaged findings, streams th
 
 When you invoke `/tally-triage`, Claude Code:
 
-1. Fetches untriaged SAST and API findings from your active project
+1. Fetches untriaged SAST, API, and DAST findings from your active project
 2. Groups findings into batches
 3. Sends each batch to the triage agent
 4. Displays the verdicts and waits for your approval
@@ -341,6 +341,56 @@ Use **auto-triage** when:
 - You want to process all findings headlessly without interaction
 - You want triage to run from the REPL or web UI in a fully automated pipeline
 - You are triaging a large volume of findings and interactivity is not needed
+
+---
+
+## DAST Triage
+
+DAST (dynamic application security testing) triage differs from SAST triage in one fundamental way: it assumes the vulnerability exists. A dynamic scanner such as ZAP or Burp has already confirmed the behavior by sending a crafted request and observing a vulnerable response. The triage agent's task is to locate the vulnerable code path in the source tree.
+
+Unlike SAST triage, which asks "is this a real vulnerability?", DAST triage asks a different question: "where is the vulnerability in the source code that allows this endpoint to be exploited?" This inverted approach focuses investigation on finding the code, not re-confirming the scanner's observation. The resulting verdict includes a `call_stack` field that traces the full vulnerability chain from request intake to the vulnerable operation.
+
+### Evidence differences between ZAP and Burp
+
+ZAP and Burp provide different evidence in their findings:
+
+**ZAP** includes:
+- Alert name and severity
+- Attack payload (the malicious input sent by the scanner)
+- Parameter name (the injection point)
+- Evidence string (proof of behavior extracted from the response)
+
+**Burp** includes:
+- Alert name, severity, and confidence
+- Full HTTP request and response (decoded and human-readable)
+- Vulnerability fingerprint type (identifies the specific variant detected)
+- Remediation guidance (vendor-provided fix recommendations)
+
+The triage agent reads both formats and extracts the evidence needed to guide source code investigation.
+
+### Verdict format for DAST findings
+
+DAST verdicts use the standard triage verdict schema with one required addition:
+
+- `finding_id`, `confidence`, `finding_type`, `severity`, `access_required`, `exploitation_complexity`, `user_interaction`, `reasoning`, `remediation` are the same as SAST verdicts.
+- `attack_vector` is the HTTP method, endpoint path, and vulnerable parameter (example: `POST /api/user?id=1 (id parameter)`).
+- `call_stack` is required and must be non-empty. A JSON array of strings, each in the format `file:line function_name`, that traces every file and function from request entry to the vulnerable operation.
+
+The `call_stack` field is mandatory and distinguishes DAST verdicts from other finding types. The agent must examine the source tree to populate this field before returning a verdict.
+
+### Source code not examined error
+
+If the agent cannot locate the repository, route handler, or source code for an endpoint, it returns an error object instead of a verdict:
+
+```json
+{
+  "error": "source_not_examined",
+  "finding_id": 12345,
+  "reason": "Could not locate route handler for POST /api/endpoint"
+}
+```
+
+This prevents false positives from incomplete source examination.
 
 ---
 
