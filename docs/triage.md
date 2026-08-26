@@ -344,6 +344,56 @@ Use **auto-triage** when:
 
 ---
 
+## DAST Triage
+
+DAST (dynamic application security testing) triage differs from SAST triage in one fundamental way: it assumes the vulnerability exists. A dynamic scanner such as ZAP or Burp has already confirmed the behavior by sending a crafted request and observing a vulnerable response. The triage agent's task is to locate the vulnerable code path in the source tree.
+
+Unlike SAST triage, which asks "is this a real vulnerability?", DAST triage asks a different question: "where is the vulnerability in the source code that allows this endpoint to be exploited?" This inverted approach focuses investigation on finding the code, not re-confirming the scanner's observation. The resulting verdict includes a `call_stack` field that traces the full vulnerability chain from request intake to the vulnerable operation.
+
+### Evidence differences between ZAP and Burp
+
+ZAP and Burp provide different evidence in their findings:
+
+**ZAP** includes:
+- Alert name and severity
+- Attack payload (the malicious input sent by the scanner)
+- Parameter name (the injection point)
+- Evidence string (proof of behavior extracted from the response)
+
+**Burp** includes:
+- Alert name, severity, and confidence
+- Full HTTP request and response (decoded and human-readable)
+- Vulnerability fingerprint type (identifies the specific variant detected)
+- Remediation guidance (vendor-provided fix recommendations)
+
+The triage agent reads both formats and extracts the evidence needed to guide source code investigation.
+
+### Verdict format for DAST findings
+
+DAST verdicts use the standard triage verdict schema with one required addition:
+
+- `finding_id`, `confidence`, `finding_type`, `severity`, `access_required`, `exploitation_complexity`, `user_interaction`, `reasoning`, `remediation` — same as SAST verdicts.
+- `attack_vector` — the HTTP method, endpoint path, and vulnerable parameter (example: `POST /api/user?id=1 (id parameter)`)
+- `call_stack` — required, and must be non-empty. A JSON array of strings, each in the format `file:line function_name`, that traces every file and function from request entry to the vulnerable operation.
+
+The `call_stack` field is mandatory and distinguishes DAST verdicts from other finding types. The agent must examine the source tree to populate this field before returning a verdict.
+
+### Source code not examined error
+
+If the agent cannot locate the repository, route handler, or source code for an endpoint, it returns an error object instead of a verdict:
+
+```json
+{
+  "error": "source_not_examined",
+  "finding_id": 12345,
+  "reason": "Could not locate route handler for POST /api/endpoint"
+}
+```
+
+This prevents false positives from incomplete source examination.
+
+---
+
 ## Troubleshooting
 
 ### "Docker is not installed or not running"
