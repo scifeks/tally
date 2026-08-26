@@ -14,7 +14,7 @@ Use the web UI when you are running an audit interactively and have browser acce
 
 - **Dashboard** with project stats, recent scans, and high-severity finding alerts
 - **Findings browser** with segment tabs, severity filters, full-text search, bulk actions, and an inline detail panel for editing findings
-- **Scans page** with advanced options (repos, tools, domains, argument profiles), saved scan templates, and a real-time event log
+- **Scans page** with advanced options (repos, tools, domains, argument profiles), Burp Organizer polling, saved scan templates, and a real-time event log
 - **Triage page** with batch progress visualization, resume from failure, and prompt injection warnings
 - **Reports page** with per-section draft cards (generate, review, upload), format selection, and report history with downloads
 - **Chat** with persistent multi-turn sessions, streaming responses, and session management
@@ -47,6 +47,7 @@ The REPL provides the same scanning, triage, reporting, and chat capabilities as
 - Chat is single-shot (one question, one answer). The web UI supports persistent multi-turn sessions.
 - Configuration is done through interactive prompts (`repo add`, `tool edit`) rather than a graphical form.
 - Scan progress and triage results display as terminal output rather than visual dashboards.
+- Burp polling is available via the `burp poll` command for continuous Organizer ingestion (blocking until Ctrl+C).
 
 **Starting:**
 
@@ -97,9 +98,11 @@ After initial setup, most users work primarily through the web UI.
 
 | Interface | How to scan |
 |---|---|
-| Web UI | Open the Scans page, configure advanced options if needed, click Start. Progress streams in real time. |
-| REPL | `scan` for a full scan, or `scan --tool=semgrep --repo=backend` to scope it. Tally prompts before each tool runs. |
+| Web UI | Open the Scans page, configure advanced options if needed, click Start. Progress streams in real time. Or click the orange Burp button to run a Burp crawl-and-audit scan (when configured). |
+| REPL | `scan` for a full scan, or `scan --tool=semgrep --repo=backend` to scope it. Tally prompts before each tool runs. Use `burp scan` to run a Burp crawl-and-audit scan with an optional config name. |
 | CLI | `python3 tally-cli.py --project myapp --command scan`. All prompts auto-approved. |
+
+Burp scans require Burp Suite Professional running with REST API enabled and a `burp` section configured in `config/global.json`.
 
 ### Triage
 

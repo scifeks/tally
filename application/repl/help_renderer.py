@@ -94,6 +94,14 @@ _HELP_REGISTRY = [
     # Manual Run
     ("run", None, None, "Manual Run"),
     ("run", "run", "<tool> [args...]", "Execute a tool with raw arguments"),
+    # Burp
+    ("burp", None, None, "Burp Suite"),
+    (
+        "burp",
+        "burp scan",
+        "[config_name]",
+        "Start a Burp crawl-and-audit scan using project base URLs",
+    ),
     # Tools
     ("tool", None, None, "Tools"),
     ("tool", "tool add", None, "Add a tool to the active configuration"),
@@ -333,6 +341,14 @@ _HELP_REGISTRY = [
         "Remove a document from the knowledge base",
     ),
     ("documents", "docs stats", None, "Show document store statistics"),
+    # Burp
+    ("burp", None, None, "Burp Integration"),
+    (
+        "burp",
+        "burp poll",
+        None,
+        "Poll Burp Organizer for new items. Ctrl+C to stop.",
+    ),
     # Web UI
     ("ui", None, None, "Web UI"),
     (

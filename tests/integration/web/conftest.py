@@ -42,18 +42,37 @@ def _seed_global_config(base_path: Path) -> None:
     )
 
 
+def _seed_commands_config(base_path: Path) -> None:
+    """Register gitleaks deterministically so tool-name validation is stable.
+
+    Bootstrap reconciles the tool registry against the host PATH, so a local
+    tool is only registered when its binary is installed. This bucket-2 suite
+    must not depend on installed CLI binaries. A docker-location entry survives
+    reconciliation regardless of PATH, and the run route re-discovers tools
+    from this same file, so gitleaks stays registered on both paths.
+    """
+    config_dir = base_path / "config"
+    config_dir.mkdir(parents=True, exist_ok=True)
+    (config_dir / "commands.json").write_text(
+        json.dumps(
+            {
+                "gitleaks": {
+                    "type": "repo",
+                    "location": "docker",
+                    "container": {
+                        "name": "tally-test-gitleaks",
+                        "tool_path": "/usr/bin/gitleaks",
+                    },
+                }
+            }
+        )
+    )
+
+
 def _seed_test_tools(base_path: Path, tool_registry: ToolRegistry) -> None:
-    """Inject gitleaks into commands.json and re-discover."""
+    """Re-run tool discovery after app construction."""
     from application.tools.registry import discover_tools
 
-    commands_path = base_path / "config" / "commands.json"
-    existing = json.loads(commands_path.read_text()) if commands_path.exists() else {}
-    existing["gitleaks"] = {
-        "type": "repo",
-        "location": "local",
-        "path": "gitleaks",
-    }
-    commands_path.write_text(json.dumps(existing))
     discover_tools(tool_registry, str(base_path))
 
 
@@ -104,6 +123,7 @@ async def _authenticate(client: httpx.AsyncClient) -> dict[str, str]:
 async def app_client(tmp_path: Path):
     """Yield (client, finding_id, rag_mock, factory, mut_headers, project_id)."""
     _seed_global_config(tmp_path)
+    _seed_commands_config(tmp_path)
     # DB must live at the canonical path the registry resolves to.
     db_path = tmp_path / "projects" / "testproject" / "sqlite" / "findings.db"
     db_path.parent.mkdir(parents=True, exist_ok=True)

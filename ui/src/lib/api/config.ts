@@ -128,6 +128,8 @@ export const REST_ENDPOINTS = {
   /** POST: cancel a running scan (project-scoped). */
   cancelScan: (projectId: number, runId: number) =>
     `${API_BASE_URL}/projects/${projectId}/scans/${runId}/cancel`,
+  /** POST: start a Burp crawl-and-audit scan. */
+  burpScan: (projectId: number) => `${API_BASE_URL}/projects/${projectId}/burp-scan`,
 
   // ─── Triage ─────────────────────────────────────────────────────────────────
   /** GET: paginated triage run history for a project. Query: offset?, limit?. */
@@ -276,6 +278,14 @@ export const REST_ENDPOINTS = {
   /** POST: trigger a run from a saved scan. */
   runSavedScan: (projectId: number, id: number) =>
     `${API_BASE_URL}/projects/${projectId}/saved-scans/${id}/run`,
+
+  // ─── Burp ───────────────────────────────────────────────────────────────
+  /** GET: poll status (configured + active) for a project */
+  burpPollStatus: (projectId: number) => `${API_BASE_URL}/projects/${projectId}/burp/poll/status`,
+  /** POST: start Burp Organizer polling */
+  startBurpPoll: (projectId: number) => `${API_BASE_URL}/projects/${projectId}/burp/poll`,
+  /** POST: stop Burp Organizer polling */
+  cancelBurpPoll: (projectId: number) => `${API_BASE_URL}/projects/${projectId}/burp/poll/cancel`,
 
   // ─── Documents ─────────────────────────────────────────────────────────────
   /** GET: list ingested documents for a project. */

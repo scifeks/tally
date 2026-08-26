@@ -557,6 +557,18 @@ class ScanStartRequest(BaseModel):
     )
 
 
+class BurpScanStartRequest(BaseModel):
+    """POST body for /api/v1/projects/{id}/burp-scan."""
+
+    model_config = ConfigDict(populate_by_name=True, extra="ignore")
+
+    configName: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("configName", "config_name"),
+    )
+    timeout: int | None = None
+
+
 class ScanRunSummary(BaseModel):
     id: int
     project_id: int | None
@@ -921,3 +933,20 @@ class DocumentUploadResponse(BaseModel):
 class DocumentDeleteResponse(BaseModel):
     filename: str
     chunks_removed: int
+
+
+# Burp Poll
+class BurpPollStartResponse(BaseModel):
+    project_id: int
+    status: str
+
+
+class BurpPollCancelResponse(BaseModel):
+    project_id: int
+    status: str
+
+
+class BurpPollStatusResponse(BaseModel):
+    project_id: int
+    configured: bool
+    active: bool

@@ -34,6 +34,7 @@ export {
   useProjectScanConfig,
   useStartScan,
   useCancelScan,
+  useStartBurpScan,
   useScanEvents,
 } from './useScans'
 
@@ -156,6 +157,10 @@ export {
   useRunSavedScan,
 } from './useSavedScans'
 export type { SavedScanListResponse, SavedScanWriteInput } from './useSavedScans'
+
+// Burp polling
+export { useBurpPollStatus, useStartBurpPoll, useCancelBurpPoll } from './useBurpPoll'
+export type { BurpPollStatus } from './useBurpPoll'
 
 // Tool argument profiles
 export {

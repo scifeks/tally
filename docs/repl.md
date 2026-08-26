@@ -397,6 +397,34 @@ Tally asks if you want to ingest the output into the knowledge base after execut
 
 ---
 
+## Burp Suite
+
+### Starting a Burp scan
+
+The `burp scan` command triggers a Burp Suite crawl-and-audit scan using the base URLs configured on project repositories:
+
+```
+[myproject]> burp scan
+Starting burp scan...
+```
+
+To use a named Burp scan configuration:
+
+```
+[myproject]> burp scan Crawl and Audit - Balanced
+Starting burp scan (Crawl and Audit - Balanced)...
+```
+
+The scan configuration name must match a configuration defined in your Burp Suite installation. When omitted, Burp uses its default scan configuration.
+
+Burp scans require:
+
+- A running Burp Suite Professional instance with REST API enabled
+- Burp connection configured in `config/global.json` (see [docs/configuration.md](configuration.md#burp-suite-fields))
+- At least one repository service with `base_urls` configured
+
+---
+
 ## Working with Findings
 
 Findings are automatically ingested into the RAG knowledge base after each scan. You can then search, chat, and get statistics.
@@ -899,3 +927,23 @@ Token 'ci-agent' revoked.
 ```
 
 Revoked tokens cannot be reactivated. Generate a new token if needed.
+
+---
+
+## Burp Integration
+
+### Polling the Organizer
+
+The `burp poll` command starts a blocking polling loop that fetches items from Burp's Organizer and ingests them as findings. The command runs until you press Ctrl+C.
+
+```
+[myproject]> burp poll
+Polling Burp Organizer every 30s... (Ctrl+C to stop)
+```
+
+While polling, open Burp Suite and send requests to the Organizer. Tally picks them up on the next poll cycle and ingests them as `web` segment findings.
+
+**Prerequisites:**
+
+- Set `burp.mcp_url` in `config/global.json` to the Burp MCP server's SSE endpoint (e.g., `http://127.0.0.1:9876/sse`).
+- Burp Suite Professional must be running with the PortSwigger MCP extension active.

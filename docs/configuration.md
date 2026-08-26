@@ -47,6 +47,7 @@ Triage uses the same feature-inference pattern through `triage_inference`. The `
 | `antares_inference` | object | Feature config for Antares CWE scanner LLM backend. See [Feature Config Fields](#feature-config-fields) and [docs/antares-shim.md](antares-shim.md). |
 | `antares_sweep_config` | object | CWE sweep parameters for Antares. Fields: `max_cwes` (int, maximum CWE classes per sweep) and `workers` (int, maximum concurrent CWE workers). See [docs/antares-shim.md](antares-shim.md). |
 | `defectdojo` | object | DefectDojo connection settings. See [DefectDojo Fields](#defectdojo-fields) and [docs/integrations/defect-dojo.md](integrations/defect-dojo.md). |
+| `burp` | object | Burp Suite REST API connection settings. See [Burp Suite Fields](#burp-suite-fields). |
 | `post_scan_sync` | list\[string\] | Integrations to auto-sync after each scan. Supported values: `"defectdojo"`. Default: `[]` (disabled). See [docs/integrations/defect-dojo.md](integrations/defect-dojo.md#automatic-post-scan-sync). |
 | `post_triage_sync` | list\[string\] | Integrations to auto-sync after triage. Supported values: `"defectdojo"`. Default: `[]` (disabled). See [docs/integrations/defect-dojo.md](integrations/defect-dojo.md#automatic-post-triage-sync). |
 | `projects_dir` | string | Directory where project workspaces are stored. Default: `"./projects"`. |
@@ -171,6 +172,29 @@ Optional. Required only when using the `sync --integration=defectdojo` command.
 | `scan_type` | string | No | `"Generic Findings Import"` | DefectDojo scan type used for the import. Controls the "Found By" label. |
 
 See [docs/integrations/defect-dojo.md](integrations/defect-dojo.md) for entity mapping, engagement type cascade, and usage.
+
+### Burp Suite Fields
+
+Connection settings for a Burp Suite Professional or Enterprise instance running its REST API.
+
+#### Fields
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `base_url` | string | No | `http://localhost:1337` | Burp REST API base URL |
+| `api_key` | string | No | `""` | API key for authenticated access (Enterprise) |
+
+#### Example
+
+```json
+{
+  "burp": {
+    "base_url": "http://10.1.20.101:1337"
+  }
+}
+```
+
+At startup, Tally probes `GET /v0.1/` on the configured host. If the probe succeeds, Burp appears in the available tools list. If the probe fails, Burp is marked as configured but offline. If no `burp` section exists, Burp does not appear.
 
 ### Example: Ollama Only
 
@@ -416,6 +440,32 @@ Voyage AI provides specialized embedding models. Pair it with Claude for chat, e
 ```
 
 Leave `api_key` empty in both the `claude` and `voyage` blocks to have Tally read them from `ANTHROPIC_API_KEY` and `VOYAGE_API_KEY` environment variables.
+
+---
+
+## Burp Suite
+
+Tally connects to Burp Suite Professional's MCP server to ingest Organizer items. Configure the connection in `config/global.json`.
+
+#### Example
+
+```json
+{
+  "burp": {
+    "mcp_url": "http://127.0.0.1:9876/sse",
+    "poll_interval_seconds": 30
+  }
+}
+```
+
+#### Fields
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `mcp_url` | string | Yes | `""` | SSE endpoint URL for Burp's MCP server |
+| `poll_interval_seconds` | integer | No | `30` | Seconds between Organizer poll cycles (minimum 5) |
+
+> **Note:** Burp's MCP server truncates each Organizer item to 5000 characters total. Long HTTP responses may appear incomplete with `... (truncated)`. REST API scan results (triggered via `burp scan`) bypass this limit.
 
 ---
 

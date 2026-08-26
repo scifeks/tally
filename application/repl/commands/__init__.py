@@ -1,5 +1,6 @@
 """REPL commands package."""
 
+from .burp_commands import BurpCommands
 from .document_commands import DocumentCommands
 from .knowledge_commands import KnowledgeCommands
 from .mcp_commands import McpCommands
@@ -14,6 +15,7 @@ from .ui_commands import UiCommands
 from .vuln_data_commands import VulnDataCommands
 
 __all__ = [
+    "BurpCommands",
     "SyncCommand",
     "DocumentCommands",
     "KnowledgeCommands",

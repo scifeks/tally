@@ -83,13 +83,20 @@ class McpIngestService:
         self._indexer = indexer
         self._kb = knowledge_base
 
-    def create_scan_run(self, project_id: int, repo_ids: list[str]) -> dict[str, int]:
+    def create_scan_run(
+        self,
+        project_id: int,
+        repo_ids: list[str],
+        *,
+        tool_ids: list[str] | None = None,
+        domains: list[str] | None = None,
+    ) -> dict[str, int]:
         """Open a scan_run row for an external Claude Code scan."""
         run_id = self._runs.create(
             project_id=project_id,
             repo_ids=repo_ids,
-            tool_ids=["claudecode"],
-            domains=["llm"],
+            tool_ids=tool_ids or ["claudecode"],
+            domains=domains or ["llm"],
             skip_enrichment=True,
             status="running",
         )
@@ -105,7 +112,14 @@ class McpIngestService:
         self._runs.set_finished_at(run_id)
         return {"status": "done"}
 
-    def submit_finding(self, run_id: int, payload: dict[str, Any]) -> dict[str, Any]:
+    def submit_finding(
+        self,
+        run_id: int,
+        payload: dict[str, Any],
+        *,
+        tool: str = "claudecode",
+        domain: str = "llm",
+    ) -> dict[str, Any]:
         """Submit an MCP finding and sync to vector index.
 
         Validates the payload, normalizes and fingerprints it, inserts it
@@ -123,8 +137,8 @@ class McpIngestService:
         now = datetime.now(UTC).isoformat()
 
         raw_row: dict[str, Any] = {
-            "tool": "claudecode",
-            "domain": "llm",
+            "tool": tool,
+            "domain": domain,
             "segment": validated.get("segment", "sast"),
             "file": validated["file"],
             "file_path": validated["file"],
