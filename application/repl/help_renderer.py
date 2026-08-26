@@ -341,6 +341,14 @@ _HELP_REGISTRY = [
         "Remove a document from the knowledge base",
     ),
     ("documents", "docs stats", None, "Show document store statistics"),
+    # Burp
+    ("burp", None, None, "Burp Integration"),
+    (
+        "burp",
+        "burp poll",
+        None,
+        "Poll Burp Organizer for new items. Ctrl+C to stop.",
+    ),
     # Web UI
     ("ui", None, None, "Web UI"),
     (

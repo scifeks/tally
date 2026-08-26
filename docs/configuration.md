@@ -443,6 +443,32 @@ Leave `api_key` empty in both the `claude` and `voyage` blocks to have Tally rea
 
 ---
 
+## Burp Suite
+
+Tally connects to Burp Suite Professional's MCP server to ingest Organizer items. Configure the connection in `config/global.json`.
+
+#### Example
+
+```json
+{
+  "burp": {
+    "mcp_url": "http://127.0.0.1:9876/sse",
+    "poll_interval_seconds": 30
+  }
+}
+```
+
+#### Fields
+
+| Field | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `mcp_url` | string | Yes | `""` | SSE endpoint URL for Burp's MCP server |
+| `poll_interval_seconds` | integer | No | `30` | Seconds between Organizer poll cycles (minimum 5) |
+
+> **Note:** Burp's MCP server truncates each Organizer item to 5000 characters total. Long HTTP responses may appear incomplete with `... (truncated)`. REST API scan results (triggered via `burp scan`) bypass this limit.
+
+---
+
 ## Project Configuration
 
 Each project lives under `projects/<project-name>/`. All project config files are created and managed by Tally. You can edit them manually, but Tally will overwrite them on the next write operation.

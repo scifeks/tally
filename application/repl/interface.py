@@ -81,6 +81,7 @@ _COMPLETIONS = [
     "sync",
     "ui",
     "vuln-data",
+    "burp poll",
     "burp scan",
     "mcp token create",
     "mcp token list",
@@ -300,6 +301,7 @@ class REPL:
         self.vuln_data_commands = VulnDataCommands(self)
         self.document_commands = DocumentCommands(self)
         self.mcp_commands = McpCommands(self)
+        self.burp_commands = BurpCommands(self)
 
     def run(self) -> None:
         """Start the REPL loop."""

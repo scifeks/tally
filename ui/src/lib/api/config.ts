@@ -279,6 +279,14 @@ export const REST_ENDPOINTS = {
   runSavedScan: (projectId: number, id: number) =>
     `${API_BASE_URL}/projects/${projectId}/saved-scans/${id}/run`,
 
+  // ─── Burp ───────────────────────────────────────────────────────────────
+  /** GET: poll status (configured + active) for a project */
+  burpPollStatus: (projectId: number) => `${API_BASE_URL}/projects/${projectId}/burp/poll/status`,
+  /** POST: start Burp Organizer polling */
+  startBurpPoll: (projectId: number) => `${API_BASE_URL}/projects/${projectId}/burp/poll`,
+  /** POST: stop Burp Organizer polling */
+  cancelBurpPoll: (projectId: number) => `${API_BASE_URL}/projects/${projectId}/burp/poll/cancel`,
+
   // ─── Documents ─────────────────────────────────────────────────────────────
   /** GET: list ingested documents for a project. */
   documents: (projectId: number) => `${API_BASE_URL}/projects/${projectId}/documents`,

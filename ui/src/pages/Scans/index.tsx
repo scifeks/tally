@@ -16,6 +16,9 @@ import {
   useToolArgProfileList,
   useRunSavedScan,
   useStartBurpScan,
+  useBurpPollStatus,
+  useStartBurpPoll,
+  useCancelBurpPoll,
 } from '@/lib/api'
 import { useScanEvents, type SnapshotPayload } from '@/lib/api/useScans'
 import type { Segment, ScanLogEvent, ScanRunStatus, ScanOptions } from '@/lib/types'
@@ -44,6 +47,9 @@ export default function Scans() {
   const { mutate: cancelScanMutation } = useCancelScan()
   const { mutate: runSavedScanMutation } = useRunSavedScan()
   const startBurpScan = useStartBurpScan()
+  const { data: burpPollStatus } = useBurpPollStatus(projectIdNum)
+  const { mutate: startBurpPollMutation } = useStartBurpPoll()
+  const { mutate: cancelBurpPollMutation } = useCancelBurpPoll()
   const queryClient = useQueryClient()
   const setScanMutationError = useUI(s => s.setScanMutationError)
 
@@ -606,7 +612,7 @@ export default function Scans() {
                 {hasAdvancedOptions && <span className="text-[10px]">(custom)</span>}
               </button>
             )}
-            {canStart && burpAvailable && (
+            {canStart && (burpAvailable || burpPollStatus?.configured) && (
               <div ref={burpDropdownRef} className="relative">
                 <button
                   onClick={() => setShowBurpDropdown(s => !s)}
@@ -617,19 +623,42 @@ export default function Scans() {
                 </button>
                 {showBurpDropdown && (
                   <div className="absolute top-full right-0 mt-1 w-64 border border-border bg-background z-50 shadow-lg">
-                    <button
-                      onClick={() => {
-                        setShowBurpDropdown(false)
-                        setShowBurpConfigInput(true)
-                      }}
-                      className="w-full text-left px-3 py-2 text-xs hover:bg-muted transition-colors"
-                    >
-                      <div className="font-bold">Burp Scan</div>
-                      <div className="text-[10px] text-dim">Crawl and audit via REST API</div>
-                    </button>
+                    {burpAvailable && (
+                      <button
+                        onClick={() => {
+                          setShowBurpDropdown(false)
+                          setShowBurpConfigInput(true)
+                        }}
+                        className="w-full text-left px-3 py-2 text-xs hover:bg-muted transition-colors border-b border-border last:border-b-0"
+                      >
+                        <div className="font-bold">Burp Scan</div>
+                        <div className="text-[10px] text-dim">Crawl and audit via REST API</div>
+                      </button>
+                    )}
+                    {burpPollStatus?.configured && !burpPollStatus.active && (
+                      <button
+                        onClick={() => {
+                          setShowBurpDropdown(false)
+                          startBurpPollMutation({ projectId: projectIdNum })
+                        }}
+                        className="w-full text-left px-3 py-2 text-xs hover:bg-muted transition-colors border-b border-border last:border-b-0"
+                      >
+                        <div className="font-bold">Poll Burp</div>
+                        <div className="text-[10px] text-dim">Ingest Organizer items via MCP</div>
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
+            )}
+            {burpPollStatus?.active && (
+              <button
+                onClick={() => cancelBurpPollMutation({ projectId: projectIdNum })}
+                className="flex items-center gap-2 px-4 h-9 border border-amber-600 text-amber-500 font-bold text-xs uppercase tracking-wider hover:bg-amber-600/15 transition-colors"
+              >
+                <Square className="h-4 w-4" />
+                Stop Polling
+              </button>
             )}
             {isRunning && (
               <button

@@ -26,6 +26,7 @@ from web.api._errors import install_error_handlers
 from web.api._redact import install_redaction_middleware
 from web.api.arg_profiles import arg_profiles_v1_router
 from web.api.auth import router as auth_router
+from web.api.burp_poll import v1_router as burp_poll_v1_router
 from web.api.burp_scan import v1_router as burp_scan_v1_router
 from web.api.chat import v1_router as chat_projects_v1_router
 from web.api.config import router as config_router
@@ -153,6 +154,7 @@ def create_app(
     app.include_router(scans_projects_v1_router, prefix="/api/v1/projects")
     app.include_router(burp_scan_v1_router, prefix="/api/v1/projects")
     app.include_router(triage_projects_v1_router, prefix="/api/v1/projects")
+    app.include_router(burp_poll_v1_router, prefix="/api/v1/projects")
     app.include_router(reports_projects_v1_router, prefix="/api/v1/projects")
     app.include_router(chat_projects_v1_router, prefix="/api/v1/projects")
     app.include_router(url_list_v1_router, prefix="/api/v1/projects")
