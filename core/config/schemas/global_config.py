@@ -4,6 +4,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from .burp_config import BurpConfig
 from .claude_config import ClaudeConfig
 from .defectdojo_config import DefectDojoGlobalConfig
 from .feature_inference_config import FeatureInferenceConfig
@@ -48,6 +49,7 @@ class GlobalConfig(BaseModel):
     openai: OpenAIConfig | None = None
     voyage: VoyageConfig | None = None
     defectdojo: DefectDojoGlobalConfig | None = None
+    burp: BurpConfig | None = None
     opencode: OpenCodeConfig | None = None
     chat_inference: FeatureInferenceConfig | None = None
     enrichment_inference: FeatureInferenceConfig | None = None

@@ -1,5 +1,6 @@
 """Configuration schemas package."""
 
+from .burp_config import BurpConfig
 from .claude_config import ClaudeConfig
 from .command_entry import CommandEntry
 from .defectdojo_config import (
@@ -21,6 +22,7 @@ from .repository import _VALID_REPO_TYPES, RepoAuth, Repository, build_excluded_
 from .validation import TOOL_METACHAR_CHARS, has_shell_metacharacters
 
 __all__ = [
+    "BurpConfig",
     "ClaudeConfig",
     "CommandEntry",
     "DefectDojoGlobalConfig",

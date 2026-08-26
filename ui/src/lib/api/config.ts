@@ -128,6 +128,8 @@ export const REST_ENDPOINTS = {
   /** POST: cancel a running scan (project-scoped). */
   cancelScan: (projectId: number, runId: number) =>
     `${API_BASE_URL}/projects/${projectId}/scans/${runId}/cancel`,
+  /** POST: start a Burp crawl-and-audit scan. */
+  burpScan: (projectId: number) => `${API_BASE_URL}/projects/${projectId}/burp-scan`,
 
   // ─── Triage ─────────────────────────────────────────────────────────────────
   /** GET: paginated triage run history for a project. Query: offset?, limit?. */

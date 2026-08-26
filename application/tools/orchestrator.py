@@ -37,6 +37,7 @@ if TYPE_CHECKING:
         ProjectRepoRepositoryPort,
     )
     from application.ports.run_repository import RunRepositoryPort
+    from infrastructure.tools.http_runner import HttpToolRunner
 
 logger = logging.getLogger(__name__)
 
@@ -78,6 +79,7 @@ class ScanOrchestrator:
         repo_repo: ProjectRepoRepositoryPort | None = None,
         since_commit: str | None = None,
         git_diff: GitDiffPort | None = None,
+        http_runner: HttpToolRunner | None = None,
     ) -> None:
         self.project_name = project
         self.registry = tool_registry
@@ -96,6 +98,7 @@ class ScanOrchestrator:
         self._repo_repo = repo_repo
         self._since_commit = since_commit
         self._git_diff = git_diff
+        self._http_runner = http_runner
 
         # Plumb cancellation into the executor so subprocess waits abort.
         if hasattr(tool_executor, "set_cancel_token"):
@@ -129,6 +132,7 @@ class ScanOrchestrator:
             event_bus=self._event_bus,
             display=self.display,
             event_sink=self._event_sink,
+            http_runner=self._http_runner,
         )
 
     def _emit(self, event: Any) -> None:
@@ -286,6 +290,31 @@ class ScanOrchestrator:
         return self._run(
             lambda: ToolOnRepoScan(tool_name, repo_name).execute(
                 self._make_config(remaining_peers=remaining_peers),
+                self._make_resources(),
+            )
+        )
+
+    def run_burp_scan(
+        self,
+        urls: list[str],
+        timeout: int | None = None,
+        config_name: str | None = None,
+    ) -> ScanSummary:
+        from application.tools.scan_types.burp import BurpScanType
+
+        if self._http_runner is None:
+            raise ValueError("No HTTP runner configured")
+
+        http_runner = self._http_runner
+        return self._run(
+            lambda: BurpScanType(
+                http_runner=http_runner,
+                urls=urls,
+                cancel_token=self._cancel_token,
+                timeout=timeout,
+                config_name=config_name,
+            ).execute(
+                self._make_config(),
                 self._make_resources(),
             )
         )

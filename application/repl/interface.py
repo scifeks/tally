@@ -25,6 +25,7 @@ from application.repl.adapters.dependency_summary_display import (
 )
 from application.repl.adapters.tool_registry_display import print_discovery_summary
 from application.repl.commands import (
+    BurpCommands,
     DocumentCommands,
     KnowledgeCommands,
     McpCommands,
@@ -80,6 +81,7 @@ _COMPLETIONS = [
     "sync",
     "ui",
     "vuln-data",
+    "burp scan",
     "mcp token create",
     "mcp token list",
     "mcp token revoke",
@@ -287,6 +289,7 @@ class REPL:
         )
         self.project_commands = ProjectCommands(self, self.help_renderer)
         self.scan_commands = ScanCommands(self)
+        self.burp_commands = BurpCommands(self)
         self.knowledge_commands = KnowledgeCommands(self)
         self.purge_commands = PurgeCommand(self)
         self.report_commands = ReportCommand(self)
@@ -421,6 +424,7 @@ class REPL:
             "sync": self.sync_commands.cmd_sync,
             "ui": self.ui_commands.cmd_ui,
             "vuln-data": self.vuln_data_commands.cmd_vuln_data,
+            "burp": self.burp_commands.cmd_burp,
             "mcp": self.mcp_commands.cmd_mcp,
         }
         handler = handlers.get(cmd)
