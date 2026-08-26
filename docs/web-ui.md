@@ -169,6 +169,14 @@ Create a new saved scan by configuring advanced options and clicking "Save scan"
 
 After a scan completes, the page shows detailed timing and status for each tool run grouped by domain (SAST, SCA, WEB, SECRETS). Expand each tool group to see per-repo or per-host timing information.
 
+### Poll Burp
+
+When Burp Suite's MCP URL is configured (`burp.mcp_url` in `config/global.json`), an orange **Poll Burp** button appears on the Scans page. Clicking it starts a continuous polling loop that fetches items from Burp's Organizer and ingests them as findings.
+
+While polling is active, the button changes to **Stop Polling**. Clicking it cancels the poll loop. The polling interval is controlled by `burp.poll_interval_seconds` (default: 30 seconds).
+
+Ingested findings appear on the Findings page under the `web` segment with tool `burp_organizer`. If an LLM provider is configured for the `enrichment` role, developer notes on Organizer items are classified into vulnerability type, CWE, and severity.
+
 ---
 
 ## Triage

@@ -25,6 +25,7 @@ from application.repl.adapters.dependency_summary_display import (
 )
 from application.repl.adapters.tool_registry_display import print_discovery_summary
 from application.repl.commands import (
+    BurpCommands,
     DocumentCommands,
     KnowledgeCommands,
     McpCommands,
@@ -80,6 +81,7 @@ _COMPLETIONS = [
     "sync",
     "ui",
     "vuln-data",
+    "burp poll",
     "mcp token create",
     "mcp token list",
     "mcp token revoke",
@@ -297,6 +299,7 @@ class REPL:
         self.vuln_data_commands = VulnDataCommands(self)
         self.document_commands = DocumentCommands(self)
         self.mcp_commands = McpCommands(self)
+        self.burp_commands = BurpCommands(self)
 
     def run(self) -> None:
         """Start the REPL loop."""
@@ -422,6 +425,7 @@ class REPL:
             "ui": self.ui_commands.cmd_ui,
             "vuln-data": self.vuln_data_commands.cmd_vuln_data,
             "mcp": self.mcp_commands.cmd_mcp,
+            "burp": self.burp_commands.cmd_burp,
         }
         handler = handlers.get(cmd)
         if handler is None:

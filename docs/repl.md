@@ -899,3 +899,23 @@ Token 'ci-agent' revoked.
 ```
 
 Revoked tokens cannot be reactivated. Generate a new token if needed.
+
+---
+
+## Burp Integration
+
+### Polling the Organizer
+
+The `burp poll` command starts a blocking polling loop that fetches items from Burp's Organizer and ingests them as findings. The command runs until you press Ctrl+C.
+
+```
+[myproject]> burp poll
+Polling Burp Organizer every 30s... (Ctrl+C to stop)
+```
+
+While polling, open Burp Suite and send requests to the Organizer. Tally picks them up on the next poll cycle and ingests them as `web` segment findings.
+
+**Prerequisites:**
+
+- Set `burp.mcp_url` in `config/global.json` to the Burp MCP server's SSE endpoint (e.g., `http://127.0.0.1:9876/sse`).
+- Burp Suite Professional must be running with the PortSwigger MCP extension active.

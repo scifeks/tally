@@ -1,6 +1,15 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { Play, Square, RotateCcw, Settings2, Terminal, Check, ChevronDown } from 'lucide-react'
+import {
+  Play,
+  Square,
+  RotateCcw,
+  Settings2,
+  Terminal,
+  Check,
+  ChevronDown,
+  Radio,
+} from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Panel } from '@/components/tty'
 import { useUI } from '@/lib/store'
@@ -15,6 +24,9 @@ import {
   useDeleteSavedScan,
   useToolArgProfileList,
   useRunSavedScan,
+  useBurpPollStatus,
+  useStartBurpPoll,
+  useCancelBurpPoll,
 } from '@/lib/api'
 import { useScanEvents, type SnapshotPayload } from '@/lib/api/useScans'
 import type { Segment, ScanLogEvent, ScanRunStatus, ScanOptions } from '@/lib/types'
@@ -42,6 +54,9 @@ export default function Scans() {
   const { mutate: startScanMutation } = useStartScan()
   const { mutate: cancelScanMutation } = useCancelScan()
   const { mutate: runSavedScanMutation } = useRunSavedScan()
+  const { data: burpPollStatus } = useBurpPollStatus(projectIdNum)
+  const { mutate: startBurpPollMutation } = useStartBurpPoll()
+  const { mutate: cancelBurpPollMutation } = useCancelBurpPoll()
   const queryClient = useQueryClient()
   const setScanMutationError = useUI(s => s.setScanMutationError)
 
@@ -591,6 +606,32 @@ export default function Scans() {
               >
                 <Settings2 className="h-4 w-4" />
                 {hasAdvancedOptions && <span className="text-[10px]">(custom)</span>}
+              </button>
+            )}
+            {burpPollStatus?.configured && !burpPollStatus.active && canStart && (
+              <button
+                onClick={() =>
+                  startBurpPollMutation({
+                    projectId: projectIdNum,
+                  })
+                }
+                className="flex items-center gap-2 px-4 h-9 bg-amber-600 text-white font-bold text-xs uppercase tracking-wider hover:bg-amber-500 transition-all"
+              >
+                <Radio className="h-4 w-4" />
+                Poll Burp
+              </button>
+            )}
+            {burpPollStatus?.active && (
+              <button
+                onClick={() =>
+                  cancelBurpPollMutation({
+                    projectId: projectIdNum,
+                  })
+                }
+                className="flex items-center gap-2 px-4 h-9 border border-amber-600 text-amber-500 font-bold text-xs uppercase tracking-wider hover:bg-amber-600/15 transition-colors"
+              >
+                <Square className="h-4 w-4" />
+                Stop Polling
               </button>
             )}
             {isRunning && (
