@@ -175,26 +175,32 @@ See [docs/integrations/defect-dojo.md](integrations/defect-dojo.md) for entity m
 
 ### Burp Suite Fields
 
-Connection settings for a Burp Suite Professional or Enterprise instance running its REST API.
+Connection settings for Burp Suite Professional or Enterprise. Covers both REST API scans and Organizer polling. See [docs/burp.md](burp.md) for the full setup guide.
 
 #### Fields
 
 | Field | Type | Required | Default | Description |
 |---|---|---|---|---|
-| `base_url` | string | No | `http://localhost:1337` | Burp REST API base URL |
-| `api_key` | string | No | `""` | API key for authenticated access (Enterprise) |
+| `base_url` | string | No | `http://localhost:1337` | Burp REST API base URL. Used for automated scans. |
+| `api_key` | string | No | `""` | API key for authenticated REST API access (Enterprise or when configured). |
+| `mcp_url` | string | No | `""` | SSE endpoint URL for Burp's MCP server. Used for Organizer polling. |
+| `poll_interval_seconds` | integer | No | `30` | Seconds between Organizer poll cycles. Minimum 5. |
 
 #### Example
 
 ```json
 {
   "burp": {
-    "base_url": "http://10.1.20.101:1337"
+    "base_url": "http://127.0.0.1:1337",
+    "mcp_url": "http://127.0.0.1:9876/sse",
+    "poll_interval_seconds": 30
   }
 }
 ```
 
-At startup, Tally probes `GET /v0.1/` on the configured host. If the probe succeeds, Burp appears in the available tools list. If the probe fails, Burp is marked as configured but offline. If no `burp` section exists, Burp does not appear.
+At startup, Tally probes `GET /v0.1/` on the configured `base_url`. If the probe succeeds, Burp appears in the available tools list. If the probe fails, Burp is marked as configured but offline. If no `burp` section exists, Burp does not appear.
+
+Burp's MCP server truncates each Organizer item to 5000 characters. REST API scan results bypass this limit.
 
 ### Example: Ollama Only
 
@@ -440,32 +446,6 @@ Voyage AI provides specialized embedding models. Pair it with Claude for chat, e
 ```
 
 Leave `api_key` empty in both the `claude` and `voyage` blocks to have Tally read them from `ANTHROPIC_API_KEY` and `VOYAGE_API_KEY` environment variables.
-
----
-
-## Burp Suite
-
-Tally connects to Burp Suite Professional's MCP server to ingest Organizer items. Configure the connection in `config/global.json`.
-
-#### Example
-
-```json
-{
-  "burp": {
-    "mcp_url": "http://127.0.0.1:9876/sse",
-    "poll_interval_seconds": 30
-  }
-}
-```
-
-#### Fields
-
-| Field | Type | Required | Default | Description |
-|---|---|---|---|---|
-| `mcp_url` | string | Yes | `""` | SSE endpoint URL for Burp's MCP server |
-| `poll_interval_seconds` | integer | No | `30` | Seconds between Organizer poll cycles (minimum 5) |
-
-> **Note:** Burp's MCP server truncates each Organizer item to 5000 characters total. Long HTTP responses may appear incomplete with `... (truncated)`. REST API scan results (triggered via `burp scan`) bypass this limit.
 
 ---
 

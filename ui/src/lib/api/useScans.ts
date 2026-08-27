@@ -17,7 +17,7 @@ import { apiFetch } from './client'
 import { apiEventSource } from './sse'
 import { useUI } from '../store'
 
-// ─── Scan-config: wire-format types & inline mappers ────────────────────────
+// Scan-config: wire-format types & inline mappers
 
 interface ScanConfigRepoApi {
   id: number
@@ -65,7 +65,7 @@ function mapScanConfig(api: ScanConfigResponseApi): ProjectScanConfig {
   }
 }
 
-// ─── Scan-history: wire-format types & inline mapper ────────────────────────
+// Scan-history: wire-format types & inline mapper
 
 export interface ScanRunSummaryApi {
   id: number
@@ -124,10 +124,10 @@ function buildScanHistoryUrl(
   return `${REST_ENDPOINTS.scans(projectId)}?${params.toString()}`
 }
 
-// ─── Hooks ──────────────────────────────────────────────────────────────────
+// Hooks
 
 /**
- * Backend serves snake_case; the inline mapper renames `domain`/`domains` →
+ * Backend serves snake_case; the inline mapper renames `domain`/`domains` to
  * `segment`/`segments` to match the FE Segment vocabulary.
  */
 export function useProjectScanConfig(projectId: number) {
@@ -313,7 +313,7 @@ export function useStartBurpScan() {
   })
 }
 
-// ─── SSE event handling ─────────────────────────────────────────────────────
+// SSE event handling
 
 const SCAN_EVENT_TYPES: readonly ScanLogEventType[] = [
   'run_started',

@@ -135,7 +135,7 @@ export default function Scans() {
     return () => document.removeEventListener('mousedown', handleClick)
   }, [])
 
-  // Tool ↔ domain compatibility. Selecting domains restricts the tools list
+  // Tool and domain compatibility. Selecting domains restricts the tools list
   // to those whose `segment` is in the selected set; with no domains chosen,
   // every configured tool is compatible.
   const compatibleToolIds = useMemo(() => {

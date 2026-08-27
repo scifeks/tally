@@ -171,19 +171,19 @@ After a scan completes, the page shows detailed timing and status for each tool 
 
 ### Burp scan
 
-When Burp Suite is configured and reachable, an orange **Burp** button appears on the scan page. Click it and select **Burp Scan** from the dropdown. You can optionally enter a scan configuration name that matches a configuration in your Burp Suite installation. Click **Start** to begin the scan.
+When Burp Suite is configured and reachable, an orange **Start Burp Scan** button appears next to the green **Start Scan** button. To its right, a tag input field accepts optional scan configuration names. Each name becomes a removable chip.
 
-Burp scans use the base URLs from all configured repository services in the active project. If no base URLs are configured, the endpoint returns an error.
+Click the button to start a crawl-and-audit scan against all base URLs in the active project. If you entered configuration names, Burp uses those profiles instead of its defaults. Multiple names are merged (useful for combining a crawl config with an audit config). If no names are entered, Burp runs with all checks enabled.
 
-Scan progress and findings appear in the same live log and history tabs used by other scans.
+Scan progress appears in the live log. The count shown during the scan is the raw event count, not the final ingested count. When Burp reports the scan as succeeded, Tally ingests all findings in one batch.
+
+See [docs/burp.md](burp.md) for Burp setup, scan configurations, and the Organizer polling workflow.
 
 ### Poll Burp
 
-When Burp Suite's MCP URL is configured (`burp.mcp_url` in `config/global.json`), an orange **Poll Burp** button appears on the Scans page. Clicking it starts a continuous polling loop that fetches items from Burp's Organizer and ingests them as findings.
+When `burp.mcp_url` is configured in `config/global.json`, an orange **Poll Burp** button appears on the Scans page. Clicking it starts a polling loop that fetches items from Burp's Organizer and ingests them as findings. While active, the button changes to **Stop Polling**.
 
-While polling is active, the button changes to **Stop Polling**. Clicking it cancels the poll loop. The polling interval is controlled by `burp.poll_interval_seconds` (default: 30 seconds).
-
-Ingested findings appear on the Findings page under the `web` segment with tool `burp_organizer`. If an LLM provider is configured for the `enrichment` role, developer notes on Organizer items are classified into vulnerability type, CWE, and severity.
+Ingested findings appear on the Findings page under the `web` segment with tool `burp_organizer`. If an LLM provider is configured for the `enrichment` role, developer notes on Organizer items are classified into vulnerability type, CWE, and severity. See [docs/burp.md](burp.md) for Organizer polling setup.
 
 ---
 
