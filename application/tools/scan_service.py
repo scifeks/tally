@@ -106,7 +106,8 @@ class ScanService:
         since_commit: str | None = None,
         git_diff: GitDiffPort | None = None,
         burp_urls: list[str] | None = None,
-        burp_config_name: str | None = None,
+        burp_config_names: list[str] | None = None,
+        burp_task_name: str | None = None,
         burp_timeout: int | None = None,
     ) -> ScanHandle:
         """Start a scan and return a ScanHandle.
@@ -178,7 +179,8 @@ class ScanService:
                 "since_commit": since_commit,
                 "git_diff": git_diff,
                 "burp_urls": burp_urls,
-                "burp_config_name": burp_config_name,
+                "burp_config_names": burp_config_names,
+                "burp_task_name": burp_task_name,
                 "burp_timeout": burp_timeout,
             },
             name=f"scan-run-{run_id}",
@@ -216,7 +218,8 @@ class ScanService:
         since_commit: str | None = None,
         git_diff: GitDiffPort | None = None,
         burp_urls: list[str] | None = None,
-        burp_config_name: str | None = None,
+        burp_config_names: list[str] | None = None,
+        burp_task_name: str | None = None,
         burp_timeout: int | None = None,
     ) -> None:
         from application.pipeline.factory import PipelineFactory
@@ -293,7 +296,8 @@ class ScanService:
                 summary = orchestrator.run_burp_scan(
                     urls=burp_urls,
                     timeout=burp_timeout,
-                    config_name=burp_config_name,
+                    config_names=burp_config_names,
+                    task_name=burp_task_name,
                 )
             else:
                 summary = orchestrator.run_scoped_scan(

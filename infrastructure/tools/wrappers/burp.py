@@ -87,6 +87,9 @@ class BurpToolWrapper(ToolInterface):
         result = probe_burp_availability(self._config)
         return result is True
 
+    def get_version(self) -> str | None:
+        return None
+
     def build_command(self, **kwargs: Any) -> list[str]:
         raise NotImplementedError("HTTP-transport tool; use HttpToolRunner")
 

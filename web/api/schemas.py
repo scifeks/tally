@@ -562,9 +562,13 @@ class BurpScanStartRequest(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True, extra="ignore")
 
-    configName: str | None = Field(
+    configNames: list[str] | None = Field(
         default=None,
-        validation_alias=AliasChoices("configName", "config_name"),
+        validation_alias=AliasChoices("configNames", "config_names"),
+    )
+    taskName: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("taskName", "task_name"),
     )
     timeout: int | None = None
 

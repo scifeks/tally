@@ -136,6 +136,7 @@ Tools can run locally or inside a Docker container. The execution mode is config
 - [docs/antares-shim.md](docs/antares-shim.md) - Antares CWE scanner Ollama completions shim configuration
 - [docs/chat.md](docs/chat.md) - RAG chat configuration and usage
 - [docs/report.md](docs/report.md) - Report generation guide and PDF assembly
+- [docs/burp.md](docs/burp.md) - Burp Suite integration: REST API scans, Organizer polling, and scan configurations
 - [docs/triage.md](docs/triage.md) - AI triage: auto-triage and MCP triage modes, container lifecycle, and security model
 - [docs/claude-code-scanning.md](docs/claude-code-scanning.md) - Claude Code scanning: setup, skills, and MCP server
 - [docs/url-discovery.md](docs/url-discovery.md) - URL discovery pipeline for DAST tools

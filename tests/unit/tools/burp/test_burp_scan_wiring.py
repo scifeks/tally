@@ -100,7 +100,7 @@ class TestScanServiceBurpRouting:
                 url_finding_repo=MagicMock(),
                 prompt=MagicMock(),
                 burp_urls=["https://target.example.com"],
-                burp_config_name="test-config",
+                burp_config_names=["test-config"],
                 burp_timeout=300,
             )
             handle.result.result(timeout=5)
@@ -108,5 +108,5 @@ class TestScanServiceBurpRouting:
         mock_orchestrator.run_burp_scan.assert_called_once()
         call_kwargs = mock_orchestrator.run_burp_scan.call_args.kwargs
         assert call_kwargs["urls"] == ["https://target.example.com"]
-        assert call_kwargs["config_name"] == "test-config"
+        assert call_kwargs["config_names"] == ["test-config"]
         assert call_kwargs["timeout"] == 300

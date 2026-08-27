@@ -79,7 +79,7 @@ class TestBurpScanCommand:
 
         call_kw = mock_svc.return_value.start_scan.call_args.kwargs
         assert call_kw["burp_urls"] == ["https://target.example.com"]
-        assert call_kw["burp_config_name"] is None
+        assert call_kw["burp_config_names"] is None
 
     def test_burp_scan_with_config_name(self):
         repl, repo = _make_repl()
@@ -126,7 +126,7 @@ class TestBurpScanCommand:
             cmd.cmd_burp("burp", ["scan", "Crawl and Audit"])
 
         call_kw = mock_svc.return_value.start_scan.call_args.kwargs
-        assert call_kw["burp_config_name"] == "Crawl and Audit"
+        assert call_kw["burp_config_names"] == ["Crawl and Audit"]
 
     def test_burp_scan_no_active_project_prints_warning(
         self,
