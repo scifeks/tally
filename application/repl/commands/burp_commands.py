@@ -154,7 +154,9 @@ class BurpCommands:
             self._repl.base_path,
             self._repl.active_project,
         )
-        run_repo, chat_repo, profiles_repo, _ = create_scan_repos(paths.findings_db)
+        run_repo, chat_repo, profiles_repo, _ = create_scan_repos(
+            paths.findings_db,
+        )
         finding_repo = create_finding_repo(paths.findings_db)
         repo_repo = create_repo_repo(paths.findings_db)
         url_finding_repo = create_url_finding_repo(paths.findings_db)
@@ -190,7 +192,7 @@ class BurpCommands:
                 reporter=StdoutProgressReporter(),
                 display=OrchestratorDisplay(self._repl.console),
                 burp_urls=urls,
-                burp_config_name=config_name,
+                burp_config_names=([config_name] if config_name else None),
             )
         except JobBusy as exc:
             self._repl.console.print(f"[red]Error:[/red] {exc}")

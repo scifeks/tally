@@ -110,7 +110,8 @@ class BurpRestClient:
             payload["name"] = request.name
         if request.scan_configurations:
             payload["scan_configurations"] = [
-                {"name": n} for n in request.scan_configurations
+                {"type": "NamedConfiguration", "name": n}
+                for n in request.scan_configurations
             ]
         return payload
 

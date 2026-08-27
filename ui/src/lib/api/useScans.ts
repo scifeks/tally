@@ -281,10 +281,14 @@ export function useStartBurpScan() {
   const queryClient = useQueryClient()
   const setError = useUI(s => s.setScanMutationError)
 
-  return useMutation<Scan, ApiError, { projectId: number; configName?: string; timeout?: number }>({
-    mutationFn: async ({ projectId, configName, timeout }) => {
+  return useMutation<
+    Scan,
+    ApiError,
+    { projectId: number; configNames?: string[]; timeout?: number }
+  >({
+    mutationFn: async ({ projectId, configNames, timeout }) => {
       const body: Record<string, unknown> = {}
-      if (configName) body.configName = configName
+      if (configNames && configNames.length > 0) body.configNames = configNames
       if (timeout) body.timeout = timeout
       const data = await apiFetch<ScanRunSummaryApi>(REST_ENDPOINTS.burpScan(projectId), {
         method: 'POST',

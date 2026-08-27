@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { Play, Square, RotateCcw, Settings2, Terminal, Check, ChevronDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Panel } from '@/components/tty'
+import { TagInput } from '@/pages/Config/shared'
 import { useUI } from '@/lib/store'
 import {
   useProjects,
@@ -56,7 +57,7 @@ export default function Scans() {
   const project = projects.find(p => p.id === activeProjectId)
   const meta = projectMetaData
 
-  // Derived config data - memoized to avoid new array refs on every render
+  // Derived config data; memoized to avoid new array refs on every render
   const configuredRepos = useMemo(() => scanConfig?.repos ?? [], [scanConfig])
   const configuredTools = useMemo(() => scanConfig?.tools ?? [], [scanConfig])
   const configuredDomains = useMemo(() => scanConfig?.segments ?? [], [scanConfig])
@@ -98,6 +99,7 @@ export default function Scans() {
     setSkipEnrichment(false)
     setSelectedArgProfiles(new Set())
     setSelectedSavedScanId(null)
+    setBurpConfigs([])
     setScanWatchState(null)
   }, [activeProjectId, setScanWatchState])
 
@@ -120,19 +122,13 @@ export default function Scans() {
   const scanDropdownRef = useRef<HTMLDivElement>(null)
   const [staleItems, setStaleItems] = useState<StaleSavedScanItem[]>([])
 
-  // Burp scan button state
-  const [showBurpDropdown, setShowBurpDropdown] = useState(false)
-  const [showBurpConfigInput, setShowBurpConfigInput] = useState(false)
-  const [burpConfigName, setBurpConfigName] = useState('')
-  const burpDropdownRef = useRef<HTMLDivElement>(null)
+  // Burp scan config names state
+  const [burpConfigs, setBurpConfigs] = useState<string[]>([])
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
       if (scanDropdownRef.current && !scanDropdownRef.current.contains(e.target as Node)) {
         setShowScanDropdown(false)
-      }
-      if (burpDropdownRef.current && !burpDropdownRef.current.contains(e.target as Node)) {
-        setShowBurpDropdown(false)
       }
     }
     document.addEventListener('mousedown', handleClick)
@@ -612,44 +608,36 @@ export default function Scans() {
                 {hasAdvancedOptions && <span className="text-[10px]">(custom)</span>}
               </button>
             )}
-            {canStart && (burpAvailable || burpPollStatus?.configured) && (
-              <div ref={burpDropdownRef} className="relative">
+            {canStart && burpAvailable && (
+              <>
                 <button
-                  onClick={() => setShowBurpDropdown(s => !s)}
+                  onClick={() => {
+                    startBurpScan.mutate({
+                      projectId: projectIdNum,
+                      configNames: burpConfigs.length > 0 ? burpConfigs : undefined,
+                    })
+                  }}
                   className="flex items-center gap-2 px-4 h-9 bg-orange-600 text-white font-bold text-xs uppercase tracking-wider hover:bg-orange-500 transition-all"
                 >
-                  Burp
-                  <ChevronDown className="h-3 w-3" />
+                  <Play className="h-4 w-4" />
+                  Start Burp Scan
                 </button>
-                {showBurpDropdown && (
-                  <div className="absolute top-full right-0 mt-1 w-64 border border-border bg-background z-50 shadow-lg">
-                    {burpAvailable && (
-                      <button
-                        onClick={() => {
-                          setShowBurpDropdown(false)
-                          setShowBurpConfigInput(true)
-                        }}
-                        className="w-full text-left px-3 py-2 text-xs hover:bg-muted transition-colors border-b border-border last:border-b-0"
-                      >
-                        <div className="font-bold">Burp Scan</div>
-                        <div className="text-[10px] text-dim">Crawl and audit via REST API</div>
-                      </button>
-                    )}
-                    {burpPollStatus?.configured && !burpPollStatus.active && (
-                      <button
-                        onClick={() => {
-                          setShowBurpDropdown(false)
-                          startBurpPollMutation({ projectId: projectIdNum })
-                        }}
-                        className="w-full text-left px-3 py-2 text-xs hover:bg-muted transition-colors border-b border-border last:border-b-0"
-                      >
-                        <div className="font-bold">Poll Burp</div>
-                        <div className="text-[10px] text-dim">Ingest Organizer items via MCP</div>
-                      </button>
-                    )}
-                  </div>
-                )}
-              </div>
+                <div className="w-64">
+                  <TagInput
+                    value={burpConfigs}
+                    onChange={setBurpConfigs}
+                    placeholder="Scan configs (optional)"
+                  />
+                </div>
+              </>
+            )}
+            {canStart && burpPollStatus?.configured && !burpPollStatus.active && (
+              <button
+                onClick={() => startBurpPollMutation({ projectId: projectIdNum })}
+                className="flex items-center gap-2 px-3 h-9 border border-amber-600 text-amber-500 font-bold text-xs uppercase tracking-wider hover:bg-amber-600/15 transition-colors"
+              >
+                Poll Burp
+              </button>
             )}
             {burpPollStatus?.active && (
               <button
@@ -711,41 +699,6 @@ export default function Scans() {
           )}
         </div>
       </div>
-
-      {/* Burp config input */}
-      {showBurpConfigInput && (
-        <div className="flex items-center gap-2 mt-2 p-3 border border-orange-600/30 bg-orange-600/5">
-          <input
-            type="text"
-            value={burpConfigName}
-            onChange={e => setBurpConfigName(e.target.value)}
-            placeholder="Scan configuration name (optional)"
-            className="flex-1 px-2 py-1 text-xs bg-background border border-border focus:border-orange-500 outline-none"
-          />
-          <button
-            onClick={() => {
-              startBurpScan.mutate({
-                projectId: projectIdNum,
-                configName: burpConfigName || undefined,
-              })
-              setShowBurpConfigInput(false)
-              setBurpConfigName('')
-            }}
-            className="px-3 py-1 bg-orange-600 text-white text-xs font-bold uppercase hover:bg-orange-500 transition-colors"
-          >
-            Start
-          </button>
-          <button
-            onClick={() => {
-              setShowBurpConfigInput(false)
-              setBurpConfigName('')
-            }}
-            className="px-3 py-1 border border-border text-muted-foreground text-xs hover:text-foreground transition-colors"
-          >
-            Cancel
-          </button>
-        </div>
-      )}
 
       {/* Advanced Options Panel (collapsible) */}
       {showAdvanced && canStart && (

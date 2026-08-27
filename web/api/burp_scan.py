@@ -129,7 +129,8 @@ async def start_burp_scan(
             prompt=NoApprovalPromptAdapter(),
             event_sink=sink,
             burp_urls=urls,
-            burp_config_name=body.configName,
+            burp_config_names=body.configNames,
+            burp_task_name=body.taskName,
             burp_timeout=body.timeout,
         )
     except JobBusy as exc:
