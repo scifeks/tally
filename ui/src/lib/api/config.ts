@@ -106,6 +106,9 @@ export const REST_ENDPOINTS = {
   /** DELETE: delete a manual finding. */
   deleteFinding: (projectId: string | number, findingId: string | number) =>
     `${API_BASE_URL}/projects/${projectId}/findings/${findingId}`,
+  /** POST: batch-delete findings. */
+  batchDeleteFindings: (projectId: string | number) =>
+    `${API_BASE_URL}/projects/${projectId}/findings/batch-delete`,
   /** GET: field specs (valid enums for severity, confidence, finding_type, status). */
   fieldSpecs: `${API_BASE_URL}/config/field-specs`,
 

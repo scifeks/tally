@@ -146,6 +146,21 @@ class BatchFindingPatchRequest(BaseModel):
         return self
 
 
+class BatchDeleteRequest(BaseModel):
+    """Batch-delete request body for POST /api/findings/batch-delete."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    ids: list[int]
+
+    @field_validator("ids")
+    @classmethod
+    def validate_ids_nonempty(cls, v: list[int]) -> list[int]:
+        if not v:
+            raise ValueError("ids must not be empty")
+        return v
+
+
 class ManualFindingCreateRequest(BaseModel):
     """POST body for creating a manual finding."""
 
@@ -241,6 +256,20 @@ class BatchPatchResponse(BaseModel):
     skipped_locked: list[int]
     not_found: list[int]
     skip_reasons: dict[int, str]
+
+
+class BatchDeleteResponse(BaseModel):
+    """Response for POST /api/v1/findings/batch-delete.
+
+    Three disjoint id buckets:
+    - ``deleted``: ids successfully removed.
+    - ``skipped_locked``: ids held by another job at request time.
+    - ``not_found``: ids that do not exist.
+    """
+
+    deleted: list[int]
+    skipped_locked: list[int]
+    not_found: list[int]
 
 
 class ProjectListItem(BaseModel):

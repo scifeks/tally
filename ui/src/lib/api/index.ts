@@ -25,6 +25,7 @@ export type { FieldSpecs } from './useFieldSpecs'
 export { useCreateFinding } from './useCreateFinding'
 export type { CreateFindingInput } from './useCreateFinding'
 export { useDeleteFinding } from './useDeleteFinding'
+export { useDeleteFindings } from './useDeleteFindings'
 
 // Scan hooks
 export {

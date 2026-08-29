@@ -25,6 +25,8 @@ from web.api._errors import FindingsLocked, Forbidden, NotFound
 from web.api._finding_serialiser import serialise_finding as _serialise_finding
 from web.api._project_resolver import _resolve_project
 from web.api.schemas import (
+    BatchDeleteRequest,
+    BatchDeleteResponse,
     BatchFindingPatchRequest,
     BatchPatchResponse,
     FindingHistoryItem,
@@ -344,6 +346,25 @@ async def delete_finding(
         raise Forbidden(str(exc)) from exc
     except FindingsBusy as exc:
         raise FindingsLocked(exc.conflicting_ids, exc.holders) from exc
+
+
+@v1_router.post(
+    "/{project_id}/findings/batch-delete",
+    response_model=BatchDeleteResponse,
+)
+async def batch_delete_findings(
+    project_id: int,
+    request: Request,
+    body: BatchDeleteRequest,
+) -> BatchDeleteResponse:
+    """Batch-delete findings; locked or missing findings are skipped."""
+    service = _service(request, project_id)
+    result = await asyncio.to_thread(service.batch_delete_findings, body.ids)
+    return BatchDeleteResponse(
+        deleted=result.deleted,
+        skipped_locked=result.skipped_locked,
+        not_found=result.not_found,
+    )
 
 
 @v1_router.get(
