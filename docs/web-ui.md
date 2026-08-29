@@ -136,6 +136,12 @@ Read-only fields (ID, tool, file, rule, URL, first-seen date) cannot be edited.
 
 Click the plus button above the findings table to add a finding discovered outside the scanning pipeline. Title and severity are required. You must provide at least one location (repository, file path, or URL).
 
+### Poll Burp Organizer
+
+When `burp.mcp_url` is configured in `config/global.json`, a **Poll Burp Organizer** button appears on the Findings page next to **+ Add Issue**. Clicking it starts a polling loop that fetches items from Burp's Organizer and ingests them as findings. The segment tab switches to `web` automatically. While active, the button changes to **Stop Polling**.
+
+Ingested findings appear under the `web` segment with tool `burp_organizer`. If an LLM provider is configured for the `enrichment` role, developer notes on Organizer items are classified into vulnerability type, CWE, and severity. See [docs/burp.md](burp.md) for Organizer polling setup.
+
 ---
 
 ## Scans
@@ -178,12 +184,6 @@ Click the button to start a crawl-and-audit scan against all base URLs in the ac
 Scan progress appears in the live log. The count shown during the scan is the raw event count, not the final ingested count. When Burp reports the scan as succeeded, Tally ingests all findings in one batch.
 
 See [docs/burp.md](burp.md) for Burp setup, scan configurations, and the Organizer polling workflow.
-
-### Poll Burp
-
-When `burp.mcp_url` is configured in `config/global.json`, an orange **Poll Burp** button appears on the Scans page. Clicking it starts a polling loop that fetches items from Burp's Organizer and ingests them as findings. While active, the button changes to **Stop Polling**.
-
-Ingested findings appear on the Findings page under the `web` segment with tool `burp_organizer`. If an LLM provider is configured for the `enrichment` role, developer notes on Organizer items are classified into vulnerability type, CWE, and severity. See [docs/burp.md](burp.md) for Organizer polling setup.
 
 ---
 

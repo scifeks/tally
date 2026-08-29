@@ -183,7 +183,7 @@ Connection settings for Burp Suite Professional or Enterprise. Covers both REST 
 |---|---|---|---|---|
 | `base_url` | string | No | `http://localhost:1337` | Burp REST API base URL. Used for automated scans. |
 | `api_key` | string | No | `""` | API key for authenticated REST API access (Enterprise or when configured). |
-| `mcp_url` | string | No | `""` | SSE endpoint URL for Burp's MCP server. Used for Organizer polling. |
+| `mcp_url` | string | No | `""` | Root URL of Burp's MCP server (e.g., `http://127.0.0.1:9876/`). Used for Organizer polling. |
 | `poll_interval_seconds` | integer | No | `30` | Seconds between Organizer poll cycles. Minimum 5. |
 
 #### Example
@@ -192,7 +192,7 @@ Connection settings for Burp Suite Professional or Enterprise. Covers both REST 
 {
   "burp": {
     "base_url": "http://127.0.0.1:1337",
-    "mcp_url": "http://127.0.0.1:9876/sse",
+    "mcp_url": "http://127.0.0.1:9876/",
     "poll_interval_seconds": 30
   }
 }

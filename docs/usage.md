@@ -13,8 +13,8 @@ Use the web UI when you are running an audit interactively and have browser acce
 **What you get:**
 
 - **Dashboard** with project stats, recent scans, and high-severity finding alerts
-- **Findings browser** with segment tabs, severity filters, full-text search, bulk actions, and an inline detail panel for editing findings
-- **Scans page** with advanced options (repos, tools, domains, argument profiles), Burp Organizer polling, saved scan templates, and a real-time event log
+- **Findings browser** with segment tabs, severity filters, full-text search, bulk actions, Burp Organizer polling, and an inline detail panel for editing findings
+- **Scans page** with advanced options (repos, tools, domains, argument profiles), Burp REST API scans, saved scan templates, and a real-time event log
 - **Triage page** with batch progress visualization, resume from failure, and prompt injection warnings
 - **Reports page** with per-section draft cards (generate, review, upload), format selection, and report history with downloads
 - **Chat** with persistent multi-turn sessions, streaming responses, and session management

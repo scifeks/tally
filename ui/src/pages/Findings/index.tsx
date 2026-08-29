@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Search, X, Plus } from 'lucide-react'
+import { Search, X, Plus, Square } from 'lucide-react'
 import {
   useFindings,
   useFindingsCounts,
@@ -7,6 +7,9 @@ import {
   useFindingsFilterOptions,
   useProjectScanConfig,
   useUpdateFinding,
+  useBurpPollStatus,
+  useStartBurpPoll,
+  useCancelBurpPoll,
   type FindingFilters,
   type FindingSortKey,
 } from '@/lib/api'
@@ -72,6 +75,9 @@ export default function Findings() {
 
   const { data: scanConfig } = useProjectScanConfig(projectIdNum)
   const configuredDomains = useMemo(() => scanConfig?.segments ?? [], [scanConfig])
+  const { data: burpPollStatus } = useBurpPollStatus(projectIdNum)
+  const { mutate: startBurpPollMutation } = useStartBurpPoll()
+  const { mutate: cancelBurpPollMutation } = useCancelBurpPoll()
 
   const { data: counts } = useFindingsCounts(projectIdParam)
 
@@ -321,6 +327,26 @@ export default function Findings() {
             {filters.search ? `matches: ${total}` : 'press / to focus'}
           </span>
         </div>
+
+        {burpPollStatus?.active ? (
+          <button
+            onClick={() => cancelBurpPollMutation({ projectId: projectIdNum })}
+            className="shrink-0 flex items-center gap-1.5 px-3 h-9 border-l border-border text-[11px] uppercase tracking-wider font-bold text-amber-500 bg-amber-600/8 hover:bg-amber-600/15 transition-colors"
+          >
+            <Square className="h-3.5 w-3.5" />
+            stop polling
+          </button>
+        ) : burpPollStatus?.configured ? (
+          <button
+            onClick={() => {
+              startBurpPollMutation({ projectId: projectIdNum })
+              setDomain('web')
+            }}
+            className="shrink-0 flex items-center gap-1.5 px-3 h-9 border-l border-border text-[11px] uppercase tracking-wider font-bold text-orange-400 bg-orange-600/8 hover:bg-orange-600/15 transition-colors"
+          >
+            poll burp organizer
+          </button>
+        ) : null}
 
         <button
           onClick={() => setShowCreateModal(true)}

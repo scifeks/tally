@@ -945,5 +945,5 @@ While polling, open Burp Suite and send requests to the Organizer. Tally picks t
 
 **Prerequisites:**
 
-- Set `burp.mcp_url` in `config/global.json` to the Burp MCP server's SSE endpoint (e.g., `http://127.0.0.1:9876/sse`).
+- Set `burp.mcp_url` in `config/global.json` to the Burp MCP server's root URL (e.g., `http://127.0.0.1:9876/`).
 - Burp Suite Professional must be running with the PortSwigger MCP extension active.

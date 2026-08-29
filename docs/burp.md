@@ -79,7 +79,7 @@ Add a `burp` section to `config/global.json` with the fields your workflow requi
 |---|---|---|---|---|
 | `base_url` | string | No | `http://localhost:1337` | Burp REST API base URL. Used for automated scans. |
 | `api_key` | string | No | `""` | API key for authenticated REST API access (Enterprise or when configured). |
-| `mcp_url` | string | No | `""` | SSE endpoint URL for Burp's MCP server. Used for Organizer polling. |
+| `mcp_url` | string | No | `""` | Root URL of Burp's MCP server (e.g., `http://127.0.0.1:9876/`). Used for Organizer polling. |
 | `poll_interval_seconds` | integer | No | `30` | Seconds between Organizer poll cycles. Minimum 5. |
 
 ### Example: REST API only
@@ -98,7 +98,7 @@ Add a `burp` section to `config/global.json` with the fields your workflow requi
 {
   "burp": {
     "base_url": "http://127.0.0.1:1337",
-    "mcp_url": "http://127.0.0.1:9876/sse",
+    "mcp_url": "http://127.0.0.1:9876/",
     "poll_interval_seconds": 30
   }
 }
@@ -210,9 +210,9 @@ Organizer polling is a separate workflow from automated scanning. During manual 
 
 ### Web UI
 
-When `burp.mcp_url` is configured, an orange **Poll Burp** button appears on the Scans page. Click it to start polling. The button changes to **Stop Polling** while active.
+When `burp.mcp_url` is configured, a **Poll Burp Organizer** button appears on the Findings page next to **+ Add Issue**. Click it to start polling. The button changes to **Stop Polling** while active, and the segment tab switches to `web`.
 
-Ingested findings appear on the Findings page under the `web` segment with tool `burp_organizer`. If an LLM provider is configured for the `enrichment` role, developer notes on Organizer items are classified into vulnerability type, CWE, and severity.
+Ingested findings appear under the `web` segment with tool `burp_organizer`. If an LLM provider is configured for the `enrichment` role, developer notes on Organizer items are classified into vulnerability type, CWE, and severity.
 
 ### REPL
 
