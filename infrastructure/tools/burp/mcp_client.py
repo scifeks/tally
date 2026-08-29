@@ -20,6 +20,23 @@ class BurpMcpError(Exception):
     """Raised when the Burp MCP tool call fails."""
 
 
+def _parse_items(text: str) -> list[dict[str, Any]]:
+    """Parse newline-delimited JSON objects from Burp MCP."""
+    try:
+        parsed = json.loads(text)
+        if isinstance(parsed, list):
+            return parsed
+        return [parsed]
+    except json.JSONDecodeError:
+        pass
+    items: list[dict[str, Any]] = []
+    for line in text.strip().splitlines():
+        line = line.strip()
+        if line:
+            items.append(json.loads(line))
+    return items
+
+
 class BurpMcpClient:
     """Connects to Burp's MCP server via SSE per call.
 
@@ -37,7 +54,10 @@ class BurpMcpClient:
         async with sse_client(self._url) as (read, write):
             async with ClientSession(read, write) as session:
                 await session.initialize()
-                result = await session.call_tool("get_organizer_items")
+                result = await session.call_tool(
+                    "get_organizer_items",
+                    arguments={"offset": 0, "count": 1000},
+                )
 
         if result.isError:
             raise BurpMcpError("get_organizer_items returned an error")
@@ -50,7 +70,7 @@ class BurpMcpClient:
         if not text:
             return []
 
-        items_data: list[dict[str, Any]] = json.loads(text)
+        items_data: list[dict[str, Any]] = _parse_items(text)
         return [
             OrganizerItem(
                 id=item["id"],

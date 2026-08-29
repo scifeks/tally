@@ -122,4 +122,7 @@ class TestBurpMcpClientFetchItems:
         client = BurpMcpClient("http://localhost:9876/sse")
         client.fetch_items()
 
-        mock_mcp_session.call_tool.assert_called_once_with("get_organizer_items")
+        mock_mcp_session.call_tool.assert_called_once_with(
+            "get_organizer_items",
+            arguments={"offset": 0, "count": 1000},
+        )

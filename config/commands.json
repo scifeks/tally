@@ -17,6 +17,11 @@
     "location": "local",
     "path": "/usr/bin/graphql-cop"
   },
+  "noir": {
+    "type": "repo",
+    "location": "local",
+    "path": "/usr/bin/noir"
+  },
   "npm-audit": {
     "type": "repo",
     "location": "docker",
@@ -49,5 +54,15 @@
     "type": "api",
     "location": "local",
     "path": "/usr/bin/sqlmap"
+  },
+  "xsstrike": {
+    "type": "api",
+    "location": "local",
+    "path": "/home/justin/.local/bin/xsstrike"
+  },
+  "zap": {
+    "type": "api",
+    "location": "local",
+    "path": "/usr/share/zaproxy/zap.sh"
   }
 }

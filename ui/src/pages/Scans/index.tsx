@@ -100,6 +100,7 @@ export default function Scans() {
     setSelectedArgProfiles(new Set())
     setSelectedSavedScanId(null)
     setBurpConfigs([])
+    setShowBurpDropdown(false)
     setScanWatchState(null)
   }, [activeProjectId, setScanWatchState])
 
@@ -122,13 +123,18 @@ export default function Scans() {
   const scanDropdownRef = useRef<HTMLDivElement>(null)
   const [staleItems, setStaleItems] = useState<StaleSavedScanItem[]>([])
 
-  // Burp scan config names state
+  // Burp scan state
   const [burpConfigs, setBurpConfigs] = useState<string[]>([])
+  const [showBurpDropdown, setShowBurpDropdown] = useState(false)
+  const burpDropdownRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
       if (scanDropdownRef.current && !scanDropdownRef.current.contains(e.target as Node)) {
         setShowScanDropdown(false)
+      }
+      if (burpDropdownRef.current && !burpDropdownRef.current.contains(e.target as Node)) {
+        setShowBurpDropdown(false)
       }
     }
     document.addEventListener('mousedown', handleClick)
@@ -610,18 +616,43 @@ export default function Scans() {
             )}
             {canStart && burpAvailable && (
               <>
-                <button
-                  onClick={() => {
-                    startBurpScan.mutate({
-                      projectId: projectIdNum,
-                      configNames: burpConfigs.length > 0 ? burpConfigs : undefined,
-                    })
-                  }}
-                  className="flex items-center gap-2 px-4 h-9 bg-orange-600 text-white font-bold text-xs uppercase tracking-wider hover:bg-orange-500 transition-all"
-                >
-                  <Play className="h-4 w-4" />
-                  Start Burp Scan
-                </button>
+                <div ref={burpDropdownRef} className="relative flex">
+                  <button
+                    onClick={() => {
+                      startBurpScan.mutate({
+                        projectId: projectIdNum,
+                        configNames: burpConfigs.length > 0 ? burpConfigs : undefined,
+                      })
+                    }}
+                    className="flex items-center gap-2 px-4 h-9 bg-orange-600 text-white font-bold text-xs uppercase tracking-wider hover:bg-orange-500 transition-all"
+                  >
+                    <Play className="h-4 w-4" />
+                    Start Burp Scan
+                  </button>
+                  {!burpPollStatus?.active && (
+                    <button
+                      onClick={() => setShowBurpDropdown(s => !s)}
+                      aria-label="Burp options"
+                      className="flex items-center px-2 h-9 bg-orange-600 text-white border-l border-background/30 hover:bg-orange-500 transition-all"
+                    >
+                      <ChevronDown className="h-3 w-3" />
+                    </button>
+                  )}
+                  {showBurpDropdown && (
+                    <div className="absolute top-full right-0 mt-1 w-64 border border-border bg-background z-50 shadow-lg isolate">
+                      <button
+                        onClick={() => {
+                          setShowBurpDropdown(false)
+                          startBurpPollMutation({ projectId: projectIdNum })
+                        }}
+                        className="w-full text-left px-3 py-2 text-xs hover:bg-muted transition-colors"
+                      >
+                        <div className="font-bold">Poll Burp Collections</div>
+                        <div className="text-[10px] text-dim">Ingest Organizer items via MCP</div>
+                      </button>
+                    </div>
+                  )}
+                </div>
                 <div className="w-64">
                   <TagInput
                     value={burpConfigs}
@@ -630,14 +661,6 @@ export default function Scans() {
                   />
                 </div>
               </>
-            )}
-            {canStart && burpPollStatus?.configured && !burpPollStatus.active && (
-              <button
-                onClick={() => startBurpPollMutation({ projectId: projectIdNum })}
-                className="flex items-center gap-2 px-3 h-9 border border-amber-600 text-amber-500 font-bold text-xs uppercase tracking-wider hover:bg-amber-600/15 transition-colors"
-              >
-                Poll Burp
-              </button>
             )}
             {burpPollStatus?.active && (
               <button
