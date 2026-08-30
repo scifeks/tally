@@ -62,7 +62,7 @@ Triage uses the same feature-inference pattern through `triage_inference`. The `
 | `web_ui_port` | int | `8080` | TCP port for the FastAPI server started by `ui serve`. |
 | `web_ui_vite_port` | int | `3000` | TCP port for the Vite dev server started by `ui serve`. |
 | `web_ui_allowed_origins` | list\[string\] | derived | CORS allow-list for the Vite dev server. Defaults to `["https://<web_ui_host>:<web_ui_vite_port>"]` when absent or empty. Override only when running Vite under a different hostname. |
-| `mcp_port` | int | `8765` | TCP port for the MCP SSE server started by `tally mcp serve`. Binds to localhost (127.0.0.1) without TLS. Used for both Claude Code scanning and MCP triage. See [docs/claude-code-scanning.md](claude-code-scanning.md). |
+| `mcp` | object | See below | MCP server settings for Claude Code integration. See [MCP Server](#mcp-server). |
 
 ### TLS Certificate Configuration
 
@@ -201,6 +201,29 @@ Connection settings for Burp Suite Professional or Enterprise. Covers both REST 
 At startup, Tally probes `GET /v0.1/` on the configured `base_url`. If the probe succeeds, Burp appears in the available tools list. If the probe fails, Burp is marked as configured but offline. If no `burp` section exists, Burp does not appear.
 
 Burp's MCP server truncates each Organizer item to 5000 characters. REST API scan results bypass this limit.
+
+### MCP Server
+
+Configures the MCP SSE server started by `tally mcp serve`. Used for
+Claude Code scanning and MCP triage.
+
+#### Fields
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `host` | string | `"http://127.0.0.1"` | Protocol and host for the MCP server URL. Includes the protocol (`http://` or `https://`). Used when generating `.mcp.json` for Claude Code. |
+| `port` | int | `8765` | TCP port for the MCP SSE server. Binds to localhost. |
+
+#### Example
+
+```json
+{
+  "mcp": {
+    "host": "http://127.0.0.1",
+    "port": 8765
+  }
+}
+```
 
 ### Example: Ollama Only
 

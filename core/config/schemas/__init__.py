@@ -15,6 +15,7 @@ from .global_config import (
     GlobalConfig,
 )
 from .local_inference_config import LocalInferenceConfig
+from .mcp_config import McpConfig
 from .opencode_config import OpenCodeConfig
 from .project_config import ProjectConfig
 from .repo_service import RepoService
@@ -32,6 +33,7 @@ __all__ = [
     "FeatureInferenceConfig",
     "GlobalConfig",
     "LocalInferenceConfig",
+    "McpConfig",
     "TRIAGE_SESSION_TIMEOUT_SECONDS_DEFAULT",
     "OpenCodeConfig",
     "ProjectConfig",

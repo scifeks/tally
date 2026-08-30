@@ -62,11 +62,14 @@ The server binds to `127.0.0.1:8765` by default. Override the port with `--port`
 python3 tally-cli.py mcp --port 9000
 ```
 
-Or set `mcp_port` in `config/global.json`:
+Or set `mcp.port` in `config/global.json`:
 
 ```json
 {
-  "mcp_port": 9000
+  "mcp": {
+    "host": "http://127.0.0.1",
+    "port": 9000
+  }
 }
 ```
 

@@ -49,6 +49,7 @@ Thumbs.db
 *.pem
 config/secrets.json
 /config/commands.json
+.mcp.json
 
 #Docker
 docker/tool-entrypoints/docker-compose.yaml

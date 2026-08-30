@@ -288,13 +288,39 @@ Start the MCP triage server from the REPL:
 [myproject]> tally mcp serve
 ```
 
-The server starts on the configured `mcp_port` (default: `8765`). To use a different port:
+The server starts on the configured `mcp.port` (default: `8765`). To use a different port:
 
 ```
 [myproject]> tally mcp serve --port 9000
 ```
 
 The server remains running and awaits connections from Claude Code.
+
+### Claude Code Connection
+
+When you run `mcp serve`, Tally writes a `.mcp.json` file to the
+project root if one does not already exist. This file tells Claude Code
+where the Tally MCP server is. The URL is built from `mcp.host` and
+`mcp.port` in `config/global.json`.
+
+You can also create it manually:
+
+```
+[project]> mcp server create
+```
+
+The generated file looks like:
+
+```json
+{
+  "mcpServers": {
+    "tally": {
+      "type": "sse",
+      "url": "http://127.0.0.1:8765/sse"
+    }
+  }
+}
+```
 
 #### Step 3: Configure Claude Code
 

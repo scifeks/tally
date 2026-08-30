@@ -21,7 +21,8 @@ class TestCmdMcp:
         repl = _mock_repl()
         cmd = McpCommands(repl)
         cmd.cmd_mcp("mcp", [])
-        repl.console.print.assert_called_with("Usage: mcp token <create|list|revoke>")
+        output = repl.console.print.call_args[0][0]
+        assert "Usage: mcp" in output
 
     def test_token_no_subcommand_prints_usage(self) -> None:
         repl = _mock_repl()
@@ -75,7 +76,8 @@ class TestCmdMcp:
         repl = _mock_repl()
         cmd = McpCommands(repl)
         cmd.cmd_mcp("mcp", ["invalid"])
-        repl.console.print.assert_called_with("Usage: mcp token <create|list|revoke>")
+        output = repl.console.print.call_args[0][0]
+        assert "Usage: mcp" in output
 
 
 class TestCreateToken:

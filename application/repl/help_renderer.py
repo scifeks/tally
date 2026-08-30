@@ -363,6 +363,33 @@ _HELP_REGISTRY = [
         None,
         "Regenerate the self-signed TLS certificate for web_ui_host.",
     ),
+    # MCP Server
+    ("mcp", None, None, "MCP Server"),
+    (
+        "mcp",
+        "mcp token create",
+        "[name]",
+        "Create a bearer token for MCP authentication",
+    ),
+    ("mcp", "mcp token list", None, "List all MCP tokens"),
+    (
+        "mcp",
+        "mcp token revoke",
+        "<name>",
+        "Revoke an MCP token by name",
+    ),
+    (
+        "mcp",
+        "mcp server create",
+        None,
+        "Write .mcp.json from config/global.json mcp settings",
+    ),
+    (
+        "mcp",
+        "mcp serve",
+        None,
+        "Start the MCP server in the background",
+    ),
     # Utility
     ("utility", None, None, "Utility"),
     ("utility", "help", None, "Show this help table"),

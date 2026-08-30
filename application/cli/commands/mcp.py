@@ -7,10 +7,12 @@ from argparse import Namespace
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from application.mcp.config_file import write_mcp_json
 from core.config.manager import ConfigManager
-from core.project_paths import ProjectPaths
 from core.security.credentials import get_encryption_key
-from infrastructure.store.repositories.mcp_tokens import McpTokenRepository
+from infrastructure.store.repositories.mcp_tokens import (
+    McpTokenRepository,
+)
 from mcp_server.server import start_mcp_server
 
 if TYPE_CHECKING:
@@ -28,36 +30,43 @@ def cmd_mcp_serve(
     tool_registry: ToolRegistry,
     base_path: Path,
 ) -> int:
-    """Start the MCP server with SSE transport.
-
-    Args:
-        args: Parsed CLI arguments with optional --port override.
-        project_registry: Service for resolving projects.
-        tool_registry: Registry of security tools.
-        base_path: Base path for Tally (projects directory, config, etc).
-
-    Returns:
-        Exit code (0 on successful start, 1 on error).
-    """
+    """Start the MCP server with SSE transport."""
     try:
         config = ConfigManager(str(base_path))
-        port = (
-            args.port
-            if hasattr(args, "port") and args.port
-            else (config.global_config.mcp_port)
-        )
+        mcp_cfg = config.global_config.mcp
+        port = args.port if hasattr(args, "port") and args.port else mcp_cfg.port
 
-        # Resolve global credentials
-        credentials_key_path = (
-            ProjectPaths(base_path).sqlite_dir / "mcp_credentials.key"
-        )
+        projects = project_registry.list_active()
+        if not projects:
+            logger.error(
+                "No projects configured. "
+                "Create a project before starting the MCP server."
+            )
+            return 1
+
+        credentials_key_path = base_path / "mcp_credentials.key"
+        if not credentials_key_path.exists():
+            logger.error("No MCP tokens found. Run 'mcp token create <name>' first.")
+            return 1
         encryption_key = get_encryption_key(credentials_key_path)
 
-        # Load token repository
         registry_db_path = base_path / "tally.db"
         token_repo = McpTokenRepository(registry_db_path)
+        tokens = token_repo.list_all()
+        if not tokens:
+            logger.error("No MCP tokens found. Run 'mcp token create <name>' first.")
+            return 1
 
-        logger.info("MCP server starting on 127.0.0.1:%d with SSE transport", port)
+        mcp_json = base_path / ".mcp.json"
+        if not mcp_json.exists():
+            write_mcp_json(base_path, mcp_cfg.host, port)
+            logger.info("Created .mcp.json at %s", mcp_json)
+
+        logger.info(
+            "MCP server starting on %s:%d with SSE transport",
+            mcp_cfg.host,
+            port,
+        )
         start_mcp_server(
             port,
             project_registry,

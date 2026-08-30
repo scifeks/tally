@@ -9,6 +9,7 @@ from .claude_config import ClaudeConfig
 from .defectdojo_config import DefectDojoGlobalConfig
 from .feature_inference_config import FeatureInferenceConfig
 from .local_inference_config import LocalInferenceConfig
+from .mcp_config import McpConfig
 from .openai_config import OpenAIConfig
 from .opencode_config import OpenCodeConfig
 from .voyage_config import VoyageConfig
@@ -106,7 +107,7 @@ class GlobalConfig(BaseModel):
     web_ui_allowed_origins: list[str] | None = None
 
     # MCP server
-    mcp_port: int = Field(default=8765)
+    mcp: McpConfig = Field(default_factory=McpConfig)
 
     @field_validator("blind_xss_callback_url")
     @classmethod
