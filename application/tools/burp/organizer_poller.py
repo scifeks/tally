@@ -12,6 +12,10 @@ from application.tools.burp.organizer_normalizer import (
 
 if TYPE_CHECKING:
     from application.mcp.ingest_service import McpIngestService
+    from application.ports.finding_event_sink import FindingEventSink
+    from application.ports.finding_repository import (
+        FindingRepositoryPort,
+    )
     from application.ports.organizer_state_repository import (
         OrganizerStateRepositoryPort,
     )
@@ -40,6 +44,8 @@ class OrganizerPoller:
         project_id: int,
         poll_interval: float = 30.0,
         note_enrichment: NoteEnrichment | None = None,
+        finding_repo: FindingRepositoryPort | None = None,
+        event_sink: FindingEventSink | None = None,
     ) -> None:
         self._fetcher = fetcher
         self._state_repo = state_repo
@@ -47,6 +53,8 @@ class OrganizerPoller:
         self._project_id = project_id
         self._poll_interval = poll_interval
         self._enrichment = note_enrichment
+        self._finding_repo = finding_repo
+        self._event_sink = event_sink
 
     def run(self, cancel_token: CancellationToken) -> int:
         """Loop until cancellation. Returns total items ingested."""
@@ -85,12 +93,13 @@ class OrganizerPoller:
             normalized = normalize_http(item.request, item.response)
             classification = self._classify(item)
             payload = _build_payload(item, normalized, classification)
-            self._ingest.submit_finding(
+            result = self._ingest.submit_finding(
                 run_id,
                 payload,
                 tool="burp_organizer",
                 domain="web",
             )
+            self._emit_created(result)
             self._state_repo.mark_ingested(self._project_id, item.id)
             count += 1
             logger.info("Ingested Organizer item %d", item.id)
@@ -101,6 +110,27 @@ class OrganizerPoller:
             count,
         )
         return count
+
+    def _emit_created(self, result: dict) -> None:
+        """Emit a FindingCreated event if the sink is wired."""
+        if not self._event_sink or not self._finding_repo:
+            return
+        finding_id = result.get("finding_id")
+        if not finding_id:
+            return
+        finding = self._finding_repo.get_finding(finding_id)
+        if not finding:
+            return
+        from domain.findings.events import FindingCreated
+
+        self._event_sink.emit(
+            FindingCreated(
+                project_id=self._project_id,
+                finding=finding,
+                is_locked=False,
+                lock_holder=None,
+            )
+        )
 
     def _classify(self, item: OrganizerItem) -> NoteClassification | None:
         note = item.notes.strip() if item.notes else ""

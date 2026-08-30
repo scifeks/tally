@@ -101,6 +101,8 @@ def _parse_issue(issue: dict[str, Any]) -> dict[str, Any] | None:
         "fingerprint_type": fp_fields.get("type", ""),
         "fingerprint_origin": fp_fields.get("origin", ""),
         "fingerprint_path": fp_fields.get("path", ""),
+        "issue_background": issue.get("issue_background", ""),
+        "caption": issue.get("caption", ""),
     }
 
 
@@ -164,6 +166,18 @@ class BurpHandler:
             evidence = finding.get("evidence", "")
             if evidence:
                 row["evidence"] = evidence
+            bg = finding.get("issue_background", "")
+            if bg:
+                row["issue_background"] = bg
+            caption = finding.get("caption", "")
+            if caption:
+                row["caption"] = caption
+            serial = finding.get("serial_number", "")
+            if serial:
+                row["serial_number"] = serial
+            fp_raw = finding.get("fingerprint_raw", "")
+            if fp_raw:
+                row["fingerprint_raw"] = fp_raw
             if alert_name:
                 row["title"] = alert_name
             row.update(_shared_meta(self, "vulnerability"))

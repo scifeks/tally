@@ -32,6 +32,7 @@ def _make_app(
 
     app.state.base_path = "/tmp/tally_test"
     app.state.project_registry = MagicMock()
+    app.state.event_bus = MagicMock()
     return app, cfg_manager
 
 

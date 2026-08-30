@@ -24,6 +24,9 @@ from infrastructure.store.repositories.organizer_state import (
 )
 from infrastructure.store.repositories.runs import RunRepository
 from infrastructure.tools.burp.mcp_client import BurpMcpClient
+from web.adapters.event_bus_finding_sink import (
+    EventBusFindingSink,
+)
 from web.api._errors import Conflict, NotFound
 from web.api._errors import (
     ValidationError as ApiValidationError,
@@ -86,6 +89,8 @@ async def start_poll(
     except Exception:
         logger.debug("LLM enrichment unavailable for poll")
 
+    event_sink = EventBusFindingSink(request.app.state.event_bus)
+
     poller = OrganizerPoller(
         fetcher=fetcher,
         state_repo=state_repo,
@@ -93,6 +98,8 @@ async def start_poll(
         project_id=project_id,
         poll_interval=float(burp_cfg.poll_interval_seconds),
         note_enrichment=note_enrichment,
+        finding_repo=finding_repo,
+        event_sink=event_sink,
     )
 
     cancel_token = CancellationToken()
