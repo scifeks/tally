@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
-from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from application.mcp.duplicate_grouping import (
@@ -134,8 +133,6 @@ class McpIngestService:
         except FindingPayloadError as exc:
             return {"finding_id": None, "status": "rejected", "error": str(exc)}
 
-        now = datetime.now(UTC).isoformat()
-
         raw_row: dict[str, Any] = {
             "tool": tool,
             "domain": domain,
@@ -150,8 +147,6 @@ class McpIngestService:
             "cwe": validated["cwe"],
             "finding_type": validated["finding_type"],
             "rule_id": validated["rule_id"],
-            "triaged_by": "claudecode",
-            "triaged_at": now,
             "status": "active",
         }
 

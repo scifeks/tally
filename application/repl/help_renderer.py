@@ -102,6 +102,12 @@ _HELP_REGISTRY = [
         "[config_name]",
         "Start a Burp crawl-and-audit scan using project base URLs",
     ),
+    (
+        "burp",
+        "burp poll",
+        None,
+        "Poll Burp Organizer for new items. Ctrl+C to stop.",
+    ),
     # Tools
     ("tool", None, None, "Tools"),
     ("tool", "tool add", None, "Add a tool to the active configuration"),
@@ -341,14 +347,6 @@ _HELP_REGISTRY = [
         "Remove a document from the knowledge base",
     ),
     ("documents", "docs stats", None, "Show document store statistics"),
-    # Burp
-    ("burp", None, None, "Burp Integration"),
-    (
-        "burp",
-        "burp poll",
-        None,
-        "Poll Burp Organizer for new items. Ctrl+C to stop.",
-    ),
     # Web UI
     ("ui", None, None, "Web UI"),
     (

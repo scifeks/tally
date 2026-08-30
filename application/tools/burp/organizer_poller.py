@@ -151,19 +151,21 @@ def _build_payload(
         cwe = [classification.cwe]
         finding_type = ["vulnerability"]
         vuln_type = classification.vulnerability_type
-        description = notes or vuln_type
         title = f"{vuln_type}: {normalized.method} {normalized.url}".strip()
+        owasp_name = vuln_type
     else:
         severity = "informational"
         cwe = ["CWE-0"]
         finding_type = ["informational"]
-        description = notes or "Burp Organizer item (no notes)"
         title = f"Organizer: {notes[:50]}" if notes else "Organizer: untitled"
+        owasp_name = "Unclassified"
+
+    remediation = "Review the captured request and response"
 
     meta: dict[str, Any] = {
         "title": title,
-        "owasp_name": "Unclassified",
-        "remediation": "Review the captured request and response",
+        "owasp_name": owasp_name,
+        "remediation": remediation,
         "request": item.request,
         "response": item.response,
         "url": normalized.url,
@@ -175,8 +177,20 @@ def _build_payload(
         meta["host"] = normalized.host
     if normalized.status_code is not None:
         meta["status_code"] = normalized.status_code
+    if notes:
+        meta["notes"] = notes
     if classification is not None:
         meta["vulnerability_type"] = classification.vulnerability_type
+
+    desc_parts = [title, ""]
+    if remediation:
+        desc_parts.append(f"Remediation:\n{remediation}")
+        desc_parts.append("")
+    if item.request:
+        desc_parts.append(f"Request:\n{item.request}")
+        desc_parts.append("")
+    desc_parts.append(f"Response:\n{item.response or '<no response>'}")
+    description = "\n".join(desc_parts)
 
     return {
         "segment": "web",
