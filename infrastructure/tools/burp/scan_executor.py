@@ -53,6 +53,7 @@ class BurpScanExecutor:
         _log.info("Burp scan created: task_id=%s", task_id)
 
         all_events: list[dict[str, Any]] = []
+        seen_serials: set[str] = set()
         cursor = 0
         attempt = 0
         last_status = "initializing"
@@ -72,8 +73,14 @@ class BurpScanExecutor:
 
             new_events = progress.issue_events
             if new_events:
-                all_events.extend(new_events)
                 cursor += len(new_events)
+                for ev in new_events:
+                    serial = ev.get("issue", {}).get("serial_number", "")
+                    if serial and serial in seen_serials:
+                        continue
+                    if serial:
+                        seen_serials.add(serial)
+                    all_events.append(ev)
 
             pct = progress.metrics.get("crawl_and_audit_progress", 0)
             sink.emit(
@@ -110,7 +117,7 @@ class BurpScanExecutor:
         return ToolResult(
             tool_name="burp",
             success=success,
-            output=f"Burp scan {last_status}: {finding_count} findings",
+            output=(f"Burp scan {last_status}: {finding_count} findings"),
             parsed_data=parsed,
             output_files={},
             timestamp=timestamp,

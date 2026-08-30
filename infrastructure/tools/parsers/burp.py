@@ -155,7 +155,7 @@ class BurpHandler:
                 "alert_name": alert_name,
                 "url": finding.get("url", ""),
                 "method": "",
-                "description": finding.get("description", ""),
+                "description": (finding.get("description", "") or alert_name),
                 "remediation": finding.get("remediation", ""),
                 "timestamp": timestamp,
                 "source_file": source_file,
