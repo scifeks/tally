@@ -291,3 +291,47 @@ class TestNormalizationAndEnrichment:
         payload = ingest.submit_finding.call_args[0][1]
         assert payload["severity"] == "informational"
         assert payload["finding_type"] == ["informational"]
+
+
+class TestRepoResolution:
+    def test_poll_once_sets_repo_id_from_url(self) -> None:
+        """Findings are linked to the repo whose base_url matches."""
+        svc = MagicMock()
+        svc.base_urls = ["http://127.0.0.1:8081"]
+        repo = MagicMock()
+        repo.name = "webgoat"
+        repo.id = 5
+        repo.services = [svc]
+
+        repo_repo = MagicMock()
+        repo_repo.list_active.return_value = [repo]
+
+        item = OrganizerItem(
+            id=1,
+            status="New",
+            request="GET /WebGoat/login HTTP/1.1\r\nHost: 127.0.0.1:8081\r\n\r\n",
+            response="<no response>",
+            notes="",
+        )
+        fetcher = MagicMock()
+        fetcher.fetch_items.return_value = [item]
+
+        state_repo = MagicMock()
+        state_repo.get_ingested_ids.return_value = set()
+
+        ingest = MagicMock()
+        ingest.create_scan_run.return_value = {"run_id": 1}
+        ingest.submit_finding.return_value = {"finding_id": 10}
+
+        poller = OrganizerPoller(
+            fetcher=fetcher,
+            state_repo=state_repo,
+            ingest_service=ingest,
+            project_id=1,
+            repo_repo=repo_repo,
+        )
+        poller.poll_once()
+
+        payload = ingest.submit_finding.call_args[0][1]
+        assert payload["meta"]["repo_id"] == 5
+        assert payload["meta"]["repo"] == "webgoat"

@@ -17,7 +17,10 @@ from application.tools.burp.poll_registry import (
 from core.config import ConfigManager
 from core.project_paths import ProjectPaths
 from factories.llm import create_llm_provider
-from factories.persistence import create_finding_repo
+from factories.persistence import (
+    create_finding_repo,
+    create_repo_repo,
+)
 from infrastructure.store.connection import ConnectionFactory
 from infrastructure.store.repositories.organizer_state import (
     OrganizerStateRepository,
@@ -78,6 +81,7 @@ async def start_poll(
     factory.init_schema()
     run_repo = RunRepository(factory)
     finding_repo = create_finding_repo(paths.findings_db)
+    repo_repo = create_repo_repo(paths.findings_db)
     state_repo = OrganizerStateRepository(factory)
     fetcher = BurpMcpClient(burp_cfg.mcp_url)
     ingest = McpIngestService(finding_repo=finding_repo, run_repo=run_repo)
@@ -100,6 +104,7 @@ async def start_poll(
         note_enrichment=note_enrichment,
         finding_repo=finding_repo,
         event_sink=event_sink,
+        repo_repo=repo_repo,
     )
 
     cancel_token = CancellationToken()

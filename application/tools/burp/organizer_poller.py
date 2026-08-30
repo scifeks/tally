@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any
 
 from application.tools.burp.organizer_normalizer import (
@@ -19,10 +20,14 @@ if TYPE_CHECKING:
     from application.ports.organizer_state_repository import (
         OrganizerStateRepositoryPort,
     )
+    from application.ports.project_repo_repository import (
+        ProjectRepoRepositoryPort,
+    )
     from application.tools.burp.note_enrichment import (
         NoteClassification,
         NoteEnrichment,
     )
+    from core.config.schemas.repository import Repository
     from domain.locking.cancellation import CancellationToken
     from domain.tools.burp.mcp_ports import (
         OrganizerFetcherPort,
@@ -46,6 +51,7 @@ class OrganizerPoller:
         note_enrichment: NoteEnrichment | None = None,
         finding_repo: FindingRepositoryPort | None = None,
         event_sink: FindingEventSink | None = None,
+        repo_repo: ProjectRepoRepositoryPort | None = None,
     ) -> None:
         self._fetcher = fetcher
         self._state_repo = state_repo
@@ -55,6 +61,7 @@ class OrganizerPoller:
         self._enrichment = note_enrichment
         self._finding_repo = finding_repo
         self._event_sink = event_sink
+        self._repo_repo = repo_repo
 
     def run(self, cancel_token: CancellationToken) -> int:
         """Loop until cancellation. Returns total items ingested."""
@@ -88,11 +95,19 @@ class OrganizerPoller:
         )
         run_id = result["run_id"]
 
+        active_repos = self._get_active_repos()
         count = 0
         for item in new_items:
             normalized = normalize_http(item.request, item.response)
             classification = self._classify(item)
-            payload = _build_payload(item, normalized, classification)
+            repo_name, repo_id = self._resolve_repo(normalized, active_repos)
+            payload = _build_payload(
+                item,
+                normalized,
+                classification,
+                repo_name=repo_name,
+                repo_id=repo_id,
+            )
             result = self._ingest.submit_finding(
                 run_id,
                 payload,
@@ -138,11 +153,38 @@ class OrganizerPoller:
             return None
         return self._enrichment.classify(note)
 
+    def _get_active_repos(self) -> list[Repository]:
+        if self._repo_repo is None:
+            return []
+        try:
+            return self._repo_repo.list_active()
+        except Exception:
+            return []
+
+    def _resolve_repo(
+        self,
+        normalized: NormalizedHttp,
+        repos: Sequence[Repository],
+    ) -> tuple[str, int | None]:
+        if not repos or not normalized.host:
+            return "", None
+        from application.tools.burp.repo_resolver import (
+            resolve_repo_by_url,
+        )
+
+        # OrganizerItem carries no scheme, only a Host header, so
+        # assume http to build a URL comparable to repo base_urls.
+        url = f"http://{normalized.host}{normalized.url}"
+        return resolve_repo_by_url(url, repos)
+
 
 def _build_payload(
     item: OrganizerItem,
     normalized: NormalizedHttp,
     classification: NoteClassification | None,
+    *,
+    repo_name: str = "",
+    repo_id: int | None = None,
 ) -> dict[str, Any]:
     """Convert an OrganizerItem to a finding submission payload."""
     notes = item.notes.strip() if item.notes else ""
@@ -181,6 +223,9 @@ def _build_payload(
         meta["notes"] = notes
     if classification is not None:
         meta["vulnerability_type"] = classification.vulnerability_type
+    if repo_id is not None:
+        meta["repo_id"] = repo_id
+        meta["repo"] = repo_name
 
     desc_parts = [title, ""]
     if remediation:

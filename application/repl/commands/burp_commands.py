@@ -85,6 +85,7 @@ class BurpCommands:
         factory.init_schema()
         run_repo = RunRepository(factory)
         finding_repo = create_finding_repo(paths.findings_db)
+        repo_repo = create_repo_repo(paths.findings_db)
         state_repo = OrganizerStateRepository(factory)
         fetcher = BurpMcpClient(burp_cfg.mcp_url)
         ingest = McpIngestService(
@@ -106,6 +107,7 @@ class BurpCommands:
             project_id=row.id,
             poll_interval=float(burp_cfg.poll_interval_seconds),
             note_enrichment=enrichment,
+            repo_repo=repo_repo,
         )
 
         interval = burp_cfg.poll_interval_seconds
