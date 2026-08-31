@@ -12,9 +12,17 @@ class TestMcpConfig:
         assert cfg.port == 8765
 
     def test_custom_values(self) -> None:
-        cfg = McpConfig(host="https://10.1.20.101", port=9000)
-        assert cfg.host == "https://10.1.20.101"
+        cfg = McpConfig(host="10.1.20.101", port=9000)
+        assert cfg.host == "10.1.20.101"
         assert cfg.port == 9000
+
+    def test_host_strips_http_prefix(self) -> None:
+        cfg = McpConfig(host="http://127.0.0.1")
+        assert cfg.host == "127.0.0.1"
+
+    def test_host_strips_https_prefix(self) -> None:
+        cfg = McpConfig(host="https://10.1.20.101")
+        assert cfg.host == "10.1.20.101"
 
     def test_port_coerced_from_string(self) -> None:
         cfg = McpConfig(port="9000")  # type: ignore[arg-type]

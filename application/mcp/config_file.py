@@ -15,19 +15,20 @@ class ShowConfigOutput:
 def format_show_config(
     host: str,
     port: int,
+    token: str,
 ) -> ShowConfigOutput:
-    """Build the two setup options for Claude Code.
+    """Build the ready-to-run setup command for Claude Code.
 
-    Returns a JSON snippet for ~/.claude.json and a
-    claude mcp add-json CLI command, both using
-    ${TALLY_MCP_TOKEN} as the bearer token placeholder.
+    The token is embedded in the output so the user can
+    copy-paste a single command. The output is ephemeral
+    terminal text, same security model as token creation.
     """
     url = f"http://{host}:{port}/mcp"
     entry = {
         "type": "http",
         "url": url,
         "headers": {
-            "Authorization": "Bearer ${TALLY_MCP_TOKEN}",
+            "Authorization": f"Bearer {token}",
         },
     }
     snippet = json.dumps({"tally": entry}, indent=2)

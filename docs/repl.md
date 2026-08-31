@@ -960,9 +960,9 @@ MCP serve commands:
 [acme-audit]> mcp show-config
 ```
 
-Prints a JSON snippet for `~/.claude.json` and a `claude mcp add-json`
-command, both using `${TALLY_MCP_TOKEN}` as a placeholder. Export the
-token in the shell that launches Claude Code. This is a one-time setup.
+Reads the token from the encrypted store and prints a ready-to-run
+`claude mcp add-json` command. Copy it, run it in a terminal, and
+restart Claude Code. One-time setup.
 
 ### Creating triage batches
 

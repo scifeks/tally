@@ -364,32 +364,24 @@ stop`, and `mcp serve restart`.
 
 ### Claude Code Connection
 
-Run `mcp show-config` to print the connection details:
+Run `mcp show-config` to generate a ready-to-run setup command. Tally
+reads the token from its encrypted store and embeds it in the command:
 
 ```
 [myproject]> mcp show-config
-Add this to ~/.claude.json under "mcpServers":
+Run this command in your terminal:
 
-{
-  "tally": {
-    "type": "http",
-    "url": "http://127.0.0.1:8765/mcp",
-    "headers": {
-      "Authorization": "Bearer ${TALLY_MCP_TOKEN}"
-    }
-  }
-}
+  claude mcp add-json tally '{"type":"http","url":"http://127.0.0.1:8765/mcp","headers":{"Authorization":"Bearer <token>"}}' --scope user
 
-Or run:
-
-  claude mcp add-json tally '{"type":"http","url":"http://127.0.0.1:8765/mcp","headers":{"Authorization":"Bearer ${TALLY_MCP_TOKEN}"}}' --scope user
-
-Then export TALLY_MCP_TOKEN=<your token> in the shell that launches claude.
+One-time setup. Restart Claude Code after running.
 ```
 
-Both setup options use `${TALLY_MCP_TOKEN}` as a placeholder; the token
-comes from `mcp token create` (see [Step 1](#step-1-generate-an-mcp-token)
-above). This is a one-time setup.
+Copy the command and run it in a terminal. This registers the Tally MCP
+server in Claude Code's user-level config (`~/.claude.json`). The token
+comes from `mcp token create` (see
+[Step 1](#step-1-generate-an-mcp-token) above). You only need to do
+this once; if you revoke and recreate the token, re-run `mcp show-config`
+to get an updated command.
 
 If you restart Tally's MCP server while Claude Code is already connected,
 Claude Code may not detect the change automatically. Run `/mcp` in Claude

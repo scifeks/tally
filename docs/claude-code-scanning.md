@@ -78,32 +78,21 @@ scanning session.
 
 ### Step 3: Configure Claude Code to connect
 
-Run `mcp show-config` in the Tally REPL:
+Run `mcp show-config` in the Tally REPL. Tally reads the token from its
+encrypted store and prints a ready-to-run command:
 
 ```
 tally> mcp show-config
-Add this to ~/.claude.json under "mcpServers":
+Run this command in your terminal:
 
-{
-  "tally": {
-    "type": "http",
-    "url": "http://127.0.0.1:8765/mcp",
-    "headers": {
-      "Authorization": "Bearer ${TALLY_MCP_TOKEN}"
-    }
-  }
-}
+  claude mcp add-json tally '{"type":"http","url":"http://127.0.0.1:8765/mcp","headers":{"Authorization":"Bearer <token>"}}' --scope user
 
-Or run:
-
-  claude mcp add-json tally '{"type":"http","url":"http://127.0.0.1:8765/mcp","headers":{"Authorization":"Bearer ${TALLY_MCP_TOKEN}"}}' --scope user
-
-Then export TALLY_MCP_TOKEN=<your token> in the shell that launches claude.
+One-time setup. Restart Claude Code after running.
 ```
 
-Add the printed snippet to `~/.claude.json`, or run the printed
-`claude mcp add-json` command directly. Use the token you created in
-Step 1. This is a one-time setup.
+Copy the command and run it in a terminal. Restart Claude Code afterward
+so it picks up the new server. This is a one-time setup; if you revoke
+and recreate the token, re-run `mcp show-config`.
 
 ### Step 4: Make scanner skills and agents available
 

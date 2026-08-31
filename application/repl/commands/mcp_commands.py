@@ -68,22 +68,39 @@ class McpCommands:
         from application.mcp.config_file import (
             format_show_config,
         )
+        from core.security.credentials import decrypt_value
 
         try:
-            config = ConfigManager(self._repl.base_path)
+            repl = self._repl
+            config = ConfigManager(repl.base_path)
             mcp_cfg = config.global_config.mcp
-            result = format_show_config(mcp_cfg.host, mcp_cfg.port)
-            c = self._repl.console
-            c.print('[bold]Add this to ~/.claude.json under "mcpServers":[/bold]\n')
-            c.print(result.json_snippet)
-            c.print("\n[bold]Or run:[/bold]\n")
+            base = Path(repl.base_path)
+
+            key_path = base / "mcp_credentials.key"
+            if not key_path.exists():
+                repl.console.print(
+                    "[red]No MCP tokens found.[/red] "
+                    "Run 'mcp token create <name>' first."
+                )
+                return
+            key = get_encryption_key(key_path)
+
+            db_path = repl.project_registry._repo.db_path
+            repo = McpTokenRepository(db_path)
+            encrypted = repo.get_all_encrypted()
+            if not encrypted:
+                repl.console.print(
+                    "[red]No MCP tokens found.[/red] "
+                    "Run 'mcp token create <name>' first."
+                )
+                return
+
+            token = decrypt_value(encrypted[0], key)
+            result = format_show_config(mcp_cfg.host, mcp_cfg.port, token)
+            c = repl.console
+            c.print("[bold]Run this command in your terminal:[/bold]\n")
             c.print(f"  {result.cli_command}")
-            c.print(
-                "\n[dim]Then export"
-                " TALLY_MCP_TOKEN=<your token>"
-                " in the shell that launches"
-                " claude.[/dim]"
-            )
+            c.print("\n[dim]One-time setup. Restart Claude Code after running.[/dim]")
         except Exception as exc:
             self._repl.console.print(f"[red]Error:[/red] {exc}")
 
