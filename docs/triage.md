@@ -50,22 +50,15 @@ environment variable. When `claude.api_key` is non-empty, Tally injects it as
 }
 ```
 
-### Claude Code with OAuth
+### Claude Code without an API key
 
-When `claude.api_key` is empty, Tally falls back to **OAuth mode**. Run `claude`
-on the host to authenticate before your first triage run. Tally mounts two
-credential files read-only into the container:
-
-- `~/.claude.json` (account identity)
-- `~/.claude/.credentials.json` (OAuth tokens)
-
-If either file is missing, compose generation fails with a message directing you
-to authenticate on the host or set an API key.
-
-The container cannot persist refreshed tokens to disk because the mount is
-read-only. For short triage calls (30-60 seconds per finding), in-memory refresh
-is sufficient. If you see authentication errors, re-run `claude` on the host to
-refresh the session.
+When `claude.api_key` is empty and `ANTHROPIC_API_KEY` is not set, Tally cannot
+run headless auto-triage for Claude Code. Auto-triage would otherwise run
+Claude Code unattended inside the triage container using your OAuth session,
+and provider terms reserve subscription sessions for direct interactive use,
+not headless automation. Tally runs triage in [MCP mode](#mcp-triage-mode)
+instead: the agent executes inside your own authenticated Claude Code session
+rather than the container.
 
 ### Local Model (Ollama / Llama.cpp)
 
@@ -225,8 +218,9 @@ Claude Code invokes a hosted Anthropic model (Sonnet by default, configurable vi
 `claude.model` in `config/global.json`). Frontier models produce more accurate
 verdicts, particularly for findings that require data-flow analysis, recognizing
 sanitization patterns, or evaluating framework-level protections. Requires network
-access to `api.anthropic.com` and an Anthropic API key or authenticated OAuth
-session.
+access to `api.anthropic.com` and an Anthropic API key configured in
+`config/global.json` or as `ANTHROPIC_API_KEY`. Without a key, triage runs in
+[MCP mode](#mcp-triage-mode) instead of this headless flow.
 
 ### Local model (OpenCode)
 
@@ -257,19 +251,57 @@ for setup details.
 
 ## MCP Triage Mode
 
-MCP triage mode allows you to run interactive triage through Claude Code. Each batch of findings is triaged by Claude, then presented to you for review and approval before the verdicts are saved to the project database.
+MCP triage mode runs the triage agent inside your own Claude Code session
+instead of inside a Docker container. Tally runs an MCP server that hands
+out triage batches and accepts verdicts back; you invoke the
+`/tally-triage` skill in Claude Code to process them.
 
-### How MCP triage differs from auto-triage
+### Mode determination
 
-**Auto-triage** (headless mode) runs the triage agent inside a Docker container and saves all verdicts automatically without user intervention. Findings are processed in configurable batch sizes.
+Tally decides whether a project runs **auto** triage (headless, inside the
+Docker container) or **MCP** triage (interactive, inside your Claude Code
+session) from the configured `triage_inference` provider and whether an API
+key is present. This is not a setting you choose: it is enforced when
+triage starts, and starting auto-triage without an API key for a frontier
+provider fails with an error directing you to MCP mode instead.
 
-**MCP triage** (interactive mode) operates as an MCP server. An external client (Claude Code) connects, streams batches to the agent, and awaits your confirmation on each batch before persisting results. No Docker container runs on the host; the agent executes in Claude Code's environment. Use MCP triage when you want to review findings interactively before accepting triage verdicts.
+| Provider | API key present | Mode |
+|---|---|---|
+| `claude` / `openai` | Yes | auto |
+| `claude` / `openai` | No | mcp |
+| `ollama` / `llama_cpp` / `opencode` | N/A | auto |
 
-### Setup
+Frontier providers (`claude`, `openai`) without an API key fall back to MCP
+mode because auto-triage would otherwise run the provider's CLI unattended
+inside the triage container using your subscription session, and provider
+terms reserve subscription sessions for direct interactive use. Local
+providers always run in auto mode: there is no subscription session to
+protect, and the container never leaves your network.
+
+### Web UI MCP triage flow
+
+When a project's triage mode is `mcp`, the Triage page (`/triage`) shows a
+**Start MCP Triage** button in place of **Start Triage**. Clicking it
+creates triage batches for the latest scan run and starts the MCP server
+if it is not already running.
+
+An instructions panel shows the server host and port. The first time you
+start MCP triage for a project, the panel also shows a bearer token; copy
+it, since it is not shown again. On later starts, the panel reminds you to
+use the token you already saved instead of generating a new one. The panel
+also shows the command to run: open Claude Code and invoke `/tally-triage`.
+
+Batch and log results from MCP triage appear in the same panels used for
+auto-triage: the batches panel and the triage log update identically
+regardless of which mode produced them.
+
+Click **Stop MCP Triage** to stop the server. This does not cancel work
+already in progress in Claude Code; it only stops Tally's MCP server from
+accepting further connections.
+
+### REPL MCP triage flow
 
 #### Step 1: Generate an MCP token
-
-Generate a bearer token for server authentication in the REPL:
 
 ```
 [myproject]> mcp token create ci-agent
@@ -278,36 +310,50 @@ Token name: ci-agent
 Warning: Copy this token now. It will not be shown again.
 ```
 
-Save the token securely. You will pass it to Claude Code when configuring the MCP connection.
+Save the token securely. You will pass it to Claude Code when configuring
+the MCP connection.
 
-#### Step 2: Start the MCP server
-
-Start the MCP triage server from the REPL:
-
-```
-[myproject]> tally mcp serve
-```
-
-The server starts on the configured `mcp.port` (default: `8765`). To use a different port:
+#### Step 2: Create triage batches
 
 ```
-[myproject]> tally mcp serve --port 9000
+[myproject]> mcp triage prepare
+Created 12 batches (43 findings) for run 7
 ```
 
-The server remains running and awaits connections from Claude Code.
+`mcp triage prepare` groups untriaged SAST, API, and DAST findings from a
+scan run into batches for MCP processing. Pass a run ID to target a
+specific scan; omit it to use the most recent run:
+
+```
+[myproject]> mcp triage prepare 7
+```
+
+#### Step 3: Start the MCP server
+
+```
+[myproject]> mcp serve start
+MCP server started on 127.0.0.1:8765
+```
+
+Bare `mcp serve` (no subcommand) prints a submenu instead of starting
+anything. Manage a running server with `mcp serve status`, `mcp serve
+stop`, and `mcp serve restart`.
 
 ### Claude Code Connection
 
-When you run `mcp serve`, Tally writes a `.mcp.json` file to the
-project root if one does not already exist. This file tells Claude Code
-where the Tally MCP server is. The URL is built from `mcp.host` and
-`mcp.port` in `config/global.json`.
+Running `mcp serve start` writes a `.mcp.json` file to the project root if
+one does not already exist. This file tells Claude Code where the Tally
+MCP server is. The URL is built from `mcp.host` and `mcp.port` in
+`config/global.json`.
 
-You can also create it manually:
+To generate the file without starting the server, run:
 
 ```
-[project]> mcp server create
+[myproject]> mcp server create
 ```
+
+`mcp server create` only writes `.mcp.json`; it does not start the MCP
+server, and it leaves an existing file untouched.
 
 The generated file looks like:
 
@@ -322,51 +368,32 @@ The generated file looks like:
 }
 ```
 
-#### Step 3: Configure Claude Code
+In Claude Code, add an MCP server pointed at this URL and supply the token
+from Step 1 for authentication.
 
-In Claude Code, configure the MCP connection to your Tally instance:
+### Invoking triage in Claude Code
 
-1. Open Claude Code settings
-2. Add an MCP server with:
-   - **Host:** localhost or your Tally server address
-   - **Port:** `8765` (or the port you specified in step 2)
-   - **Token:** paste the token from step 1
-
-#### Step 4: Invoke triage in Claude Code
-
-Use the `/tally-triage` slash command in Claude Code:
+With batches prepared and the server running, open Claude Code in the
+project directory and run:
 
 ```
 /tally-triage
 ```
 
-Claude Code connects to the MCP server, retrieves untriaged findings, streams them through the triage agent, and presents each batch to you for confirmation.
+Claude Code asks for your project name and MCP token, reports how many
+batches and findings are pending, and asks for a single approval to
+proceed. Once approved, it fetches each batch, dispatches concurrent
+`triage-agent` subagents (one per finding), submits the collected
+verdicts, and repeats until no batches remain. There is no per-batch
+confirmation after the initial approval; verdicts are persisted to the
+project database as each batch completes.
 
-### Batch confirmation workflow
+### Concurrent sessions
 
-When you invoke `/tally-triage`, Claude Code:
-
-1. Fetches untriaged SAST, API, and DAST findings from your active project
-2. Groups findings into batches
-3. Sends each batch to the triage agent
-4. Displays the verdicts and waits for your approval
-5. On approval, persists the verdicts to the project database
-6. Moves to the next batch
-
-You can approve, reject, or edit verdicts in Claude Code before confirming. Rejected batches are skipped and remain untriaged; you can retry them later.
-
-### When to use MCP triage vs auto-triage
-
-Use **MCP triage** when:
-- You want to review and confirm findings interactively before committing verdicts
-- You prefer to run triage from Claude Code alongside other development workflows
-- You want visibility into each batch before persistence
-- You do not want a long-running container on the host
-
-Use **auto-triage** when:
-- You want to process all findings headlessly without interaction
-- You want triage to run from the REPL or web UI in a fully automated pipeline
-- You are triaging a large volume of findings and interactivity is not needed
+Do not run more than one `/tally-triage` session against the same project
+at a time. Auto-triage enforces a single run per project through a lock;
+MCP triage has no equivalent lock, so concurrent sessions pull batches
+from the same shared queue and produce interleaved, unpredictable results.
 
 ---
 

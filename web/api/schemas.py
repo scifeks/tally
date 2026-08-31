@@ -420,6 +420,7 @@ class CapabilitiesResponse(BaseModel):
     report_retention_enabled: bool
     max_report_history: int
     triage_backend_label: str | None
+    triage_mode: str | None = None
 
 
 class FindingHistoryItem(BaseModel):
@@ -983,3 +984,25 @@ class BurpPollStatusResponse(BaseModel):
     project_id: int
     configured: bool
     active: bool
+
+
+# MCP Serve
+class McpTriageStartResponse(BaseModel):
+    host: str
+    port: int
+    token: str
+    batch_count: int = Field(alias="batchCount")
+    total_findings: int = Field(alias="totalFindings")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class McpServeStopResponse(BaseModel):
+    status: str
+
+
+class McpServeStatusResponse(BaseModel):
+    active: bool
+    host: str | None = None
+    port: int | None = None
+    source: str | None = None

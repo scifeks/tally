@@ -10,6 +10,7 @@ from .defectdojo_config import DefectDojoGlobalConfig
 from .feature_inference_config import FeatureInferenceConfig
 from .local_inference_config import LocalInferenceConfig
 from .mcp_config import McpConfig
+from .mcp_triage_config import McpTriageConfig
 from .openai_config import OpenAIConfig
 from .opencode_config import OpenCodeConfig
 from .voyage_config import VoyageConfig
@@ -108,6 +109,9 @@ class GlobalConfig(BaseModel):
 
     # MCP server
     mcp: McpConfig = Field(default_factory=McpConfig)
+    mcp_triage: McpTriageConfig = Field(
+        default_factory=McpTriageConfig,
+    )
 
     @field_validator("blind_xss_callback_url")
     @classmethod

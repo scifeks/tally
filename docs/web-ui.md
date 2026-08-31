@@ -197,6 +197,16 @@ Click "Start triage" to launch the agent against untriaged findings in the activ
 
 Triage requires Docker and a configured `triage_inference` block in `config/global.json`. If prerequisites are not met, the button is disabled with a message explaining what is missing.
 
+### MCP triage mode
+
+Some projects run triage through MCP mode instead of the headless Docker flow: the agent executes inside your own Claude Code session rather than inside a container. Which mode applies is determined by your configured triage provider and API key, not a choice you make in the UI. See [docs/triage.md](triage.md#mcp-triage-mode) for the mode determination table.
+
+When the active project is in MCP mode, the Triage page shows **Start MCP Triage** in place of **Start Triage**. Clicking it creates triage batches for the latest scan run and starts Tally's MCP server if it is not already running.
+
+An instructions panel shows the server host and port. The first time you start MCP triage for a project, it also shows a bearer token; copy it, since it is not shown again. On later starts, the panel reminds you to use your existing token instead. Open Claude Code and run `/tally-triage` to begin triaging the prepared batches.
+
+Batch and log results from MCP triage appear in the same batches panel and triage log used by auto-triage. Click **Stop MCP Triage** to stop the server.
+
 ### Real-time progress
 
 As triage runs, the page displays overall progress (findings processed / total eligible), a batch list grouped by segment with status and timing, a live event log, and an elapsed time counter.

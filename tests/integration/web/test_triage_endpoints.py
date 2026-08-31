@@ -298,6 +298,7 @@ async def test_start_triage_returns_202_and_acquires_slot(
 
     client, _fid, _rag, factory, mut_headers, project_id = app_client
     _seed_scan_run(factory, project_id=project_id)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test-key")
 
     # Stub the worker so the spawned thread is a no-op and the lock
     # remains acquired (the route's response is what we are asserting).
@@ -338,6 +339,7 @@ async def test_start_triage_runs_worker_end_to_end(app_client, monkeypatch) -> N
 
     client, _fid, _rag, factory, mut_headers, project_id = app_client
     _seed_scan_run(factory, project_id=project_id)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test-key")
 
     captured: dict[str, Any] = {}
     done = threading.Event()
@@ -388,6 +390,7 @@ async def test_start_triage_runs_worker_end_to_end(app_client, monkeypatch) -> N
 async def test_start_triage_409_when_busy(app_client, monkeypatch) -> None:
     client, _fid, _rag, factory, mut_headers, project_id = app_client
     _seed_scan_run(factory, project_id=project_id)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test-key")
 
     # Pre-acquire the triage slot so the next dispatch gets 409.
     get_registry().acquire_job("triage", "test-other-holder")
@@ -901,6 +904,7 @@ async def test_start_response_includes_previous_max_batch_id(
     client, _fid, _rag, factory, mut_headers, project_id = app_client
     run_id = _seed_scan_run(factory, project_id=project_id)
     prior = _seed_triage_batch(factory, run_id=run_id, finding_ids=[1])
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test-key")
 
     def _noop(self, **kwargs):
         return None

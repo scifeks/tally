@@ -63,6 +63,10 @@ export type {
 export { useCapabilities } from './useCapabilities'
 export type { Capabilities } from './useCapabilities'
 
+// MCP triage-mode hooks
+export { useMcpServeStatus, useStartMcpTriage, useStopMcpServe } from './useMcpServe'
+export type { McpServeStatus, McpTriageStartResult } from './useMcpServe'
+
 // Runtime / installed-tools hooks (cross-project)
 export { useRuntimeDependencies, useInstalledTools } from './useRuntime'
 

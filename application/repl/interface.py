@@ -86,6 +86,11 @@ _COMPLETIONS = [
     "mcp token create",
     "mcp token list",
     "mcp token revoke",
+    "mcp serve start",
+    "mcp serve stop",
+    "mcp serve restart",
+    "mcp serve status",
+    "mcp triage prepare",
 ]
 # First tokens only for WordCompleter
 _TOP_TOKENS = sorted({c.split()[0] for c in _COMPLETIONS})
@@ -265,15 +270,19 @@ class REPL:
                 build_runtime_dependency_probes(base_path=base_path)
             )
         self._runtime_service = runtime_service
-        claude_api_key = (
-            self.config.global_config.claude.api_key
-            if self.config.global_config.claude
-            else ""
-        )
+        gcfg = self.config.global_config
+        triage_provider = ""
+        triage_api_key = ""
+        if gcfg.triage_inference:
+            triage_provider = gcfg.triage_inference.provider
+            if triage_provider in ("claude", "claude_code"):
+                triage_api_key = gcfg.claude.api_key if gcfg.claude else ""
+            elif triage_provider == "openai":
+                triage_api_key = gcfg.openai.api_key if gcfg.openai else ""
         self.triage_readiness = compute_triage_readiness(
-            base_path=base_path,
+            provider=triage_provider,
             docker_available=runtime_service.is_installed("docker"),
-            claude_api_key=claude_api_key,
+            api_key=triage_api_key,
         )
         if web_ui_runner is None:
             from infrastructure.web_ui.runner import WebUiRunner
@@ -364,6 +373,11 @@ class REPL:
             self.console.print(
                 f"[dim]Cancelling {len(handles)} active scan(s)...[/dim]"
             )
+
+        from application.mcp.lifecycle import stop_mcp_server
+
+        if stop_mcp_server():
+            self.console.print("[dim]Stopping MCP server...[/dim]")
 
     def _run_harness(self) -> None:
         """Plain-stdin REPL loop (prints sentinel before each prompt)."""

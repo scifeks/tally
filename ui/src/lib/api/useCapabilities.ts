@@ -12,6 +12,7 @@ export interface Capabilities {
   reportRetentionEnabled: boolean
   maxReportHistory: number
   triageBackendLabel: string | null
+  triageMode: 'auto' | 'mcp' | null
 }
 
 interface CapabilitiesApi {
@@ -20,6 +21,7 @@ interface CapabilitiesApi {
   report_retention_enabled: boolean
   max_report_history: number
   triage_backend_label: string | null
+  triage_mode: string | null
 }
 
 function mapCapabilities(api: CapabilitiesApi): Capabilities {
@@ -29,6 +31,7 @@ function mapCapabilities(api: CapabilitiesApi): Capabilities {
     reportRetentionEnabled: api.report_retention_enabled,
     maxReportHistory: api.max_report_history,
     triageBackendLabel: api.triage_backend_label,
+    triageMode: (api.triage_mode as 'auto' | 'mcp') ?? null,
   }
 }
 

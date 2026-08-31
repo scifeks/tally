@@ -99,6 +99,39 @@ def _migrate_repositories_to_services(conn: sqlite3.Connection) -> None:
     )
 
 
+def _migrate_finding_history_source(conn: sqlite3.Connection) -> None:
+    """Add 'mcp_triage' to the finding_history source CHECK constraint."""
+    row = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='finding_history'"
+    ).fetchone()
+    if row is None or "mcp_triage" in (row[0] or ""):
+        return
+    conn.executescript("""
+        CREATE TABLE IF NOT EXISTS finding_history_new (
+            id                INTEGER PRIMARY KEY AUTOINCREMENT,
+            finding_id        INTEGER NOT NULL
+                                REFERENCES findings(id) ON DELETE CASCADE,
+            timestamp         TEXT NOT NULL,
+            before_values     TEXT NOT NULL,
+            after_values      TEXT NOT NULL,
+            inference_context TEXT,
+            source            TEXT NOT NULL CHECK (source IN (
+                                'llm_inference',
+                                'auto_triage',
+                                'web_ui',
+                                'repl',
+                                'mcp_triage'
+                              ))
+        );
+        INSERT INTO finding_history_new
+            SELECT * FROM finding_history;
+        DROP TABLE finding_history;
+        ALTER TABLE finding_history_new RENAME TO finding_history;
+        CREATE INDEX IF NOT EXISTS idx_finding_history_finding_id
+            ON finding_history (finding_id, timestamp DESC);
+    """)
+
+
 class ConnectionFactory:
     """Creates SQLite connections and manages schema initialization."""
 
@@ -303,7 +336,8 @@ class ConnectionFactory:
                                         'llm_inference',
                                         'auto_triage',
                                         'web_ui',
-                                        'repl'
+                                        'repl',
+                                        'mcp_triage'
                                       ))
                 );
 
@@ -516,6 +550,7 @@ class ConnectionFactory:
                     WHERE scope = 'service';
             """)
             _migrate_repositories_to_services(conn)
+            _migrate_finding_history_source(conn)
 
     def purge_operational_tables(self) -> None:
         """Clear operational data tables, preserving configuration.

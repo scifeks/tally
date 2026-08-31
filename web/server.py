@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import contextlib
 import logging
+import secrets
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import datetime
@@ -20,7 +21,9 @@ from application.runtime.dependency_service import RuntimeDependencyService
 from application.tools.registry import ToolRegistry
 from application.triage.readiness import compute_triage_readiness
 from core.config import ConfigManager
+from core.security.credentials import create_key_file, get_encryption_key
 from infrastructure.events.bus import EventBus
+from infrastructure.store.repositories.mcp_tokens import McpTokenRepository
 from infrastructure.system.installed_tools_probe import InstalledToolsProbe
 from web.api._errors import install_error_handlers
 from web.api._redact import install_redaction_middleware
@@ -34,6 +37,12 @@ from web.api.documents import v1_router as documents_v1_router
 from web.api.findings import v1_router as findings_v1_router
 from web.api.global_settings import router as global_settings_v1_router
 from web.api.locks import router as locks_router
+from web.api.mcp_serve import (
+    global_router as mcp_global_router,
+)
+from web.api.mcp_serve import (
+    project_router as mcp_project_router,
+)
 from web.api.platform import platform_v1_router
 from web.api.projects import v1_router as projects_v1_router
 from web.api.reports import v1_router as reports_projects_v1_router
@@ -111,6 +120,16 @@ def create_app(
     app.state.tool_catalog_snapshot = tool_registry.snapshot()
     app.state.installed_tools = InstalledToolsProbe(tool_registry)
 
+    try:
+        mcp_credentials_key_path = Path(base_path) / "mcp_credentials.key"
+        if not mcp_credentials_key_path.exists():
+            create_key_file(secrets.token_urlsafe(32), mcp_credentials_key_path)
+        app.state.encryption_key = get_encryption_key(mcp_credentials_key_path)
+        app.state.token_repo = McpTokenRepository(Path(base_path) / "tally.db")
+    except (FileNotFoundError, PermissionError):
+        app.state.encryption_key = None
+        app.state.token_repo = None
+
     app.state.runtime_dependency_service = RuntimeDependencyService(
         build_runtime_dependency_probes(base_path=base_path)
     )
@@ -120,18 +139,25 @@ def create_app(
     except (FileNotFoundError, PermissionError):
         cfg = None
 
-    claude_api_key = cfg.claude.api_key if cfg and cfg.claude else ""
-
     from infrastructure.tools.burp.probe import (
         probe_burp_availability,
     )
 
     app.state.burp_available = probe_burp_availability(cfg.burp if cfg else None)
 
+    triage_provider = ""
+    triage_api_key = ""
+    if cfg and cfg.triage_inference:
+        triage_provider = cfg.triage_inference.provider
+        if triage_provider in ("claude", "claude_code"):
+            triage_api_key = cfg.claude.api_key if cfg.claude else ""
+        elif triage_provider == "openai":
+            triage_api_key = cfg.openai.api_key if cfg.openai else ""
+
     triage_readiness = compute_triage_readiness(
-        base_path=base_path,
+        provider=triage_provider,
         docker_available=app.state.runtime_dependency_service.is_installed("docker"),
-        claude_api_key=claude_api_key,
+        api_key=triage_api_key,
     )
     app.state.capabilities_service = CapabilitiesService(
         base_path=base_path,
@@ -158,6 +184,8 @@ def create_app(
     app.include_router(reports_projects_v1_router, prefix="/api/v1/projects")
     app.include_router(chat_projects_v1_router, prefix="/api/v1/projects")
     app.include_router(url_list_v1_router, prefix="/api/v1/projects")
+    app.include_router(mcp_project_router, prefix="/api/v1/projects")
+    app.include_router(mcp_global_router, prefix="/api/v1")
 
     # Middleware added in reverse execution order (Starlette LIFO).
     # Execution: SecurityHeaders -> AccessLog -> CORS -> Host -> Origin ->

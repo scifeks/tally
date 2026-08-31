@@ -35,4 +35,5 @@ class CapabilitiesService:
             report_retention_enabled=False,
             max_report_history=max_report_history,
             triage_backend_label=self._triage_readiness.backend_label,
+            triage_mode=self._triage_readiness.triage_mode,
         )

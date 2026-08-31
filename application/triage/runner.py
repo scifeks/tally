@@ -18,10 +18,7 @@ from application.ports.triage_event_sink import (
     TriageEventSink,
 )
 from application.tools.registry import ToolRegistry
-from application.triage.batching import (
-    batch_size_for_segment,
-    compute_batches,
-)
+from application.triage.batch_creator import create_triage_batches
 from application.triage.prompts import dast_trace, sast_trace
 from application.triage.verdict import (
     SourceNotExaminedError,
@@ -35,7 +32,6 @@ from domain.findings.normalization import (
 )
 from domain.pipeline.triage_events import (
     BatchCompleted,
-    BatchCreated,
     BatchFailed,
     BatchStarted,
     RunCancelled,
@@ -60,11 +56,7 @@ _log = logging.getLogger(__name__)
 
 
 class TriageCancelled(Exception):
-    """Raised when triage observes its CancellationToken set mid-run.
-
-    The runner's batch loop catches this, marks remaining batches
-    canceled, emits a ``run_canceled`` event, and exits cleanly.
-    """
+    """Raised when triage observes its CancellationToken set mid-run."""
 
 
 class TriageAborted(Exception):
@@ -76,12 +68,7 @@ class TriageAborted(Exception):
 
 
 class NoScanRunError(RuntimeError):
-    """Raised when triage is dispatched but the project has no scan_runs.
-
-    Triage operates against the latest scan_run for the project. If no
-    scan has ever run, there is nothing to triage. The API surface
-    translates this into a 404; the REPL surfaces the message.
-    """
+    """Raised when triage is dispatched but the project has no scan_runs."""
 
 
 @dataclass
@@ -143,72 +130,18 @@ class TriageRunner:
     def batch(self) -> tuple[int, int]:
         """Run batching phase only.
 
-        Resolves the scan_run_id (constructor arg, else latest in the
-        project DB via ``RunRepository.latest_run_id()``), creates
-        triage_batches rows for that scan_run, and returns
-        ``(scan_run_id, total_batches_created)``. Raises
-        :class:`NoScanRunError` if the project has no scan runs.
+        Raises NoScanRunError if the project has no scan runs.
         """
         run_id = self._resolve_scan_run_id()
-
-        stale = self._triage_repo.cancel_remaining(run_id)
-        if stale:
-            _log.info(
-                "Cancelled %d stale batches for run_id=%d",
-                stale,
-                run_id,
-            )
-
-        skip_tools = frozenset(
-            t.name
-            for t in self._tool_registry.get_all_tools()
-            if getattr(t, "skip", False)
+        created = create_triage_batches(
+            run_id=run_id,
+            triage_repo=self._triage_repo,
+            tool_registry=self._tool_registry,
+            max_findings_per_batch=self._max_findings_per_batch,
+            event_sink=self._event_sink,
+            project_id=self._project_id,
         )
-        combos = self._triage_repo.get_active_finding_combos(run_id, skip_tools)
-
-        total = 0
-        for tool, repo, segment in combos:
-            try:
-                findings = self._triage_repo.fetch_active_findings_for_batching(
-                    run_id, tool, repo, segment
-                )
-                batches = compute_batches(
-                    findings,
-                    max_findings_per_batch=(
-                        batch_size_for_segment(
-                            segment,
-                            default=(self._max_findings_per_batch),
-                        )
-                    ),
-                )
-                created = self._triage_repo.create_batches(run_id, batches)
-                _log.info(
-                    "Created %d batches: tool=%s repo=%s segment=%s",
-                    len(created),
-                    tool,
-                    repo,
-                    segment,
-                )
-                for batch_id, finding_count in created:
-                    self._emit(
-                        BatchCreated(
-                            scan_run_id=run_id,
-                            project_id=self._project_id,
-                            batch_id=batch_id,
-                            segment=segment,
-                            findings_count=finding_count,
-                            message=(
-                                f"Batched {finding_count} finding(s)"
-                                f" for {tool}/{repo}/{segment}"
-                            ),
-                        )
-                    )
-                total += len(created)
-            except Exception as exc:
-                raise RuntimeError(
-                    f"Batching failed for {tool}/{repo}/{segment}: {exc}"
-                ) from exc
-        return run_id, total
+        return run_id, len(created)
 
     def run(self, *, holder_token: str | None = None) -> TriageResult:
         """Runs one triage pass for a scan run."""
@@ -298,12 +231,7 @@ class TriageRunner:
     # Private helpers
 
     def _resolve_scan_run_id(self) -> int:
-        """Return the scan_run_id triage will operate on.
-
-        Constructor arg wins; otherwise the repository reports the
-        latest scan_run in the project's DB. Raises
-        :class:`NoScanRunError` if no scan_runs exist.
-        """
+        """Return the scan_run_id triage will operate on."""
         if self._scan_run_id is not None:
             return self._scan_run_id
         latest = self._run_repo.latest_run_id()
@@ -326,15 +254,7 @@ class TriageRunner:
             raise TriageCancelled
 
     def _emit_run_failed(self, run_id: int, exc: BaseException) -> None:
-        """Emit a ``triage_failed`` event before re-raising *exc*.
-
-        Best-effort: pulls completed/total counts from
-        ``summarize_for_run`` and the first finding id of the most
-        recently in-progress batch for ``failed_at_finding_id``.
-        ``resumable`` is True when at least one batch is still in
-        ``pending`` or ``in_progress`` (i.e. the run can be resumed
-        without re-batching).
-        """
+        """Emit a RunFailed event with best-effort progress counts."""
         completed = total = 0
         failed_at: int | None = None
         resumable = False
@@ -379,11 +299,8 @@ class TriageRunner:
     ) -> TriageResult:
         """Claim and process every pending batch for run_id.
 
-        handler(batch_id, batch_data, segment) -> outcome string.
-        Skip-flagged tools are auto-completed without calling handler.
-        When holder_token is set, finding-id locks are acquired per
-        batch so that analyst PATCH requests are blocked while the
-        agent writes those findings.
+        Acquires per-finding locks when holder_token is set so analyst
+        writes are blocked during agent processing.
         """
         sessions_run = success = failed = incomplete = 0
         while True:

@@ -7,10 +7,6 @@ import logging
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
-from application.triage.batching import (
-    batch_size_for_segment,
-    compute_batches,
-)
 from application.triage.prompts import api_trace, dast_trace, sast_trace
 from domain.findings.normalization import (
     build_triage_meta,
@@ -26,6 +22,7 @@ if TYPE_CHECKING:
     from application.ports.finding_repository import FindingRepositoryPort
     from application.ports.run_repository import RunRepositoryPort
     from application.ports.triage_batch_repository import TriageBatchRepositoryPort
+    from application.ports.triage_event_sink import TriageEventSink
     from application.tools.registry import ToolRegistry
 
 
@@ -39,13 +36,7 @@ _log = logging.getLogger(__name__)
 
 
 class McpTriageService:
-    """Orchestrate batch fetch, prompt rendering, and verdict writing for MCP.
-
-    This service implements the three MCP triage tools: fetch_batch,
-    submit_verdicts, and skip_batch. It reuses existing triage infrastructure
-    through hexagonal ports and does not import from infrastructure, the
-    auto-triage runner, or auto-triage orchestration.
-    """
+    """Orchestrate batch fetch, prompt rendering, and verdict writing for MCP."""
 
     def __init__(
         self,
@@ -54,19 +45,18 @@ class McpTriageService:
         finding_repo: FindingRepositoryPort,
         run_repo: RunRepositoryPort,
         tool_registry: ToolRegistry,
+        event_sink: TriageEventSink | None = None,
+        max_concurrent_agents: int = 3,
     ) -> None:
         self._triage_repo = triage_repo
         self._finding_repo = finding_repo
         self._run_repo = run_repo
         self._tool_registry = tool_registry
+        self._event_sink = event_sink
+        self._max_concurrent_agents = max_concurrent_agents
 
     def fetch_batch(self, project_name: str) -> dict[str, Any]:
-        """Fetch the next pending triage batch or compute new ones.
-
-        Returns a dict with batch_id, run_id, segment, batch counts, and
-        rendered prompts. If no batches are available, returns batch_id: None
-        with a message.
-        """
+        """Fetch the next pending triage batch."""
         latest_run_id = self._run_repo.latest_run_id()
         if latest_run_id is None:
             return {
@@ -75,27 +65,31 @@ class McpTriageService:
             }
 
         run_id = latest_run_id
-
-        # Try to claim a pending batch
         batch = self._triage_repo.claim_batch(run_id)
-
-        if batch is None:
-            # No pending batch; compute new ones if there are untriaged findings
-            self._compute_batches_for_run(run_id)
-            batch = self._triage_repo.claim_batch(run_id)
 
         if batch is None:
             return {
                 "batch_id": None,
-                "message": f"No untriaged findings for project '{project_name}'",
+                "message": f"No pending batches for '{project_name}'",
             }
 
-        # Determine segment from tool in batch
         tool_name = batch.batch_data[0]["tool"] if batch.batch_data else None
         tool_obj = self._tool_registry.get_tool(tool_name or "") if tool_name else None
         segment = tool_obj.scan_segment if tool_obj else "sast"
 
-        # Render prompts
+        if self._event_sink:
+            from domain.pipeline.triage_events import BatchStarted
+
+            self._event_sink.emit(
+                BatchStarted(
+                    scan_run_id=run_id,
+                    project_id=None,
+                    batch_id=batch.id,
+                    segment=segment,
+                    message=f"MCP batch {batch.id} claimed",
+                )
+            )
+
         render_fn = _PROMPT_RENDERERS.get(segment)
         if render_fn is None:
             render_fn = sast_trace.render
@@ -109,7 +103,9 @@ class McpTriageService:
                 }
             )
 
-        # Get batch counts for progress
+        # repo comes from the finding rows collected into this batch
+        repo_name = batch.batch_data[0].get("repo") if batch.batch_data else None
+
         summary = self._triage_repo.summarize_for_run(run_id)
         total_batches = summary.total_batches if summary else 0
         completed_batches = (
@@ -124,6 +120,7 @@ class McpTriageService:
             "batch_id": batch.id,
             "run_id": run_id,
             "segment": segment,
+            "repo_name": repo_name,
             "total_batches": total_batches,
             "completed_batches": completed_batches,
             "findings": findings_with_prompts,
@@ -136,19 +133,13 @@ class McpTriageService:
         *,
         project_name: str,
     ) -> dict[str, Any]:
-        """Process and persist a list of verdict dicts for a batch.
-
-        Each verdict is validated and persisted. Returns per-finding results
-        and final batch status (completed or failed).
-        """
+        """Process and persist a list of verdict dicts for a batch."""
         results = []
         accepted_count = 0
         rejected_count = 0
 
-        # Get the batch to determine segment for strategy parameter
-        all_batches = self._triage_repo.list_for_run(
-            self._get_run_id_for_batch(batch_id)
-        )
+        run_id = self._get_run_id_for_batch(batch_id)
+        all_batches = self._triage_repo.list_for_run(run_id)
         batch_row = next((b for b in all_batches if b.id == batch_id), None)
         segment = "sast"
         batch_finding_ids: set[Any] = set()
@@ -175,7 +166,6 @@ class McpTriageService:
                 json_text = json.dumps(verdict_dict)
                 verdict = parse_verdict(json_text, expected_finding_id=finding_id)
 
-                # Persist the verdict
                 call_stack_str = (
                     json.dumps(verdict.call_stack) if verdict.call_stack else None
                 )
@@ -245,6 +235,34 @@ class McpTriageService:
             batch_status = "completed"
         self._triage_repo.complete_batch(batch_id, batch_status)
 
+        if self._event_sink:
+            from domain.pipeline.triage_events import (
+                BatchCompleted,
+                BatchFailed,
+            )
+
+            if batch_status == "failed":
+                self._event_sink.emit(
+                    BatchFailed(
+                        scan_run_id=run_id,
+                        project_id=None,
+                        batch_id=batch_id,
+                        segment=segment,
+                        message=f"MCP batch {batch_id} failed",
+                    )
+                )
+            else:
+                self._event_sink.emit(
+                    BatchCompleted(
+                        scan_run_id=run_id,
+                        project_id=None,
+                        batch_id=batch_id,
+                        segment=segment,
+                        findings_count=accepted_count,
+                        message=f"MCP batch {batch_id} completed",
+                    )
+                )
+
         return {
             "results": results,
             "batch_status": batch_status,
@@ -255,21 +273,32 @@ class McpTriageService:
         self._triage_repo.complete_batch(batch_id, "skipped")
         return {"status": "skipped"}
 
-    # Private helpers
+    def get_triage_status(self, project_name: str) -> dict[str, Any]:
+        """Return triage progress for a project without claiming a batch."""
+        run_id = self._run_repo.latest_run_id()
+        summary = (
+            self._triage_repo.summarize_for_run(run_id) if run_id is not None else None
+        )
+        if summary is None:
+            return {
+                "pending_batches": 0,
+                "completed_batches": 0,
+                "failed_batches": 0,
+                "total_findings": 0,
+                "max_concurrent_agents": self._max_concurrent_agents,
+            }
+        counts = summary.counts_by_status
+        return {
+            "pending_batches": counts.get("pending", 0),
+            "completed_batches": (
+                counts.get("completed", 0) + counts.get("skipped", 0)
+            ),
+            "failed_batches": counts.get("failed", 0),
+            "total_findings": summary.total_findings,
+            "max_concurrent_agents": self._max_concurrent_agents,
+        }
 
-    def _compute_batches_for_run(self, run_id: int) -> None:
-        """Fetch untriaged findings and compute new batches for run_id."""
-        combos = self._triage_repo.get_active_finding_combos(run_id, frozenset())
-        for tool, repo, segment in combos:
-            findings = self._triage_repo.fetch_active_findings_for_batching(
-                run_id, tool, repo, segment
-            )
-            if findings:
-                batches = compute_batches(
-                    findings,
-                    max_findings_per_batch=(batch_size_for_segment(segment)),
-                )
-                self._triage_repo.create_batches(run_id, batches)
+    # Private helpers
 
     def _get_run_id_for_batch(self, batch_id: int) -> int:
         """Look up the run_id for a given batch_id."""

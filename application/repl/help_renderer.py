@@ -15,8 +15,8 @@ if TYPE_CHECKING:
 HELP_BOX = box.Box("┌─┬┐\n│ ││\n├─┼┤\n│ ││\n├─┼┤\n├─┼┤\n│ ││\n└─┴┘\n")
 
 # Help registry: (group, command, argument, description)
-# command=None  → section header row; description holds the section title.
-# command=_NOTE → dim informational row (no Command/Arguments cells).
+# command=None marks a section header row; description holds the title.
+# command=_NOTE marks a dim informational row (no Command/Arguments cells).
 # group is used by HelpRenderer.render() to render filtered tables.
 _NOTE = "_NOTE_"
 
@@ -365,28 +365,52 @@ _HELP_REGISTRY = [
     ("mcp", None, None, "MCP Server"),
     (
         "mcp",
+        "mcp serve start",
+        None,
+        "Start the MCP server in the background",
+    ),
+    (
+        "mcp",
+        "mcp serve stop",
+        None,
+        "Stop the running MCP server",
+    ),
+    (
+        "mcp",
+        "mcp serve restart",
+        None,
+        "Restart the MCP server",
+    ),
+    (
+        "mcp",
+        "mcp serve status",
+        None,
+        "Show MCP server status",
+    ),
+    (
+        "mcp",
+        "mcp triage prepare",
+        "[run_id]",
+        "Create triage batches for MCP processing",
+    ),
+    (
+        "mcp",
         "mcp token create",
         "[name]",
-        "Create a bearer token for MCP authentication",
+        "Create a new MCP bearer token",
     ),
-    ("mcp", "mcp token list", None, "List all MCP tokens"),
+    ("mcp", "mcp token list", None, "List MCP tokens"),
     (
         "mcp",
         "mcp token revoke",
         "<name>",
-        "Revoke an MCP token by name",
+        "Revoke an MCP token",
     ),
     (
         "mcp",
         "mcp server create",
         None,
-        "Write .mcp.json from config/global.json mcp settings",
-    ),
-    (
-        "mcp",
-        "mcp serve",
-        None,
-        "Start the MCP server in the background",
+        "Write .mcp.json for Claude Code",
     ),
     # Utility
     ("utility", None, None, "Utility"),

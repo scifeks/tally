@@ -17,6 +17,7 @@ from application.rag.finding_indexer import FindingIndexer
 from application.rag.knowledge_base_cache import (
     get_or_build_knowledge_base,
 )
+from core.config import ConfigManager
 from core.project_paths import ProjectPaths
 from infrastructure.store.connection import ConnectionFactory
 from infrastructure.store.repositories.findings import (
@@ -29,6 +30,7 @@ from infrastructure.store.repositories.triage import (
 from mcp_server.auth import validate_bearer_token
 
 if TYPE_CHECKING:
+    from application.ports.event_publisher import EventPublisherPort
     from application.ports.mcp_token_repository import (
         McpTokenRepositoryPort,
     )
@@ -48,6 +50,7 @@ def create_mcp_server(
     encryption_key: bytes,
     base_path: str | Path,
     port: int = 8765,
+    event_publisher: EventPublisherPort | None = None,
 ) -> FastMCP:
     """Create the MCP server with triage and ingest tools."""
     server = FastMCP(
@@ -55,16 +58,18 @@ def create_mcp_server(
         port=port,
         instructions=(
             "Tally MCP tools: fetch_batch, submit_verdicts,"
-            " skip_batch, list_projects, create_scan_run,"
-            " submit_finding, get_duplicate_candidates,"
-            " resolve_duplicates, end_scan. Pass your bearer"
-            " token as the auth_token parameter."
+            " skip_batch, get_triage_status, list_projects,"
+            " create_scan_run, submit_finding,"
+            " get_duplicate_candidates, resolve_duplicates,"
+            " end_scan. Pass your bearer token as the"
+            " auth_token parameter."
         ),
     )
 
-    # KB cache for ingest service
     kb_cache: dict[str, Any] = {}
     base_path_obj = Path(base_path) if isinstance(base_path, str) else base_path
+    cfg = ConfigManager(str(base_path_obj)).global_config
+    max_agents = cfg.mcp_triage.max_concurrent_agents
 
     def _require_auth(auth_token: str) -> None:
         if not validate_bearer_token(
@@ -75,7 +80,6 @@ def create_mcp_server(
             raise PermissionError("Invalid or missing MCP token")
 
     def _run_repo_factory(db_path: str) -> RunRepositoryPort:
-        """Create a RunRepository from a db_path string."""
         conn_factory = ConnectionFactory(Path(db_path))
         conn_factory.init_schema()
         return RunRepository(conn_factory)
@@ -90,11 +94,20 @@ def create_mcp_server(
         paths.sqlite_dir.mkdir(parents=True, exist_ok=True)
         factory = ConnectionFactory(paths.findings_db)
         factory.init_schema()
+        event_sink = None
+        if event_publisher is not None:
+            from web.adapters.event_bus_triage_sink import (
+                EventBusTriageSink,
+            )
+
+            event_sink = EventBusTriageSink(event_publisher)
         return McpTriageService(
             triage_repo=TriageBatchRepository(factory),
             finding_repo=FindingRepository(factory),
             run_repo=RunRepository(factory),
             tool_registry=tool_registry,
+            event_sink=event_sink,
+            max_concurrent_agents=max_agents,
         )
 
     def _get_ingest_service(project_name: str) -> McpIngestService:
@@ -142,6 +155,13 @@ def create_mcp_server(
         _require_auth(auth_token)
         service = _get_service(project)
         return service.skip_batch(batch_id)
+
+    @server.tool()
+    def get_triage_status(project: str, auth_token: str) -> dict[str, Any]:
+        """Get triage progress summary without claiming."""
+        _require_auth(auth_token)
+        service = _get_service(project)
+        return service.get_triage_status(project)
 
     @server.tool()
     def list_projects(auth_token: str) -> list[dict[str, Any]]:
@@ -221,6 +241,7 @@ def start_mcp_server(
     token_repo: McpTokenRepositoryPort,
     encryption_key: bytes,
     base_path: str | Path,
+    event_publisher: EventPublisherPort | None = None,
 ) -> None:
     """Launch the MCP server with SSE transport (blocking)."""
     server = create_mcp_server(
@@ -230,6 +251,7 @@ def start_mcp_server(
         encryption_key,
         base_path,
         port=port,
+        event_publisher=event_publisher,
     )
     logger.info(
         "Starting MCP server on port %d with SSE transport",

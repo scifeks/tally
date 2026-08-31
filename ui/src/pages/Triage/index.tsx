@@ -15,6 +15,9 @@ import {
   useTriageEvents,
   useRuntimeDependencies,
   useCapabilities,
+  useMcpServeStatus,
+  useStartMcpTriage,
+  useStopMcpServe,
   useScanHistory,
   fetchTriageMaxBatchId,
 } from '@/lib/api'
@@ -104,6 +107,10 @@ export default function Triage() {
   const claudeMissing = claudeDep !== undefined && !claudeDep.installed
 
   const { data: capabilities } = useCapabilities()
+  const triageMode = capabilities?.triageMode ?? null
+  const { data: mcpStatus } = useMcpServeStatus()
+  const startMcpTriage = useStartMcpTriage(projectIdNum)
+  const stopMcpServe = useStopMcpServe()
 
   // Live batches map. Seeded from the detail query, then mutated by SSE.
   const [batches, setBatches] = useState<Map<number, BatchDisplay>>(new Map())
@@ -116,6 +123,7 @@ export default function Triage() {
   const [selectedScanRunId, setSelectedScanRunId] = useState<number | null>(null)
   const [completedStatus, setCompletedStatus] = useState<TriageRunStatus | null>(null)
   const [showRunDropdown, setShowRunDropdown] = useState(false)
+  const [mcpToken, setMcpToken] = useState<string | null>(null)
   const runDropdownRef = useRef<HTMLDivElement>(null)
 
   const logEndRef = useRef<HTMLDivElement>(null)
@@ -148,6 +156,7 @@ export default function Triage() {
     setElapsedSec(0)
     setCompletedStatus(null)
     setViewedTriageRunId(null)
+    setMcpToken(null)
   }, [activeProjectId, setViewedTriageRunId])
 
   // Sync the global page-status flag (used by ProjectSwitchModal to gate
@@ -247,7 +256,7 @@ export default function Triage() {
         setCompletedStatus(event.type === 'run_completed' ? 'done' : 'cancelled')
         setResume(null)
         queryClient.invalidateQueries({ queryKey: ['triage', projectIdNum] })
-        // Force-refetch the detail so the map reseeds from the true DB
+        // Refetch the detail so the map reseeds from the true DB
         // state (including canceled batches), rather than relying on
         // useEffect firing off an unchanged react-query object.
         void refetchDetail()
@@ -536,7 +545,7 @@ export default function Triage() {
             )}
 
             {/* Claude-missing gate */}
-            {claudeMissing && !isRunning && (
+            {triageMode !== 'mcp' && claudeMissing && !isRunning && (
               <div className="flex items-start gap-2 border border-crit bg-crit/5 px-3 py-2 max-w-2xl">
                 <AlertTriangle className="h-4 w-4 text-crit mt-0.5 shrink-0" />
                 <div className="text-xs text-foreground leading-relaxed">
@@ -549,7 +558,7 @@ export default function Triage() {
 
             {/* Resume note (shown above the button when we just observed a
               failure that left batches in a resumable state) */}
-            {showResumeAffordance && (
+            {triageMode !== 'mcp' && showResumeAffordance && (
               <div className="text-xs text-high" data-testid="triage-resume-note">
                 last run failed at finding #{resume.failedAtFindingId ?? '?'} - {resume.error}
               </div>
@@ -557,7 +566,7 @@ export default function Triage() {
 
             {/* Buttons */}
             <div className="flex items-center gap-3">
-              {!isRunning && showResumeAffordance && (
+              {triageMode !== 'mcp' && !isRunning && showResumeAffordance && (
                 <button
                   onClick={handleResumeClick}
                   disabled={startDisabled}
@@ -573,7 +582,7 @@ export default function Triage() {
                   Resume
                 </button>
               )}
-              {!isRunning && !showResumeAffordance && (
+              {triageMode !== 'mcp' && !isRunning && !showResumeAffordance && (
                 <div ref={runDropdownRef} className="relative flex">
                   <button
                     onClick={handleStartClick}
@@ -644,7 +653,7 @@ export default function Triage() {
                   )}
                 </div>
               )}
-              {isRunning && (
+              {triageMode !== 'mcp' && isRunning && (
                 <button
                   onClick={handleStop}
                   disabled={stopDisabled}
@@ -655,7 +664,7 @@ export default function Triage() {
                   Stop
                 </button>
               )}
-              {showResetButton && (
+              {triageMode !== 'mcp' && showResetButton && (
                 <button
                   onClick={handleReset}
                   data-testid="triage-reset-button"
@@ -664,6 +673,58 @@ export default function Triage() {
                   <RotateCcw className="h-4 w-4" />
                   Reset
                 </button>
+              )}
+              {triageMode === 'mcp' && !mcpStatus?.active && (
+                <button
+                  onClick={() => {
+                    startMcpTriage.mutate(undefined, {
+                      onSuccess: data => setMcpToken(data.token),
+                    })
+                  }}
+                  disabled={startMcpTriage.isPending}
+                  data-testid="triage-mcp-start-button"
+                  className={cn(
+                    'flex items-center gap-2 px-4 h-9 font-bold text-xs uppercase tracking-wider transition-colors',
+                    startMcpTriage.isPending
+                      ? 'bg-muted text-dim cursor-not-allowed'
+                      : 'bg-accent text-background hover:bg-accent/70'
+                  )}
+                >
+                  <Brain className="h-4 w-4" />
+                  Start MCP Triage
+                </button>
+              )}
+              {triageMode === 'mcp' && mcpStatus?.active && (
+                <div className="flex items-center gap-4">
+                  <button
+                    onClick={() => stopMcpServe.mutate()}
+                    disabled={stopMcpServe.isPending}
+                    data-testid="triage-mcp-stop-button"
+                    className="flex items-center gap-2 px-4 h-9 border border-crit text-crit font-bold text-xs uppercase tracking-wider hover:bg-crit/15 hover:shadow-[0_0_10px_rgba(255,77,77,0.2)] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <Square className="h-4 w-4" />
+                    Stop MCP Triage
+                  </button>
+                  <div className="flex items-start gap-2 border border-accent/40 bg-accent/5 px-3 py-2 max-w-2xl">
+                    <Brain className="h-4 w-4 text-accent mt-0.5 shrink-0" />
+                    <div className="text-xs text-foreground leading-relaxed">
+                      <div>
+                        MCP server running on{' '}
+                        <span className="text-primary">
+                          {mcpStatus.host}:{mcpStatus.port}
+                        </span>
+                      </div>
+                      {mcpToken && (
+                        <div>
+                          Token: <code className="text-accent">{mcpToken}</code>
+                        </div>
+                      )}
+                      <div>
+                        Open Claude Code and run <code className="text-accent">/tally-triage</code>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               )}
             </div>
 
@@ -703,7 +764,9 @@ export default function Triage() {
                 <div className="text-sm text-center">
                   {eligibleCount === 0
                     ? 'No findings eligible for triage.'
-                    : 'Press Start Triage to begin AI analysis.'}
+                    : triageMode === 'mcp'
+                      ? 'Press Start MCP Triage to begin AI analysis.'
+                      : 'Press Start Triage to begin AI analysis.'}
                 </div>
               </div>
             ) : (

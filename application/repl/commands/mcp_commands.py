@@ -2,16 +2,16 @@
 
 from __future__ import annotations
 
-import logging
 import secrets
-import threading
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from rich.markup import escape
 from rich.table import Table
 
 from application.mcp.config_file import write_mcp_json
 from core.config.manager import ConfigManager
+from core.project_paths import ProjectPaths
 from core.security.credentials import (
     create_key_file,
     encrypt_value,
@@ -23,8 +23,6 @@ from infrastructure.store.repositories.mcp_tokens import (
 
 if TYPE_CHECKING:
     from application.repl.interface import REPL
-
-logger = logging.getLogger(__name__)
 
 
 class McpCommands:
@@ -42,13 +40,15 @@ class McpCommands:
         elif verb == "server":
             self._dispatch_server(args[1:])
         elif verb == "serve":
-            self._start_serve()
+            self._dispatch_serve(args[1:])
+        elif verb == "triage":
+            self._dispatch_triage(args[1:])
         else:
             self._print_usage()
 
     def _print_usage(self) -> None:
         self._repl.console.print(
-            "Usage: mcp <token|server|serve>\n"
+            "Usage: mcp <token|server|serve|triage>\n"
             "  mcp token create [name]  "
             "Create a bearer token\n"
             "  mcp token list           "
@@ -58,10 +58,12 @@ class McpCommands:
             "  mcp server create        "
             "Write .mcp.json from config\n"
             "  mcp serve                "
-            "Start the MCP server"
+            "Manage the MCP server (start|stop|restart|status)\n"
+            "  mcp triage prepare       "
+            "Create triage batches for MCP processing"
         )
 
-    # -- server sub-commands --
+    # Server subcommands
 
     def _dispatch_server(self, args: list[str]) -> None:
         sub = args[0] if args else ""
@@ -81,9 +83,34 @@ class McpCommands:
         except Exception as exc:
             self._repl.console.print(f"[red]Error:[/red] {exc}")
 
-    # -- serve --
+    # Serve
 
-    def _start_serve(self) -> None:
+    def _dispatch_serve(self, args: list[str]) -> None:
+        if not args:
+            self._serve_submenu()
+            return
+        action = args[0]
+        if action == "start":
+            self._serve_start()
+        elif action == "stop":
+            self._serve_stop()
+        elif action == "restart":
+            self._serve_restart()
+        elif action == "status":
+            self._serve_status()
+        else:
+            self._serve_submenu()
+
+    def _serve_submenu(self) -> None:
+        self._repl.console.print("[bold]MCP serve commands:[/bold]")
+        self._repl.console.print("  mcp serve start    Start the MCP server")
+        self._repl.console.print("  mcp serve stop     Stop the MCP server")
+        self._repl.console.print("  mcp serve restart  Restart the MCP server")
+        self._repl.console.print("  mcp serve status   Show server status")
+
+    def _serve_start(self) -> None:
+        from application.mcp.lifecycle import start_mcp_server_managed
+
         try:
             repl = self._repl
             config = ConfigManager(repl.base_path)
@@ -121,39 +148,111 @@ class McpCommands:
                 write_mcp_json(base, mcp_cfg.host, mcp_cfg.port)
                 repl.console.print(f"[green]Created .mcp.json at {mcp_json}[/green]")
 
-            from mcp_server.server import start_mcp_server
-
-            port = mcp_cfg.port
-
-            def _worker() -> None:
-                try:
-                    start_mcp_server(
-                        port,
-                        repl.project_registry,
-                        repl.tool_registry,
-                        token_repo,
-                        encryption_key,
-                        base,
-                    )
-                except Exception:
-                    logger.exception("MCP server crashed")
-
-            thread = threading.Thread(
-                target=_worker,
-                name="mcp-server",
-                daemon=True,
+            handle = start_mcp_server_managed(
+                port=mcp_cfg.port,
+                host=mcp_cfg.host.replace("http://", ""),
+                project_registry=repl.project_registry,
+                tool_registry=repl.tool_registry,
+                token_repo=token_repo,
+                encryption_key=encryption_key,
+                base_path=str(base),
+                source="repl",
             )
-            thread.start()
             repl.console.print(
-                f"[green]MCP server started on"
-                f" {mcp_cfg.host}:{port}[/green]\n"
-                "The server runs in the background. "
-                "It will stop when you exit the REPL."
+                f"[green]MCP server started on {handle.host}:{handle.port}[/green]"
             )
-        except Exception as exc:
-            self._repl.console.print(f"[red]Error starting MCP server:[/red] {exc}")
+        except RuntimeError as exc:
+            self._repl.console.print(f"[red]{exc}[/red]")
 
-    # -- token sub-commands --
+    def _serve_stop(self) -> None:
+        from application.mcp.lifecycle import stop_mcp_server
+
+        if stop_mcp_server():
+            self._repl.console.print("[green]MCP server stopped[/green]")
+        else:
+            self._repl.console.print("[yellow]No active MCP server[/yellow]")
+
+    def _serve_restart(self) -> None:
+        self._serve_stop()
+        import time
+
+        time.sleep(0.5)
+        self._serve_start()
+
+    def _serve_status(self) -> None:
+        from application.mcp.registry import get_mcp_server_registry
+
+        handle = get_mcp_server_registry().get()
+        if handle is None:
+            self._repl.console.print("[dim]MCP server: not running[/dim]")
+        else:
+            self._repl.console.print(
+                f"[green]MCP server: running on"
+                f" {handle.host}:{handle.port}"
+                f" (source: {handle.source})[/green]"
+            )
+
+    # Triage
+
+    def _dispatch_triage(self, args: list[str]) -> None:
+        if not args or args[0] != "prepare":
+            self._repl.console.print(
+                f"[yellow]Usage: mcp triage prepare {escape('[run_id]')}[/yellow]"
+            )
+            return
+        run_id = int(args[1]) if len(args) > 1 else None
+        self._triage_prepare(run_id)
+
+    def _triage_prepare(self, run_id: int | None) -> None:
+        from application.triage.batch_creator import (
+            create_triage_batches,
+        )
+        from infrastructure.store.connection import (
+            ConnectionFactory,
+        )
+        from infrastructure.store.repositories.runs import (
+            RunRepository,
+        )
+        from infrastructure.store.repositories.triage import (
+            TriageBatchRepository,
+        )
+
+        repl = self._repl
+        if repl.active_project is None:
+            repl.console.print(
+                "[red]No active project.[/red] Run 'project switch <name>' first."
+            )
+            return
+        row = repl.project_registry.resolve_by_name(repl.active_project)
+        if row is None or row.archived_at:
+            repl.console.print("[red]Active project not found.[/red]")
+            return
+
+        paths = ProjectPaths.from_registry_row(row)
+        factory = ConnectionFactory(paths.findings_db)
+        factory.init_schema()
+        run_repo = RunRepository(factory)
+
+        if run_id is None:
+            run_id = run_repo.latest_run_id()
+        if run_id is None:
+            repl.console.print("[red]No scan runs found[/red]")
+            return
+
+        triage_repo = TriageBatchRepository(factory)
+        batches = create_triage_batches(
+            run_id=run_id,
+            triage_repo=triage_repo,
+            tool_registry=repl.tool_registry,
+            max_findings_per_batch=4,
+        )
+        total = sum(count for _, count in batches)
+        repl.console.print(
+            f"[green]Created {len(batches)} batches"
+            f" ({total} findings) for run {run_id}[/green]"
+        )
+
+    # Token subcommands
 
     def _dispatch_token(self, args: list[str]) -> None:
         sub = args[0] if args else ""

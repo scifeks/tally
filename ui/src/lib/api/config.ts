@@ -52,8 +52,8 @@ export const SSE_ENDPOINTS = {
     `${API_BASE_URL}/projects/${projectId}/chat/stream?session_id=${sessionId}`,
   /**
    * Project-scoped SSE stream emitting `finding_updated` events. Tail-only
-   * (no snapshot on connect - the SPA already holds the canonical list from
-   * GET /findings). Heartbeat every 15s when idle.
+   * because the SPA already holds the canonical list from GET /findings.
+   * Heartbeat every 15s when idle.
    */
   findingsEvents: (projectId: string | number) =>
     `${API_BASE_URL}/projects/${projectId}/findings/events`,
@@ -63,7 +63,7 @@ export const SSE_ENDPOINTS = {
  * REST endpoint paths (relative to API_BASE_URL).
  */
 export const REST_ENDPOINTS = {
-  // ─── Projects ───────────────────────────────────────────────────────────────
+  // Projects
   /** GET: list all projects */
   projects: `${API_BASE_URL}/projects`,
   /** GET: single project by ID */
@@ -73,7 +73,7 @@ export const REST_ENDPOINTS = {
   /** POST: create a new project */
   createProject: `${API_BASE_URL}/projects`,
 
-  // ─── Findings ───────────────────────────────────────────────────────────────
+  // Findings
   /**
    * GET: paginated, filterable findings list for a project. Query params:
    * `severity`, `status`, `confidence`, `domain`, `tool`, `segment`,
@@ -112,7 +112,7 @@ export const REST_ENDPOINTS = {
   /** GET: field specs (valid enums for severity, confidence, finding_type, status). */
   fieldSpecs: `${API_BASE_URL}/config/field-specs`,
 
-  // ─── Scans ──────────────────────────────────────────────────────────────────
+  // Scans
   /** GET: paginated scan history for a project. Query: status?, offset?, limit?. */
   scans: (projectId: number) => `${API_BASE_URL}/projects/${projectId}/scans`,
   /** GET: single scan by run ID (project-scoped). */
@@ -134,7 +134,7 @@ export const REST_ENDPOINTS = {
   /** POST: start a Burp crawl-and-audit scan. */
   burpScan: (projectId: number) => `${API_BASE_URL}/projects/${projectId}/burp-scan`,
 
-  // ─── Triage ─────────────────────────────────────────────────────────────────
+  // Triage
   /** GET: paginated triage run history for a project. Query: offset?, limit?. */
   triageRuns: (projectId: number) => `${API_BASE_URL}/projects/${projectId}/triage`,
   /** GET: single triage run with batches */
@@ -156,13 +156,21 @@ export const REST_ENDPOINTS = {
   triageMaxBatchId: (projectId: number, scanRunId: number) =>
     `${API_BASE_URL}/projects/${projectId}/triage/${scanRunId}/max-batch-id`,
 
-  // ─── Runtime / Tools (cross-project) ────────────────────────────────────────
+  // MCP
+  /** POST: create batches and start the MCP triage server for a project */
+  startMcpTriage: (projectId: number) => `${API_BASE_URL}/projects/${projectId}/mcp/triage/start`,
+  /** POST: stop the running MCP server */
+  stopMcpServe: `${API_BASE_URL}/mcp/serve/stop`,
+  /** GET: MCP server status (active, host, port, source) */
+  mcpServeStatus: `${API_BASE_URL}/mcp/serve/status`,
+
+  // Runtime / Tools (cross-project)
   /** GET: probe status for each registered runtime dependency */
   runtimeDependencies: `${API_BASE_URL}/runtime-dependencies`,
   /** GET: tool wrappers whose binary was probed at process startup */
   installedTools: `${API_BASE_URL}/tools/installed`,
 
-  // ─── URL Lists ──────────────────────────────────────────────────────────────
+  // URL Lists
   /**
    * GET: paginated URL entries for a project. Query params: `search`, `method`,
    * `protocol`, `host`, `port`, `path`, `repo_id` (all repeatable for
@@ -181,7 +189,7 @@ export const REST_ENDPOINTS = {
   urlListFilterOptions: (projectId: string | number) =>
     `${API_BASE_URL}/projects/${projectId}/url-list/filter-options`,
 
-  // ─── Reports ────────────────────────────────────────────────────────────────
+  // Reports
   /** GET: list draft sections and their statuses for a project */
   reportDrafts: (projectId: number) => `${API_BASE_URL}/projects/${projectId}/reports/drafts`,
   /** POST: generate a draft for a specific section. Body: { section, force?: boolean } */
@@ -207,7 +215,7 @@ export const REST_ENDPOINTS = {
   downloadReport: (projectId: number, reportId: number) =>
     `${API_BASE_URL}/projects/${projectId}/reports/${reportId}/download`,
 
-  // ─── Chat ───────────────────────────────────────────────────────────────────
+  // Chat
   /** GET: paginated chat sessions for a project. Query: offset?, limit?. */
   chatSessions: (projectId: number) => `${API_BASE_URL}/projects/${projectId}/chat/sessions`,
   /** POST: create a new chat session (empty body; server-set timestamp title). */
@@ -225,11 +233,11 @@ export const REST_ENDPOINTS = {
   cancelChatResponse: (projectId: number, sessionId: number) =>
     `${API_BASE_URL}/projects/${projectId}/chat/sessions/${sessionId}/cancel`,
 
-  // ─── Platform (cross-project) ──────────────────────────────────────────────
+  // Platform (cross-project)
   /** GET: platform capabilities (chat, triage, report retention) */
   capabilities: `${API_BASE_URL}/capabilities`,
 
-  // ─── Configuration ──────────────────────────────────────────────────────────
+  // Configuration
   /** GET: project info for config page */
   projectInfo: (projectId: number) => `${API_BASE_URL}/projects/${projectId}/info`,
   /** PATCH: update project info */
@@ -264,7 +272,7 @@ export const REST_ENDPOINTS = {
   deleteToolOverride: (projectId: number, toolId: string) =>
     `${API_BASE_URL}/projects/${projectId}/tools/overrides/${toolId}`,
 
-  // ─── Saved Scans ────────────────────────────────────────────────────────────
+  // Saved Scans
   /** GET: list saved scans for a project. Query: offset?, limit?. */
   listSavedScans: (projectId: number) => `${API_BASE_URL}/projects/${projectId}/saved-scans`,
   /** GET: hydrated saved scan by ID. */
@@ -282,7 +290,7 @@ export const REST_ENDPOINTS = {
   runSavedScan: (projectId: number, id: number) =>
     `${API_BASE_URL}/projects/${projectId}/saved-scans/${id}/run`,
 
-  // ─── Burp ───────────────────────────────────────────────────────────────
+  // Burp
   /** GET: poll status (configured + active) for a project */
   burpPollStatus: (projectId: number) => `${API_BASE_URL}/projects/${projectId}/burp/poll/status`,
   /** POST: start Burp Organizer polling */
@@ -290,7 +298,7 @@ export const REST_ENDPOINTS = {
   /** POST: stop Burp Organizer polling */
   cancelBurpPoll: (projectId: number) => `${API_BASE_URL}/projects/${projectId}/burp/poll/cancel`,
 
-  // ─── Documents ─────────────────────────────────────────────────────────────
+  // Documents
   /** GET: list ingested documents for a project. */
   documents: (projectId: number) => `${API_BASE_URL}/projects/${projectId}/documents`,
   /** POST (multipart): upload and ingest a .md or .txt document. */
@@ -299,7 +307,7 @@ export const REST_ENDPOINTS = {
   deleteDocument: (projectId: number, filename: string) =>
     `${API_BASE_URL}/projects/${projectId}/documents/${encodeURIComponent(filename)}`,
 
-  // ─── Argument Profiles ──────────────────────────────────────────────────────
+  // Argument Profiles
   /** GET: list argument profiles for a project. Query: tool_name?, offset?, limit?. */
   listArgProfiles: (projectId: number) => `${API_BASE_URL}/projects/${projectId}/arg-profiles`,
   /** GET: single argument profile by ID. */
@@ -317,7 +325,7 @@ export const REST_ENDPOINTS = {
   downloadArgProfileFile: (projectId: number, id: number, argName: string) =>
     `${API_BASE_URL}/projects/${projectId}/arg-profiles/${id}/files/${encodeURIComponent(argName)}`,
 
-  // ─── Global Settings ───────────────────────────────────────────────────────
+  // Global Settings
   /** GET: browse server filesystem for file selection */
   fsBrowse: (path: string) =>
     `${API_BASE_URL}/global-settings/fs-browse?path=${encodeURIComponent(path)}`,

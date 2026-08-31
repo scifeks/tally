@@ -895,9 +895,61 @@ full setup instructions and entity mapping details.
 
 ---
 
-## MCP Token Management
+## MCP Server
 
-Generate bearer tokens for MCP server authentication. Tokens are required when configuring external clients (like Claude Code) to connect to the `tally mcp serve` endpoint. See [triage.md](triage.md) for the MCP triage workflow and [claude-code-scanning.md](claude-code-scanning.md) for Claude Code scanning setup.
+Tally can run an MCP server that exposes triage batches (and Claude Code scanning tools) to external MCP clients such as Claude Code. See [triage.md](triage.md#mcp-triage-mode) for the full MCP triage workflow and [claude-code-scanning.md](claude-code-scanning.md) for Claude Code scanning setup.
+
+### Server lifecycle
+
+```
+[acme-audit]> mcp serve start
+MCP server started on 127.0.0.1:8765
+
+[acme-audit]> mcp serve status
+MCP server: running on 127.0.0.1:8765 (source: repl)
+
+[acme-audit]> mcp serve stop
+MCP server stopped
+
+[acme-audit]> mcp serve restart
+```
+
+Bare `mcp serve` (no subcommand) prints the same submenu instead of starting anything:
+
+```
+[acme-audit]> mcp serve
+MCP serve commands:
+  mcp serve start    Start the MCP server
+  mcp serve stop     Stop the MCP server
+  mcp serve restart  Restart the MCP server
+  mcp serve status   Show server status
+```
+
+### Connecting Claude Code
+
+```
+[acme-audit]> mcp server create
+.mcp.json written to /path/to/project/.mcp.json
+```
+
+`mcp server create` only writes `.mcp.json`; it does not start the MCP server. Run `mcp serve start` separately. `mcp serve start` also writes `.mcp.json` automatically if it does not already exist.
+
+### Creating triage batches
+
+```
+[acme-audit]> mcp triage prepare
+Created 12 batches (43 findings) for run 7
+```
+
+Groups untriaged SAST, API, and DAST findings from a scan run into batches for MCP processing. Pass a run ID to target a specific scan; omit it to use the most recent run:
+
+```
+[acme-audit]> mcp triage prepare 7
+```
+
+### Token management
+
+Generate bearer tokens for MCP server authentication. Tokens are required when configuring external clients (like Claude Code) to connect to the MCP server.
 
 Create a token:
 
