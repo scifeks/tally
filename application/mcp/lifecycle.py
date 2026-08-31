@@ -53,13 +53,13 @@ def start_mcp_server_managed(
     mcp = create_mcp_server(
         project_registry=project_registry,
         tool_registry=tool_registry,
-        token_repo=token_repo,
-        encryption_key=encryption_key,
         base_path=base_path,
-        port=port,
         event_publisher=event_publisher,
     )
-    app = mcp.sse_app()
+    from mcp_server.auth import BearerTokenMiddleware
+
+    app = mcp.streamable_http_app()
+    app = BearerTokenMiddleware(app, token_repo, encryption_key)
     config = uvicorn.Config(
         app,
         host=host,

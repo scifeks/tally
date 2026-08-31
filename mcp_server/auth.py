@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import logging
 import secrets
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
+
+from starlette.responses import Response
 
 from core.security.credentials import decrypt_value
 
@@ -21,16 +23,7 @@ def validate_bearer_token(
     token_repo: McpTokenRepositoryPort,
     encryption_key: bytes,
 ) -> bool:
-    """Validate an Authorization header against stored encrypted tokens.
-
-    Args:
-        authorization: The Authorization header value (e.g. "Bearer token123").
-        token_repo: Repository for reading encrypted tokens.
-        encryption_key: Fernet key for decrypting stored tokens.
-
-    Returns:
-        True if the bearer token matches a stored token, False otherwise.
-    """
+    """Validate an Authorization header against stored encrypted tokens."""
     if not authorization.startswith("Bearer "):
         return False
     incoming = authorization[7:]
@@ -44,3 +37,33 @@ def validate_bearer_token(
         if secrets.compare_digest(stored, incoming):
             return True
     return False
+
+
+class BearerTokenMiddleware:
+    """ASGI middleware that validates Bearer tokens on every request."""
+
+    def __init__(
+        self,
+        app: Any,
+        token_repo: McpTokenRepositoryPort,
+        encryption_key: bytes,
+    ) -> None:
+        self.app = app
+        self.token_repo = token_repo
+        self.encryption_key = encryption_key
+
+    async def __call__(self, scope: dict[str, Any], receive: Any, send: Any) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        headers = dict(scope.get("headers", []))
+        auth = headers.get(b"authorization", b"").decode()
+        if not validate_bearer_token(auth, self.token_repo, self.encryption_key):
+            response = Response(
+                content="Unauthorized",
+                status_code=401,
+                media_type="text/plain",
+            )
+            await response(scope, receive, send)
+            return
+        await self.app(scope, receive, send)

@@ -22,7 +22,7 @@ class TestCmdMcp:
         cmd = McpCommands(repl)
         cmd.cmd_mcp("mcp", [])
         output = repl.console.print.call_args[0][0]
-        assert "Usage: mcp" in output
+        assert "show-config" in output
 
     def test_token_no_subcommand_prints_usage(self) -> None:
         repl = _mock_repl()
@@ -78,6 +78,13 @@ class TestCmdMcp:
         cmd.cmd_mcp("mcp", ["invalid"])
         output = repl.console.print.call_args[0][0]
         assert "Usage: mcp" in output
+
+    def test_show_config_dispatches(self) -> None:
+        repl = _mock_repl()
+        cmd = McpCommands(repl)
+        with patch.object(cmd, "_show_config") as mock_show:
+            cmd.cmd_mcp("mcp", ["show-config"])
+            mock_show.assert_called_once()
 
     def test_serve_no_args_shows_submenu(self) -> None:
         repl = _mock_repl()
@@ -242,7 +249,6 @@ class TestCreateToken:
             ),
         ):
             cmd._create_token("duplicate")
-            # Should print error but not crash
             assert repl.console.print.called
 
     def test_handles_generic_exception(self) -> None:
@@ -409,42 +415,7 @@ class TestServeStart:
             "[red]No MCP tokens found.[/red] Run 'mcp token create <name>' first."
         )
 
-    def test_creates_mcp_json_when_missing(self) -> None:
-        repl = _mock_repl()
-        repl.project_registry.list_active.return_value = ["proj1"]
-        cmd = McpCommands(repl)
-        handle = MagicMock(host="127.0.0.1", port=8765)
-        with (
-            patch(
-                "application.repl.commands.mcp_commands.ConfigManager"
-            ) as mock_config_cls,
-            patch(
-                "application.repl.commands.mcp_commands.Path.exists",
-                side_effect=[True, False],
-            ),
-            patch(
-                "application.repl.commands.mcp_commands.get_encryption_key",
-                return_value=b"key",
-            ),
-            patch(
-                "application.repl.commands.mcp_commands.McpTokenRepository"
-            ) as mock_repo_cls,
-            patch(
-                "application.repl.commands.mcp_commands.write_mcp_json"
-            ) as mock_write_json,
-            patch(
-                "application.mcp.lifecycle.start_mcp_server_managed",
-                return_value=handle,
-            ),
-        ):
-            mock_config_cls.return_value.global_config.mcp.host = "http://127.0.0.1"
-            mock_config_cls.return_value.global_config.mcp.port = 8765
-            mock_repo_cls.return_value.list_all.return_value = ["tok1"]
-            cmd._serve_start()
-
-        mock_write_json.assert_called_once()
-
-    def test_starts_server_and_strips_http_prefix_from_host(self) -> None:
+    def test_starts_server_with_configured_host(self) -> None:
         repl = _mock_repl()
         repl.project_registry.list_active.return_value = ["proj1"]
         cmd = McpCommands(repl)
@@ -469,7 +440,7 @@ class TestServeStart:
                 return_value=handle,
             ) as mock_start,
         ):
-            mock_config_cls.return_value.global_config.mcp.host = "http://127.0.0.1"
+            mock_config_cls.return_value.global_config.mcp.host = "127.0.0.1"
             mock_config_cls.return_value.global_config.mcp.port = 8765
             mock_repo_cls.return_value.list_all.return_value = ["tok1"]
             cmd._serve_start()

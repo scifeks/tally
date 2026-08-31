@@ -40,7 +40,7 @@ def _parse_items(text: str) -> list[dict[str, Any]]:
 class BurpMcpClient:
     """Connects to Burp's MCP server via SSE per call.
 
-    Connect-per-poll rather than persistent connection so
+    Fresh connection each call rather than persistent so
     dropped connections resolve naturally on the next cycle.
     """
 
@@ -59,7 +59,7 @@ class BurpMcpClient:
                     arguments={"offset": 0, "count": 1000},
                 )
 
-        if result.isError:
+        if result.is_error:
             raise BurpMcpError("get_organizer_items returned an error")
 
         text = ""

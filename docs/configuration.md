@@ -205,22 +205,22 @@ Burp's MCP server truncates each Organizer item to 5000 characters. REST API sca
 
 ### MCP Server
 
-Configures the MCP SSE server started by `tally mcp serve`. Used for
+Configures the MCP server started by `mcp serve start`. Used for
 Claude Code scanning and MCP triage.
 
 #### Fields
 
 | Field | Type | Default | Description |
 |---|---|---|---|
-| `host` | string | `"http://127.0.0.1"` | Protocol and host for the MCP server URL. Includes the protocol (`http://` or `https://`). Used when generating `.mcp.json` for Claude Code. |
-| `port` | int | `8765` | TCP port for the MCP SSE server. Binds to localhost. |
+| `host` | string | `"127.0.0.1"` | Bind address for the MCP server. |
+| `port` | int | `8765` | TCP port for the MCP server. Binds to localhost. |
 
 #### Example
 
 ```json
 {
   "mcp": {
-    "host": "http://127.0.0.1",
+    "host": "127.0.0.1",
     "port": 8765
   }
 }

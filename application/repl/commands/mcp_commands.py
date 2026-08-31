@@ -9,7 +9,6 @@ from typing import TYPE_CHECKING
 from rich.markup import escape
 from rich.table import Table
 
-from application.mcp.config_file import write_mcp_json
 from core.config.manager import ConfigManager
 from core.project_paths import ProjectPaths
 from core.security.credentials import (
@@ -37,8 +36,8 @@ class McpCommands:
         verb = args[0]
         if verb == "token":
             self._dispatch_token(args[1:])
-        elif verb == "server":
-            self._dispatch_server(args[1:])
+        elif verb == "show-config":
+            self._show_config()
         elif verb == "serve":
             self._dispatch_serve(args[1:])
         elif verb == "triage":
@@ -48,38 +47,43 @@ class McpCommands:
 
     def _print_usage(self) -> None:
         self._repl.console.print(
-            "Usage: mcp <token|server|serve|triage>\n"
+            "Usage: mcp <token|show-config|serve|triage>\n"
             "  mcp token create [name]  "
             "Create a bearer token\n"
             "  mcp token list           "
             "List tokens\n"
             "  mcp token revoke <name>  "
             "Revoke a token\n"
-            "  mcp server create        "
-            "Write .mcp.json from config\n"
+            "  mcp show-config          "
+            "Show Claude Code config snippet\n"
             "  mcp serve                "
             "Manage the MCP server (start|stop|restart|status)\n"
             "  mcp triage prepare       "
             "Create triage batches for MCP processing"
         )
 
-    # Server subcommands
+    # Show config
 
-    def _dispatch_server(self, args: list[str]) -> None:
-        sub = args[0] if args else ""
-        if sub == "create":
-            self._create_server_config()
-        else:
-            self._repl.console.print("Usage: mcp server create")
+    def _show_config(self) -> None:
+        from application.mcp.config_file import (
+            format_show_config,
+        )
 
-    def _create_server_config(self) -> None:
         try:
             config = ConfigManager(self._repl.base_path)
             mcp_cfg = config.global_config.mcp
-            base = Path(self._repl.base_path)
-            path = write_mcp_json(base, mcp_cfg.host, mcp_cfg.port)
-            if (path).stat().st_size > 0:
-                self._repl.console.print(f"[green].mcp.json written to {path}[/green]")
+            result = format_show_config(mcp_cfg.host, mcp_cfg.port)
+            c = self._repl.console
+            c.print('[bold]Add this to ~/.claude.json under "mcpServers":[/bold]\n')
+            c.print(result.json_snippet)
+            c.print("\n[bold]Or run:[/bold]\n")
+            c.print(f"  {result.cli_command}")
+            c.print(
+                "\n[dim]Then export"
+                " TALLY_MCP_TOKEN=<your token>"
+                " in the shell that launches"
+                " claude.[/dim]"
+            )
         except Exception as exc:
             self._repl.console.print(f"[red]Error:[/red] {exc}")
 
@@ -143,14 +147,9 @@ class McpCommands:
                 )
                 return
 
-            mcp_json = base / ".mcp.json"
-            if not mcp_json.exists():
-                write_mcp_json(base, mcp_cfg.host, mcp_cfg.port)
-                repl.console.print(f"[green]Created .mcp.json at {mcp_json}[/green]")
-
             handle = start_mcp_server_managed(
                 port=mcp_cfg.port,
-                host=mcp_cfg.host.replace("http://", ""),
+                host=mcp_cfg.host,
                 project_registry=repl.project_registry,
                 tool_registry=repl.tool_registry,
                 token_repo=token_repo,

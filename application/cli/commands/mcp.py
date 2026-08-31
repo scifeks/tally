@@ -7,7 +7,6 @@ from argparse import Namespace
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from application.mcp.config_file import write_mcp_json
 from core.config.manager import ConfigManager
 from core.security.credentials import get_encryption_key
 from infrastructure.store.repositories.mcp_tokens import (
@@ -30,7 +29,7 @@ def cmd_mcp_serve(
     tool_registry: ToolRegistry,
     base_path: Path,
 ) -> int:
-    """Start the MCP server with SSE transport."""
+    """Start the MCP server."""
     try:
         config = ConfigManager(str(base_path))
         mcp_cfg = config.global_config.mcp
@@ -57,13 +56,8 @@ def cmd_mcp_serve(
             logger.error("No MCP tokens found. Run 'mcp token create <name>' first.")
             return 1
 
-        mcp_json = base_path / ".mcp.json"
-        if not mcp_json.exists():
-            write_mcp_json(base_path, mcp_cfg.host, port)
-            logger.info("Created .mcp.json at %s", mcp_json)
-
         logger.info(
-            "MCP server starting on %s:%d with SSE transport",
+            "MCP server starting on %s:%d",
             mcp_cfg.host,
             port,
         )

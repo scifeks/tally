@@ -1,36 +1,39 @@
-"""Build and write .mcp.json for Claude Code integration."""
+"""Format Claude Code configuration snippets for MCP setup."""
 
 from __future__ import annotations
 
 import json
-from pathlib import Path
-from typing import Any
+from dataclasses import dataclass
 
 
-def build_mcp_json(host: str, port: int) -> dict[str, Any]:
-    """Return the .mcp.json content dict.
+@dataclass(frozen=True)
+class ShowConfigOutput:
+    json_snippet: str
+    cli_command: str
 
-    ``host`` includes the protocol (e.g. ``http://127.0.0.1``).
+
+def format_show_config(
+    host: str,
+    port: int,
+) -> ShowConfigOutput:
+    """Build the two setup options for Claude Code.
+
+    Returns a JSON snippet for ~/.claude.json and a
+    claude mcp add-json CLI command, both using
+    ${TALLY_MCP_TOKEN} as the bearer token placeholder.
     """
-    url = f"{host.rstrip('/')}:{port}/sse"
-    return {
-        "mcpServers": {
-            "tally": {
-                "type": "sse",
-                "url": url,
-            }
-        }
+    url = f"http://{host}:{port}/mcp"
+    entry = {
+        "type": "http",
+        "url": url,
+        "headers": {
+            "Authorization": "Bearer ${TALLY_MCP_TOKEN}",
+        },
     }
-
-
-def write_mcp_json(directory: Path, host: str, port: int) -> Path:
-    """Write .mcp.json to ``directory`` if it does not exist.
-
-    Returns the file path. Existing files are left untouched.
-    """
-    target = directory / ".mcp.json"
-    if target.exists():
-        return target
-    content = build_mcp_json(host, port)
-    target.write_text(json.dumps(content, indent=2) + "\n")
-    return target
+    snippet = json.dumps({"tally": entry}, indent=2)
+    compact = json.dumps(entry, separators=(",", ":"))
+    cli_cmd = f"claude mcp add-json tally '{compact}' --scope user"
+    return ShowConfigOutput(
+        json_snippet=snippet,
+        cli_command=cli_cmd,
+    )

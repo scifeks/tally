@@ -408,9 +408,9 @@ _HELP_REGISTRY = [
     ),
     (
         "mcp",
-        "mcp server create",
+        "mcp show-config",
         None,
-        "Write .mcp.json for Claude Code",
+        "Show Claude Code config snippet",
     ),
     # Utility
     ("utility", None, None, "Utility"),

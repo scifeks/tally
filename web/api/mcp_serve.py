@@ -73,7 +73,7 @@ async def start_mcp_triage(
     if not registry.is_active():
         start_mcp_server_managed(
             port=mcp_cfg.port,
-            host=mcp_cfg.host.replace("http://", ""),
+            host=mcp_cfg.host,
             project_registry=request.app.state.project_registry,
             tool_registry=tool_registry,
             token_repo=request.app.state.token_repo,

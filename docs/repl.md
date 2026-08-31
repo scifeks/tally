@@ -957,11 +957,12 @@ MCP serve commands:
 ### Connecting Claude Code
 
 ```
-[acme-audit]> mcp server create
-.mcp.json written to /path/to/project/.mcp.json
+[acme-audit]> mcp show-config
 ```
 
-`mcp server create` only writes `.mcp.json`; it does not start the MCP server. Run `mcp serve start` separately. `mcp serve start` also writes `.mcp.json` automatically if it does not already exist.
+Prints a JSON snippet for `~/.claude.json` and a `claude mcp add-json`
+command, both using `${TALLY_MCP_TOKEN}` as a placeholder. Export the
+token in the shell that launches Claude Code. This is a one-time setup.
 
 ### Creating triage batches
 

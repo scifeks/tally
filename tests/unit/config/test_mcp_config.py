@@ -8,7 +8,7 @@ from core.config.schemas.mcp_config import McpConfig
 class TestMcpConfig:
     def test_defaults(self) -> None:
         cfg = McpConfig()
-        assert cfg.host == "http://127.0.0.1"
+        assert cfg.host == "127.0.0.1"
         assert cfg.port == 8765
 
     def test_custom_values(self) -> None:

@@ -30,7 +30,7 @@ def _make_text_result(data: list[dict]) -> MagicMock:
     content_item = TextContent(type="text", text=json.dumps(data))
     result = MagicMock()
     result.content = [content_item]
-    result.isError = False
+    result.is_error = False
     return result
 
 
@@ -101,7 +101,7 @@ class TestBurpMcpClientFetchItems:
 
     def test_error_result_raises(self, mock_mcp_session: AsyncMock) -> None:
         result = MagicMock()
-        result.isError = True
+        result.is_error = True
         result.content = []
         mock_mcp_session.call_tool.return_value = result
 

@@ -8,5 +8,5 @@ class McpConfig(BaseModel):
 
     model_config = ConfigDict(extra="ignore")
 
-    host: str = Field(default="http://127.0.0.1")
+    host: str = Field(default="127.0.0.1")
     port: int = Field(default=8765)
