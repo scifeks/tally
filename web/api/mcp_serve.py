@@ -23,6 +23,7 @@ from web.api._project_resolver import _resolve_project
 from web.api.schemas import (
     McpServeStatusResponse,
     McpServeStopResponse,
+    McpTriageStartRequest,
     McpTriageStartResponse,
 )
 
@@ -40,6 +41,7 @@ global_router = APIRouter()
 async def start_mcp_triage(
     project_id: int,
     request: Request,
+    body: McpTriageStartRequest | None = None,
 ) -> McpTriageStartResponse:
     row = _resolve_project(request, project_id)
     base_path: str = request.app.state.base_path
@@ -53,7 +55,7 @@ async def start_mcp_triage(
     run_repo = RunRepository(factory)
     triage_repo = TriageBatchRepository(factory)
 
-    run_id = run_repo.latest_run_id()
+    run_id = body.scan_run_id if body and body.scan_run_id else run_repo.latest_run_id()
     if run_id is None:
         raise NotFound("No scan runs for this project")
 

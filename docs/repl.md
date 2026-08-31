@@ -700,10 +700,13 @@ The Markdown report contains:
 
 ## Triaging Findings
 
-Triage uses an AI agent to assess SAST and API findings, producing a verdict with
-confidence, severity, and remediation guidance. SCA findings are skipped because
-they already reference confirmed CVEs. Triage requires Docker and a configured
-backend.
+Triage uses an AI agent to assess SAST, API, and DAST findings, producing a
+verdict with confidence, severity, and remediation guidance. SCA findings are
+skipped because they already reference confirmed CVEs. Auto-triage requires
+Docker and a configured backend. Frontier backends (Claude Code, OpenAI)
+additionally require an API key for auto-triage; without one, Tally runs
+triage in [MCP mode](triage.md#mcp-triage-mode) instead, where you process
+batches from your own Claude Code session rather than a Docker container.
 See [docs/triage.md](triage.md) for setup, the container security model, and
 backend accuracy tradeoffs.
 
@@ -724,7 +727,30 @@ Triage containers ready.
 Triage: 3 sessions run, 2 success, 1 failed, 0 incomplete
 ```
 
-To rebuild the triage Docker image (no active project required):
+### Triage Flags
+
+**Run the batching phase only:**
+
+Groups untriaged findings into batches without starting any triage sessions.
+Requires the same active project and configured backend as `triage`.
+
+```
+[acme-security-audit]> triage --batch
+Created 6 batches
+```
+
+**Render prompts without running them:**
+
+Runs the batching phase, then logs the exact prompt text that would be sent
+to the backend, without invoking it. Use this to preview what triage would
+send given the prompt injection risk described above.
+
+```
+[acme-security-audit]> triage --dry-run
+Rendered 6 batch prompt(s); see DEBUG log
+```
+
+**Rebuild the triage Docker image** (no active project required):
 
 ```
 [acme-security-audit]> triage --rebuild-container
@@ -914,6 +940,9 @@ MCP server stopped
 [acme-audit]> mcp serve restart
 ```
 
+`mcp serve start` runs the server in the background and returns immediately;
+the REPL prompt stays interactive while the server is running.
+
 Bare `mcp serve` (no subcommand) prints the same submenu instead of starting anything:
 
 ```
@@ -955,30 +984,29 @@ Create a token:
 
 ```
 [acme-audit]> mcp token create ci-agent
-MCP token created: tly_abc123xyz789...
-Token name: ci-agent
-Warning: Copy this token now. It will not be shown again.
+Token created: ci-agent
+Token value (save this, it won't be shown again):
+Kx7vQ2wR9mLpN4tY8sJ3hF6dC1bA0eZ5g...
 ```
 
-Tally stores only the token hash in the project database, never the plaintext. Save the token in a secure location.
+Tally stores only an encrypted version of the token in the project database, never the plaintext. Save the token in a secure location.
 
 List registered tokens:
 
 ```
 [acme-audit]> mcp token list
-Name        Created
-ci-agent    2024-01-15T10:30:00Z
+ Name        | Created At
+ ci-agent    | 2024-01-15T10:30:00Z
 ```
 
 Revoke a token:
 
 ```
 [acme-audit]> mcp token revoke ci-agent
-Revoke token 'ci-agent'? [y/N]: y
-Token 'ci-agent' revoked.
+Token revoked: ci-agent
 ```
 
-Revoked tokens cannot be reactivated. Generate a new token if needed.
+Revocation is immediate; Tally does not prompt for confirmation. Revoked tokens cannot be reactivated. Generate a new token if needed.
 
 ---
 

@@ -193,13 +193,15 @@ The Triage page (`/triage`) uses an AI agent to analyze findings. The agent read
 
 ### Starting triage
 
-Click "Start triage" to launch the agent against untriaged findings in the active project. The page shows how many findings are eligible.
+Click **Start Triage** to launch the agent against untriaged findings in the active project. The page shows how many findings are eligible.
 
-Triage requires Docker and a configured `triage_inference` block in `config/global.json`. If prerequisites are not met, the button is disabled with a message explaining what is missing.
+Start Triage runs auto-triage: the agent executes headless inside a Docker container. Auto-triage requires Docker and a configured `triage_inference` block in `config/global.json`. If a prerequisite is missing, such as the Claude CLI binary not being on PATH, the button is disabled with a message explaining what is missing.
+
+Whether the page shows **Start Triage** or **Start MCP Triage** depends on your configured provider and API key, not a choice you make in the UI. With Claude Code and an API key configured, or with a local provider, the page runs in auto mode and shows **Start Triage**. With Claude Code and no API key configured, the page runs in MCP mode instead, described next.
 
 ### MCP triage mode
 
-Some projects run triage through MCP mode instead of the headless Docker flow: the agent executes inside your own Claude Code session rather than inside a container. Which mode applies is determined by your configured triage provider and API key, not a choice you make in the UI. See [docs/triage.md](triage.md#mcp-triage-mode) for the mode determination table.
+In MCP mode, the agent runs inside your own Claude Code session instead of inside the Docker container described above. See [docs/triage.md](triage.md#mode-determination) for the full mode determination table.
 
 When the active project is in MCP mode, the Triage page shows **Start MCP Triage** in place of **Start Triage**. Clicking it creates triage batches for the latest scan run and starts Tally's MCP server if it is not already running.
 

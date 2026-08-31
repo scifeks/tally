@@ -31,13 +31,18 @@ export function useMcpServeStatus() {
   })
 }
 
+export interface StartMcpTriageVars {
+  scanRunId?: number | null
+}
+
 export function useStartMcpTriage(projectId: number) {
   const queryClient = useQueryClient()
 
-  return useMutation<McpTriageStartResult, ApiError, void>({
-    mutationFn: async () =>
+  return useMutation<McpTriageStartResult, ApiError, StartMcpTriageVars | void>({
+    mutationFn: async (vars?: StartMcpTriageVars | void) =>
       apiFetch<McpTriageStartResult>(REST_ENDPOINTS.startMcpTriage(projectId), {
         method: 'POST',
+        body: vars?.scanRunId != null ? { scan_run_id: vars.scanRunId } : undefined,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['mcp-serve-status'] })

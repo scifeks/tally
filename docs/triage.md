@@ -14,9 +14,23 @@ Two backends are supported:
   default).
 - **OpenCode** connects to a local Ollama instance running any compatible model.
 
-Both backends run inside a Docker container with filesystem and network sandboxing.
-The agent receives the finding and source content inline, produces a structured JSON
-verdict, and exits. No persistent agent state is kept between findings.
+Triage also runs in one of two modes. Your configuration determines which one
+applies; it is not a preference you set directly.
+
+- **Auto-triage** runs headless inside a Docker container with filesystem and
+  network sandboxing, with no interaction required once started. It requires
+  either an Anthropic API key (Claude Code backend) or a local model (OpenCode
+  backend).
+- **MCP triage** runs interactively inside your own Claude Code session
+  instead of the container, using the `/tally-triage` skill. It is required
+  when using Claude Code without an API key: provider terms reserve
+  subscription sessions for direct interactive use, not headless automation,
+  so Tally cannot run Claude Code unattended inside the container in that
+  case. See [MCP Triage Mode](#mcp-triage-mode) for setup and usage.
+
+In auto-triage, the agent receives the finding and source content inline,
+produces a structured JSON verdict, and exits. No persistent agent state is
+kept between findings.
 
 Triage can also be started from the web UI. The Triage page shows batch progress in real time and lets you resume failed runs. See [docs/web-ui.md](web-ui.md) for the UI walkthrough.
 
@@ -24,16 +38,22 @@ Triage can also be started from the web UI. The Triage page shows batch progress
 
 ## Prerequisites
 
-- **Docker** installed and running on the host
 - `triage_inference` configured in `config/global.json` with a valid provider
-- Credentials configured for your chosen backend (see [Host Setup](#host-setup))
 - At least one completed scan with untriaged findings
+- **For auto-triage:** Docker installed and running on the host, and either
+  an Anthropic API key (Claude Code backend) or a running local model
+  (OpenCode backend) (see [Host Setup](#host-setup))
+- **For MCP triage:** Claude Code installed locally and an MCP token (see
+  [MCP Triage Mode](#mcp-triage-mode))
 
 ---
 
 ## Host Setup
 
 ### Claude Code with API key
+
+An API key enables auto-triage: Tally runs Claude Code headlessly inside the
+triage container instead of routing you to MCP mode.
 
 Set `claude.api_key` in `config/global.json` or export `ANTHROPIC_API_KEY` as an
 environment variable. When `claude.api_key` is non-empty, Tally injects it as
@@ -252,9 +272,12 @@ for setup details.
 ## MCP Triage Mode
 
 MCP triage mode runs the triage agent inside your own Claude Code session
-instead of inside a Docker container. Tally runs an MCP server that hands
-out triage batches and accepts verdicts back; you invoke the
-`/tally-triage` skill in Claude Code to process them.
+instead of inside a Docker container. It exists so that Claude users without
+an API key can still run triage without violating Anthropic's terms, which
+reserve subscription sessions for direct interactive use rather than
+headless automation. Tally runs an MCP server that hands out triage batches
+and accepts verdicts back; you invoke the `/tally-triage` skill in Claude
+Code to process them.
 
 ### Mode determination
 
@@ -305,13 +328,13 @@ accepting further connections.
 
 ```
 [myproject]> mcp token create ci-agent
-MCP token created: tly_abc123...xyz
-Token name: ci-agent
-Warning: Copy this token now. It will not be shown again.
+Token created: ci-agent
+Token value (save this, it won't be shown again):
+  dG9rZW5fZXhhbXBsZV92YWx1ZV9oZXJl...
 ```
 
-Save the token securely. You will pass it to Claude Code when configuring
-the MCP connection.
+Save the token value securely. You will pass it to Claude Code when
+configuring the MCP connection.
 
 #### Step 2: Create triage batches
 

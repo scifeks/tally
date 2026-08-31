@@ -107,6 +107,7 @@ def _migrate_finding_history_source(conn: sqlite3.Connection) -> None:
     if row is None or "mcp_triage" in (row[0] or ""):
         return
     conn.executescript("""
+        PRAGMA foreign_keys = OFF;
         CREATE TABLE IF NOT EXISTS finding_history_new (
             id                INTEGER PRIMARY KEY AUTOINCREMENT,
             finding_id        INTEGER NOT NULL
@@ -129,6 +130,7 @@ def _migrate_finding_history_source(conn: sqlite3.Connection) -> None:
         ALTER TABLE finding_history_new RENAME TO finding_history;
         CREATE INDEX IF NOT EXISTS idx_finding_history_finding_id
             ON finding_history (finding_id, timestamp DESC);
+        PRAGMA foreign_keys = ON;
     """)
 
 

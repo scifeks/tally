@@ -675,24 +675,80 @@ export default function Triage() {
                 </button>
               )}
               {triageMode === 'mcp' && !mcpStatus?.active && (
-                <button
-                  onClick={() => {
-                    startMcpTriage.mutate(undefined, {
-                      onSuccess: data => setMcpToken(data.token),
-                    })
-                  }}
-                  disabled={startMcpTriage.isPending}
-                  data-testid="triage-mcp-start-button"
-                  className={cn(
-                    'flex items-center gap-2 px-4 h-9 font-bold text-xs uppercase tracking-wider transition-colors',
-                    startMcpTriage.isPending
-                      ? 'bg-muted text-dim cursor-not-allowed'
-                      : 'bg-accent text-background hover:bg-accent/70'
+                <div ref={runDropdownRef} className="relative flex">
+                  <button
+                    onClick={() => {
+                      startMcpTriage.mutate(
+                        { scanRunId: selectedScanRunId },
+                        { onSuccess: data => setMcpToken(data.token) }
+                      )
+                    }}
+                    disabled={startMcpTriage.isPending}
+                    data-testid="triage-mcp-start-button"
+                    className={cn(
+                      'flex items-center gap-2 px-4 h-9 font-bold text-xs uppercase tracking-wider transition-colors',
+                      startMcpTriage.isPending
+                        ? 'bg-muted text-dim cursor-not-allowed'
+                        : 'bg-accent text-background hover:bg-accent/70'
+                    )}
+                  >
+                    <Brain className="h-4 w-4" />
+                    {selectedScanRunId != null
+                      ? `MCP Triage Run #${selectedScanRunId}`
+                      : 'Start MCP Triage'}
+                  </button>
+                  {scanRuns.length > 0 && (
+                    <button
+                      onClick={() => setShowRunDropdown(s => !s)}
+                      disabled={startMcpTriage.isPending}
+                      aria-label="pick a scan run to triage"
+                      data-testid="triage-mcp-run-dropdown-toggle"
+                      className={cn(
+                        'flex items-center px-2 h-9 border-l border-background/30 transition-all',
+                        startMcpTriage.isPending
+                          ? 'bg-muted text-dim cursor-not-allowed'
+                          : 'bg-accent text-background hover:bg-accent/70'
+                      )}
+                    >
+                      <ChevronDown className="h-4 w-4" />
+                    </button>
                   )}
-                >
-                  <Brain className="h-4 w-4" />
-                  Start MCP Triage
-                </button>
+                  {showRunDropdown && scanRuns.length > 0 && (
+                    <div className="absolute top-full left-0 mt-1 w-72 border border-border bg-background z-50 shadow-lg isolate">
+                      <div className="px-3 py-1.5 text-[10px] uppercase tracking-[0.2em] text-dim border-b border-border">
+                        [ scan runs ]
+                      </div>
+                      {scanRuns.map(scan => (
+                        <button
+                          key={scan.id}
+                          onClick={() => {
+                            setSelectedScanRunId(scan.id)
+                            setViewedTriageRunId(scan.id)
+                            setLogs([])
+                            setShowRunDropdown(false)
+                          }}
+                          className={cn(
+                            'w-full text-left px-3 py-2 text-xs hover:bg-muted transition-colors border-b border-border last:border-b-0',
+                            selectedScanRunId === scan.id && 'bg-accent/20 text-accent'
+                          )}
+                        >
+                          <div className="font-bold tabular-nums">
+                            Run #{scan.id}
+                            {scan.findingsCount != null && (
+                              <span className="ml-2 font-normal text-dim">
+                                {scan.findingsCount} findings
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-[10px] text-dim">
+                            {scan.toolIds.join(', ')}
+                            {scan.startedAt && ` · ${scan.startedAt}`}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
               )}
               {triageMode === 'mcp' && mcpStatus?.active && (
                 <div className="flex items-center gap-4">

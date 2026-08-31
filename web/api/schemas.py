@@ -987,6 +987,12 @@ class BurpPollStatusResponse(BaseModel):
 
 
 # MCP Serve
+class McpTriageStartRequest(BaseModel):
+    scan_run_id: int | None = Field(default=None, alias="scanRunId")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
 class McpTriageStartResponse(BaseModel):
     host: str
     port: int

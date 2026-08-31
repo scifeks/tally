@@ -26,7 +26,7 @@ Each of six inference features can use a different provider independently:
 | `noir_inference` | Noir AI-assisted endpoint discovery |
 | `endpoint_extraction_inference` | LLM-based endpoint extraction from source code |
 
-Triage uses the same feature-inference pattern through `triage_inference`. The `provider` field selects which provider block supplies the base URL and default model. Optional overrides like `model` work the same way as for other features.
+Triage uses the same feature-inference pattern through `triage_inference`. The `provider` field selects which provider block supplies the base URL and default model. Optional overrides like `model` work the same way as for other features. See [Triage Availability](#triage-availability) for how the provider and its credentials determine whether triage runs automatically or through Claude Code.
 
 ### Top-level Fields
 
@@ -43,7 +43,7 @@ Triage uses the same feature-inference pattern through `triage_inference`. The `
 | `embedding_inference` | object | Feature config for ChromaDB vector embeddings. See [Feature Config Fields](#feature-config-fields). |
 | `noir_inference` | object | Feature config for Noir AI-assisted endpoint discovery. See [Feature Config Fields](#feature-config-fields). |
 | `endpoint_extraction_inference` | object | Feature config for LLM-based endpoint extraction. See [Feature Config Fields](#feature-config-fields). |
-| `triage_inference` | object | Feature config for AI triage. Requires Docker. See [Feature Config Fields](#feature-config-fields) and [docs/triage.md](triage.md). |
+| `triage_inference` | object | Feature config for AI triage. Required to enable triage. Auto mode requires Docker; MCP mode does not. See [Feature Config Fields](#feature-config-fields), [Triage Availability](#triage-availability), and [docs/triage.md](triage.md). |
 | `antares_inference` | object | Feature config for Antares CWE scanner LLM backend. See [Feature Config Fields](#feature-config-fields) and [docs/antares-shim.md](antares-shim.md). |
 | `antares_sweep_config` | object | CWE sweep parameters for Antares. Fields: `max_cwes` (int, maximum CWE classes per sweep) and `workers` (int, maximum concurrent CWE workers). See [docs/antares-shim.md](antares-shim.md). |
 | `defectdojo` | object | DefectDojo connection settings. See [DefectDojo Fields](#defectdojo-fields) and [docs/integrations/defect-dojo.md](integrations/defect-dojo.md). |
@@ -62,7 +62,7 @@ Triage uses the same feature-inference pattern through `triage_inference`. The `
 | `web_ui_port` | int | `8080` | TCP port for the FastAPI server started by `ui serve`. |
 | `web_ui_vite_port` | int | `3000` | TCP port for the Vite dev server started by `ui serve`. |
 | `web_ui_allowed_origins` | list\[string\] | derived | CORS allow-list for the Vite dev server. Defaults to `["https://<web_ui_host>:<web_ui_vite_port>"]` when absent or empty. Override only when running Vite under a different hostname. |
-| `mcp` | object | See below | MCP server settings for Claude Code integration. See [MCP Server](#mcp-server). |
+| `mcp` | object | See below | MCP server settings for Claude Code scanning and MCP triage. See [MCP Server](#mcp-server). |
 
 ### TLS Certificate Configuration
 
@@ -106,7 +106,7 @@ The `ollama` and `llama_cpp` provider configs share the same schema:
 
 | Field | Type | Default | Description |
 |---|---|---|---|
-| `api_key` | string | `""` | Anthropic API key. Leave empty to use the `ANTHROPIC_API_KEY` environment variable instead (recommended). Also used for triage when `triage_inference.provider` is `"claude"`. |
+| `api_key` | string | `""` | Anthropic API key. Leave empty to use the `ANTHROPIC_API_KEY` environment variable instead (recommended). Also used for triage when `triage_inference.provider` is `"claude"`: triage runs in auto mode when this key (or the environment variable) is set, and in MCP mode otherwise. See [Triage Availability](#triage-availability). |
 | `model` | string | `"claude-opus-4-6[1m]"` | Anthropic model ID (e.g. `claude-opus-4-6`, `claude-sonnet-5`). Also controls the triage model when using the Claude Code backend. |
 | `max_tokens` | int | `1024` | Maximum tokens in the model response. |
 | `timeout_seconds` | int | `60` | Request timeout in seconds for Anthropic API calls. |
@@ -143,6 +143,7 @@ Each of the six inference features (`chat_inference`, `enrichment_inference`,
 | Field | Type | Default | Description |
 |---|---|---|---|
 | `provider` | string | (required) | Name of a provider config block: `"ollama"`, `"llama_cpp"`, `"claude"`, `"openai"`, or `"voyage"`. Required. |
+| `base_url` | string or null | `null` | Overrides the provider's base URL (local providers only). Must start with `http://` or `https://` if set. If `null`, uses the provider's base URL. |
 | `model` | string or null | `null` | Overrides the provider's model for this feature only. If `null`, uses the provider's model. |
 | `timeout_seconds` | int or null | `null` | Overrides the provider's timeout in seconds. Must be positive if set. If `null`, uses the provider's timeout. |
 | `num_ctx` | int or null | `null` | Overrides the provider's context window (local providers only). Must be positive if set. If `null`, uses the provider's value. |
@@ -224,6 +225,31 @@ Claude Code scanning and MCP triage.
   }
 }
 ```
+
+### Triage Availability
+
+The `triage_inference.provider` field determines both the model used for
+triage and whether triage runs automatically or through Claude Code.
+
+Local providers (`"ollama"`, `"llama_cpp"`) always run in **auto mode**:
+Tally runs the triage agent unattended inside a Docker container against
+your local server. No API key is required or checked.
+
+The `"claude"` provider runs in one of two modes depending on whether an
+Anthropic API key is available:
+
+- **Auto mode.** When `claude.api_key` is set (or the `ANTHROPIC_API_KEY`
+  environment variable is set), Tally runs Claude unattended inside the
+  Docker container using that key.
+- **MCP mode.** When neither is set, Tally cannot run Claude unattended
+  because Anthropic's terms reserve subscription sessions for direct
+  interactive use. Triage instead runs through the MCP server: you invoke
+  the `/tally-triage` skill from your own Claude Code session. The `mcp`
+  block's `host` and `port` fields control where that server listens.
+
+Mode selection happens automatically; it is not a setting you choose. See
+[docs/triage.md](triage.md#mcp-triage-mode) for the full mode
+determination table and setup steps for both modes.
 
 ### Example: Ollama Only
 
@@ -323,9 +349,11 @@ Use Claude API for higher accuracy on complex endpoint patterns:
 
 ### Example: Enable Claude Code Triage
 
-Triage runs inside a Docker container. Docker must be installed and running.
-Add a `triage_inference` block referencing the `claude` provider.
-See [docs/triage.md](triage.md) for setup details and the full security model.
+Add a `triage_inference` block referencing the `claude` provider. When an
+Anthropic API key is configured, triage runs inside a Docker container
+(Docker must be installed and running); without one, triage runs in MCP
+mode instead. See [Triage Availability](#triage-availability) and
+[docs/triage.md](triage.md) for setup details and the full security model.
 
 ```json
 {
@@ -341,7 +369,10 @@ See [docs/triage.md](triage.md) for setup details and the full security model.
 }
 ```
 
-Leave `api_key` empty for Tally to use the `ANTHROPIC_API_KEY` environment variable for LLM API calls and fall back to OAuth file mounts for triage container authentication.
+Leave `api_key` empty to have Tally read the key from the
+`ANTHROPIC_API_KEY` environment variable at startup. If neither is set,
+this configuration runs triage in MCP mode rather than inside a Docker
+container.
 
 ### Example: Enable Local Model Triage
 
