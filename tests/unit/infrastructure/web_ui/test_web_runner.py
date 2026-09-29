@@ -236,6 +236,37 @@ class TestServe:
         assert "Press Ctrl+C" in printed_before_run[0]
 
 
+class TestMonitorVite:
+    def test_prints_warning_when_vite_exits(self, capsys, tmp_path) -> None:
+        proc = MagicMock()
+        proc.poll.return_value = 1
+        runner = WebUiRunner(MagicMock())
+        runner._vite_proc = proc
+
+        log_path = tmp_path / "vite.log"
+        runner._monitor_vite(log_path)
+
+        out = capsys.readouterr().out
+        assert "exited (code 1)" in out
+        assert str(log_path) in out
+
+    def test_loops_until_exit(self, tmp_path) -> None:
+        proc = MagicMock()
+        proc.poll.side_effect = [None, None, 0]
+        runner = WebUiRunner(MagicMock())
+        runner._vite_proc = proc
+
+        with patch("infrastructure.web_ui.runner.time.sleep") as mock_sleep:
+            runner._monitor_vite(tmp_path / "vite.log")
+
+        assert mock_sleep.call_count == 2
+
+    def test_exits_silently_when_proc_cleared(self) -> None:
+        runner = WebUiRunner(MagicMock())
+        runner._vite_proc = None
+        runner._monitor_vite(Path("/unused"))
+
+
 class TestWriteEnvLocal:
     _CERT = Path("/fake/cert.pem")
     _KEY = Path("/fake/key.pem")

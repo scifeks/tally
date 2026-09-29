@@ -11,6 +11,7 @@ import threading
 import time
 import webbrowser
 from collections.abc import Callable
+from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -32,6 +33,7 @@ class WebUiRunner(WebUiRunnerPort):
     def __init__(self, app_factory: Callable[..., Any]) -> None:
         self._app_factory = app_factory
         self._vite_proc: subprocess.Popen[bytes] | None = None
+        self._vite_log: Any | None = None
 
     def serve(
         self,
@@ -70,7 +72,7 @@ class WebUiRunner(WebUiRunnerPort):
             tool_registry=tool_registry,
         )
 
-        self._start_vite(ui_dir)
+        self._start_vite(ui_dir, Path(base_path))
 
         vite_url = f"https://{host}:{vite_port}"
         if not self._wait_for_port(host, vite_port, timeout=10.0):
@@ -129,23 +131,54 @@ class WebUiRunner(WebUiRunnerPort):
         except Exception:
             self._vite_proc.kill()
         self._vite_proc = None
+        if self._vite_log is not None:
+            self._vite_log.close()
+            self._vite_log = None
 
-    def _start_vite(self, ui_dir: Path) -> None:
+    def _monitor_vite(self, log_path: Path) -> None:
+        """Poll the Vite process and warn the user if it exits."""
+        while self._vite_proc is not None:
+            rc = self._vite_proc.poll()
+            if rc is not None:
+                print(
+                    f"\nVite dev server exited (code {rc}). "
+                    f"The web UI will not load. "
+                    f"Check {log_path} for details."
+                )
+                return
+            time.sleep(2)
+
+    def _start_vite(self, ui_dir: Path, base_path: Path) -> None:
         npm = "npm"
         env = {**os.environ, "FORCE_COLOR": "0"}
+
+        log_dir = base_path / "logs"
+        log_dir.mkdir(exist_ok=True)
+        log_name = "vite-" + datetime.now().strftime("%Y-%m-%d") + ".log"
+        self._vite_log = open(log_dir / log_name, "a", encoding="utf-8")
+
         try:
             self._vite_proc = subprocess.Popen(
                 [npm, "run", "dev"],
                 cwd=ui_dir,
                 env=env,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
+                stdout=self._vite_log,
+                stderr=self._vite_log,
             )
         except FileNotFoundError:
             print("npm not found. Vite dev server not started.")
+            self._vite_log.close()
+            self._vite_log = None
             self._vite_proc = None
             return
         atexit.register(self._stop_vite)
+
+        monitor = threading.Thread(
+            target=self._monitor_vite,
+            args=(log_dir / log_name,),
+            daemon=True,
+        )
+        monitor.start()
 
     @staticmethod
     def _wait_for_port(host: str, port: int, timeout: float) -> bool:
