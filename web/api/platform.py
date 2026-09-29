@@ -1,9 +1,4 @@
-"""Platform-level endpoints (health, etc.).
-
-Hosts the unauthenticated ``GET /api/v1/health`` endpoint. The handler
-probes the global project-registry SQLite to report DB reachability,
-and reports the running package version via ``importlib.metadata``.
-"""
+"""Platform-level endpoints (health, etc.)."""
 
 from __future__ import annotations
 
@@ -68,4 +63,5 @@ def get_capabilities(request: Request) -> CapabilitiesResponse:
         report_retention_enabled=caps.report_retention_enabled,
         max_report_history=caps.max_report_history,
         triage_backend_label=caps.triage_backend_label,
+        triage_mode=caps.triage_mode,
     )

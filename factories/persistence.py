@@ -27,6 +27,9 @@ from infrastructure.store.repositories.finding_history import (
     FindingHistoryRepository,
 )
 from infrastructure.store.repositories.findings import FindingRepository
+from infrastructure.store.repositories.organizer_state import (
+    OrganizerStateRepository,
+)
 from infrastructure.store.repositories.reports import ReportRepository
 from infrastructure.store.repositories.repositories import (
     RepositoryRepository,
@@ -221,6 +224,12 @@ def create_saved_scans_repo(
 ) -> SavedScansRepositoryPort:
     """Create a SavedScansRepository for the given DB."""
     return SavedScansRepository(_init_factory(db_path))
+
+
+def create_organizer_state_repo(
+    db_path: Path,
+) -> OrganizerStateRepository:
+    return OrganizerStateRepository(_init_factory(db_path))
 
 
 def create_scan_repos(

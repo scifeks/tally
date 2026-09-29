@@ -63,16 +63,22 @@ def cmd_triage(
         return PROJECT_NOT_FOUND
 
     config = ConfigManager(str(base_path))
-    claude_api_key = (
-        config.global_config.claude.api_key if config.global_config.claude else ""
-    )
+    gcfg = config.global_config
+    triage_provider = ""
+    triage_api_key = ""
+    if gcfg.triage_inference:
+        triage_provider = gcfg.triage_inference.provider
+        if triage_provider in ("claude", "claude_code"):
+            triage_api_key = gcfg.claude.api_key if gcfg.claude else ""
+        elif triage_provider == "openai":
+            triage_api_key = gcfg.openai.api_key if gcfg.openai else ""
 
     readiness = compute_triage_readiness(
-        base_path=str(base_path),
+        provider=triage_provider,
         docker_available=RuntimeDependencyService(
             build_runtime_dependency_probes(base_path=str(base_path))
         ).is_installed("docker"),
-        claude_api_key=claude_api_key,
+        api_key=triage_api_key,
     )
     if not readiness.enabled:
         print(f"Error: {readiness.reason}", file=sys.stderr)

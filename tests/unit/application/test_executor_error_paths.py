@@ -18,6 +18,7 @@ from application.ports.subprocess_runner import (
 )
 from application.tools.executor import ToolExecutor, _needs_root
 from domain.tools.base import ToolResult
+from infrastructure.tools.cli_runner import CliToolRunner
 from web.adapters.no_approval_prompt import NoApprovalPromptAdapter
 
 
@@ -59,7 +60,10 @@ def runner() -> _StubRunner:
 @pytest.fixture()
 def executor(tmp_path: Path, runner: _StubRunner) -> ToolExecutor:
     return ToolExecutor(
-        "test-project", tmp_path, NoApprovalPromptAdapter(), subprocess_runner=runner
+        "test-project",
+        tmp_path,
+        NoApprovalPromptAdapter(),
+        cli_tool_runner=CliToolRunner(runner),
     )
 
 
@@ -106,7 +110,10 @@ class TestExecutorErrorPaths:
     ) -> None:
         runner = _StubRunner(side_effect=SubprocessTimeout(["cmd"], 300))
         exec_ = ToolExecutor(
-            "p", tmp_path, NoApprovalPromptAdapter(), subprocess_runner=runner
+            "p",
+            tmp_path,
+            NoApprovalPromptAdapter(),
+            cli_tool_runner=CliToolRunner(runner),
         )
         result = exec_._run_with_escalation(
             ["cmd"],
@@ -127,7 +134,10 @@ class TestExecutorErrorPaths:
     ) -> None:
         runner = _StubRunner(side_effect=SubprocessNotFound("cmd not found"))
         exec_ = ToolExecutor(
-            "p", tmp_path, NoApprovalPromptAdapter(), subprocess_runner=runner
+            "p",
+            tmp_path,
+            NoApprovalPromptAdapter(),
+            cli_tool_runner=CliToolRunner(runner),
         )
         result = exec_._run_with_escalation(
             ["cmd"],
@@ -148,7 +158,10 @@ class TestExecutorErrorPaths:
     ) -> None:
         runner = _StubRunner(side_effect=SubprocessPermissionDenied("denied"))
         exec_ = ToolExecutor(
-            "p", tmp_path, NoApprovalPromptAdapter(), subprocess_runner=runner
+            "p",
+            tmp_path,
+            NoApprovalPromptAdapter(),
+            cli_tool_runner=CliToolRunner(runner),
         )
         result = exec_._run_with_escalation(
             ["cmd"],
@@ -171,7 +184,10 @@ class TestExecutorErrorPaths:
             result=SubprocessResult(returncode=0, stdout="ok", stderr="")
         )
         exec_ = ToolExecutor(
-            "p", tmp_path, NoApprovalPromptAdapter(), subprocess_runner=runner
+            "p",
+            tmp_path,
+            NoApprovalPromptAdapter(),
+            cli_tool_runner=CliToolRunner(runner),
         )
         result = exec_._run_with_escalation(
             ["cmd"],
@@ -205,7 +221,10 @@ class TestExecutorReporterWiring:
     ) -> None:
         runner = _StubRunner(side_effect=SubprocessNotFound("nope"))
         executor = ToolExecutor(
-            "p", tmp_path, NoApprovalPromptAdapter(), subprocess_runner=runner
+            "p",
+            tmp_path,
+            NoApprovalPromptAdapter(),
+            cli_tool_runner=CliToolRunner(runner),
         )
         executor._run_with_escalation(
             ["cmd"],
@@ -227,7 +246,7 @@ class TestExecutorReporterWiring:
             "p",
             tmp_path,
             NoApprovalPromptAdapter(),
-            subprocess_runner=runner,
+            cli_tool_runner=CliToolRunner(runner),
             reporter=reporter,
         )
         executor._run_with_escalation(
@@ -249,7 +268,7 @@ class TestExecutorReporterWiring:
             "p",
             tmp_path,
             NoApprovalPromptAdapter(),
-            subprocess_runner=runner,
+            cli_tool_runner=CliToolRunner(runner),
             reporter=reporter,
         )
         executor._timeout_result("mytool", "ts", perf_counter() - 1.0, 300)

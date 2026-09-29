@@ -136,6 +136,12 @@ Read-only fields (ID, tool, file, rule, URL, first-seen date) cannot be edited.
 
 Click the plus button above the findings table to add a finding discovered outside the scanning pipeline. Title and severity are required. You must provide at least one location (repository, file path, or URL).
 
+### Poll Burp Organizer
+
+When `burp.mcp_url` is configured in `config/global.json`, a **Poll Burp Organizer** button appears on the Findings page next to **+ Add Issue**. Clicking it starts a polling loop that fetches items from Burp's Organizer and ingests them as findings. The segment tab switches to `web` automatically. While active, the button changes to **Stop Polling**.
+
+Ingested findings appear under the `web` segment with tool `burp_organizer`. If an LLM provider is configured for the `enrichment` role, developer notes on Organizer items are classified into vulnerability type, CWE, and severity. See [docs/burp.md](burp.md) for Organizer polling setup.
+
 ---
 
 ## Scans
@@ -169,6 +175,16 @@ Create a new saved scan by configuring advanced options and clicking "Save scan"
 
 After a scan completes, the page shows detailed timing and status for each tool run grouped by domain (SAST, SCA, WEB, SECRETS). Expand each tool group to see per-repo or per-host timing information.
 
+### Burp scan
+
+When Burp Suite is configured and reachable, an orange **Start Burp Scan** button appears next to the green **Start Scan** button. To its right, a tag input field accepts optional scan configuration names. Each name becomes a removable chip.
+
+Click the button to start a crawl-and-audit scan against all base URLs in the active project. If you entered configuration names, Burp uses those profiles instead of its defaults. Multiple names are merged (useful for combining a crawl config with an audit config). If no names are entered, Burp runs with all checks enabled.
+
+Scan progress appears in the live log. The count shown during the scan is the raw event count, not the final ingested count. When Burp reports the scan as succeeded, Tally ingests all findings in one batch.
+
+See [docs/burp.md](burp.md) for Burp setup, scan configurations, and the Organizer polling workflow.
+
 ---
 
 ## Triage
@@ -177,9 +193,21 @@ The Triage page (`/triage`) uses an AI agent to analyze findings. The agent read
 
 ### Starting triage
 
-Click "Start triage" to launch the agent against untriaged findings in the active project. The page shows how many findings are eligible.
+Click **Start Triage** to launch the agent against untriaged findings in the active project. The page shows how many findings are eligible.
 
-Triage requires Docker and a configured `triage_inference` block in `config/global.json`. If prerequisites are not met, the button is disabled with a message explaining what is missing.
+Start Triage runs auto-triage: the agent executes headless inside a Docker container. Auto-triage requires Docker and a configured `triage_inference` block in `config/global.json`. If a prerequisite is missing, such as the Claude CLI binary not being on PATH, the button is disabled with a message explaining what is missing.
+
+Whether the page shows **Start Triage** or **Start MCP Triage** depends on your configured provider and API key, not a choice you make in the UI. With Claude Code and an API key configured, or with a local provider, the page runs in auto mode and shows **Start Triage**. With Claude Code and no API key configured, the page runs in MCP mode instead, described next.
+
+### MCP triage mode
+
+In MCP mode, the agent runs inside your own Claude Code session instead of inside the Docker container described above. See [docs/triage.md](triage.md#mode-determination) for the full mode determination table.
+
+When the active project is in MCP mode, the Triage page shows **Start MCP Triage** in place of **Start Triage**. Clicking it creates triage batches for the latest scan run and starts Tally's MCP server if it is not already running.
+
+An instructions panel shows the server host and port. The first time you start MCP triage for a project, it also shows a bearer token; copy it, since it is not shown again. On later starts, the panel reminds you to use your existing token instead. Open Claude Code and run `/tally-triage` to begin triaging the prepared batches.
+
+Batch and log results from MCP triage appear in the same batches panel and triage log used by auto-triage. Click **Stop MCP Triage** to stop the server.
 
 ### Real-time progress
 

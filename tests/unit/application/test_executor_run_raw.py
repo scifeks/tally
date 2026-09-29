@@ -9,6 +9,7 @@ import pytest
 
 from application.tools.executor import ToolExecutor
 from domain.tools.base import ToolResult
+from infrastructure.tools.cli_runner import CliToolRunner
 
 
 class TestExecutorRunRaw:
@@ -45,7 +46,7 @@ class TestExecutorRunRaw:
                     project_name="test",
                     base_path=Path("/tmp/test"),
                     prompt=mock_prompt,
-                    subprocess_runner=mock_subprocess_runner,
+                    cli_tool_runner=CliToolRunner(mock_subprocess_runner),
                     reporter=None,
                 )
                 return executor

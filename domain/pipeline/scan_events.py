@@ -68,6 +68,17 @@ class ToolCompleted(_ScanEventBase):
 
 
 @dataclass(frozen=True)
+class ToolProgress(_ScanEventBase):
+    segment: str = ""
+    repo: str = ""
+    tool: str = ""
+    message: str = ""
+    status: str = ""
+    findings_count: int = 0
+    progress_pct: int = 0
+
+
+@dataclass(frozen=True)
 class ToolFailed(_ScanEventBase):
     segment: str = ""
     repo: str = ""
@@ -119,6 +130,7 @@ type ScanEvent = (
     | ToolStarted
     | ToolSkipped
     | ToolCompleted
+    | ToolProgress
     | ToolFailed
     | EnrichmentProgress
     | EnrichmentComplete
@@ -135,6 +147,7 @@ _EVENT_TYPE_NAMES: dict[type, str] = {
     ToolStarted: "tool_started",
     ToolSkipped: "tool_skipped",
     ToolCompleted: "tool_completed",
+    ToolProgress: "tool_progress",
     ToolFailed: "tool_failed",
     EnrichmentProgress: "enrichment_progress",
     EnrichmentComplete: "enrichment_complete",

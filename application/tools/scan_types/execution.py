@@ -12,7 +12,7 @@ from application.tools.scan_types.models import ScanTypeConfig
 from domain.pipeline.events import EventBus, IngestCompleted, ToolCompleted
 from domain.tools.base import ToolResult
 from domain.tools.execution_config import NoirProviderSnapshot, ToolExecutionConfig
-from domain.tools.interface import ExecutionContext, ToolInterface
+from domain.tools.interface import ExecutionContext, ToolInterface, TransportType
 from domain.tools.scan_types.models import SEGMENT_ORDER
 
 _log = logging.getLogger(__name__)
@@ -154,6 +154,8 @@ def execute_tool_passes(
     changed_files: list[str] | None = None,
 ) -> ToolResult | None:
     """Prompt approval once, run all ExecutionPasses, return merged result."""
+    if getattr(tool, "transport", TransportType.CLI) == TransportType.HTTP:
+        return None
     if not config.prompt.confirm(f"  Run {tool.name}?"):
         return None
     if remaining_tools > 0:

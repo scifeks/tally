@@ -18,6 +18,7 @@ from application.ports.subprocess_runner import (
     SubprocessRunnerPort,
 )
 from application.tools.executor import ToolExecutor
+from infrastructure.tools.cli_runner import CliToolRunner
 
 
 class _StubRunner(SubprocessRunnerPort):
@@ -45,7 +46,7 @@ def executor(tmp_path: Path) -> ToolExecutor:
         project_name="test",
         base_path=tmp_path,
         prompt=MagicMock(),
-        subprocess_runner=_StubRunner(),
+        cli_tool_runner=CliToolRunner(_StubRunner()),
     )
 
 
@@ -67,7 +68,7 @@ def test_token_is_threaded_through_to_runner(tmp_path: Path) -> None:
         project_name="test",
         base_path=tmp_path,
         prompt=MagicMock(),
-        subprocess_runner=stub,
+        cli_tool_runner=CliToolRunner(stub),
     )
     token = CancellationToken()
     executor.set_cancel_token(token)

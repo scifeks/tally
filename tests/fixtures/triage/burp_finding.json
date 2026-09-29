@@ -1,0 +1,16 @@
+{
+  "id": 43,
+  "tool": "burp",
+  "repo": "example-app",
+  "segment": "web",
+  "alert_name": "Reflected cross-site scripting",
+  "severity": 3,
+  "confidence": "confirmed",
+  "description": "User input is reflected in the response without encoding.",
+  "url": "https://example.com/search",
+  "method": "GET",
+  "remediation": "Encode all user input before including it in responses.",
+  "evidence": "Request:\nGET /search?q=<script> HTTP/1.1\nHost: example.com\n\nResponse:\nHTTP/1.1 200 OK\n<script></body>",
+  "fingerprint_type": "REFLECTED_XSS",
+  "risk_type": "Reflected cross-site scripting"
+}

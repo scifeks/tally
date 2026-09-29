@@ -9,6 +9,8 @@ from rich.console import Console
 from rich.markup import escape as markup_escape
 from rich.table import Table
 
+from domain.tools.interface import TransportType
+
 if TYPE_CHECKING:
     from application.tools.registry import ToolRegistry
 
@@ -23,16 +25,25 @@ def build_tool_table(tools, registry: ToolRegistry) -> Table:
 
     for tool in tools:
         config = registry.get_tool_config(tool.name)
-        location = config.location if config else "local"
+        transport = getattr(tool, "transport", TransportType.CLI)
 
-        if location == "docker":
+        if transport == TransportType.HTTP:
+            location = "http"
+            avail = tool.check_available()
+            if avail:
+                status = "[green]v configured[/green]"
+            else:
+                status = "[yellow]! OFFLINE[/yellow]"
+            hint = ""
+        elif config and config.location == "docker":
+            location = "docker"
             container = config.container.name if config else ""
             status = "[green]v configured[/green]"
             hint = f"Container: {container}"
         else:
+            location = config.location if config else "local"
             avail = tool.check_available()
             version = tool.get_version() if avail else None
-            # Extract bare version number from verbose strings like "semgrep 1.2.3"
             if version:
                 match = re.search(r"\d+\.\d+[\d.]*", version)
                 version = match.group(0) if match else version.split("(")[0].strip()

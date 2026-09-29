@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
-from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from application.mcp.duplicate_grouping import (
@@ -83,13 +82,20 @@ class McpIngestService:
         self._indexer = indexer
         self._kb = knowledge_base
 
-    def create_scan_run(self, project_id: int, repo_ids: list[str]) -> dict[str, int]:
+    def create_scan_run(
+        self,
+        project_id: int,
+        repo_ids: list[str],
+        *,
+        tool_ids: list[str] | None = None,
+        domains: list[str] | None = None,
+    ) -> dict[str, int]:
         """Open a scan_run row for an external Claude Code scan."""
         run_id = self._runs.create(
             project_id=project_id,
             repo_ids=repo_ids,
-            tool_ids=["claudecode"],
-            domains=["llm"],
+            tool_ids=tool_ids or ["claudecode"],
+            domains=domains or ["llm"],
             skip_enrichment=True,
             status="running",
         )
@@ -105,7 +111,14 @@ class McpIngestService:
         self._runs.set_finished_at(run_id)
         return {"status": "done"}
 
-    def submit_finding(self, run_id: int, payload: dict[str, Any]) -> dict[str, Any]:
+    def submit_finding(
+        self,
+        run_id: int,
+        payload: dict[str, Any],
+        *,
+        tool: str = "claudecode",
+        domain: str = "llm",
+    ) -> dict[str, Any]:
         """Submit an MCP finding and sync to vector index.
 
         Validates the payload, normalizes and fingerprints it, inserts it
@@ -120,11 +133,9 @@ class McpIngestService:
         except FindingPayloadError as exc:
             return {"finding_id": None, "status": "rejected", "error": str(exc)}
 
-        now = datetime.now(UTC).isoformat()
-
         raw_row: dict[str, Any] = {
-            "tool": "claudecode",
-            "domain": "llm",
+            "tool": tool,
+            "domain": domain,
             "segment": validated.get("segment", "sast"),
             "file": validated["file"],
             "file_path": validated["file"],
@@ -136,8 +147,6 @@ class McpIngestService:
             "cwe": validated["cwe"],
             "finding_type": validated["finding_type"],
             "rule_id": validated["rule_id"],
-            "triaged_by": "claudecode",
-            "triaged_at": now,
             "status": "active",
         }
 

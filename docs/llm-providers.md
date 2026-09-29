@@ -43,6 +43,8 @@ Tally uses LLMs for chat over findings, enrichment during scans, report generati
 
 **What it is:** Cloud-based LLM from Anthropic. Works for chat, enrichment, report generation, and triage.
 
+**Triage authentication:** How Claude triage runs depends on how you authenticate. With `claude.api_key` (or `ANTHROPIC_API_KEY`) set, triage runs unattended (auto-triage) inside a Docker container, the same as Ollama and llama.cpp. Without a key, such as when Claude Code is signed in to a Claude Max plan via OAuth, Tally routes triage through MCP mode instead: an interactive session driven from your own Claude Code, not the container. This split is an Anthropic terms-of-service requirement; subscription sessions are reserved for direct interactive use, not headless automation. See [docs/triage.md](triage.md#mcp-triage-mode) for MCP triage setup.
+
 **Setup:**
 
 1. Create an Anthropic account and get an API key from [console.anthropic.com](https://console.anthropic.com).
@@ -183,7 +185,7 @@ Each LLM feature can use a different provider independently. Configure them by a
 | Reporting | `report_inference` | Report generation via the `report` command | `ollama`, `llama_cpp`, `claude`, `openai` |
 | Embeddings | `embedding_inference` | Vector embeddings for RAG retrieval | `ollama`, `llama_cpp`, `voyage` |
 | Noir AI | `noir_inference` | AI-assisted endpoint discovery for Noir | `ollama`, `llama_cpp` |
-| Triage | `triage_inference` | AI triage of SAST findings in Docker | `ollama`, `llama_cpp`, `claude` |
+| Triage | `triage_inference` | AI triage of SAST findings | `ollama`, `llama_cpp`, `claude` |
 | Antares | `antares_inference` | CWE vulnerability localization via LLM agents | `ollama`, `llama_cpp`, `vllm` |
 
 **Feature configuration fields:**
@@ -390,6 +392,6 @@ export VOYAGE_API_KEY="pa-..."
 
 **Embedding providers:** Ollama and llama.cpp are local (fast, requires VRAM). Voyage is cloud-based (reliable, no local overhead). OpenAI does not provide embeddings.
 
-**For triage:** Claude Code (API-based) provides the best results. OpenCode (Ollama-based) runs locally but requires Docker and more tuning.
+**For triage:** Claude Code produces the strongest results, but only runs unattended (auto-triage) with an API key configured; without one, it falls back to interactive MCP triage instead. Ollama and llama.cpp have no such gate and always run auto-triage locally; verdict quality depends on the model you run.
 
 See [docs/configuration.md](configuration.md) for the complete field reference. For triage-specific setup, see [docs/triage.md](triage.md).

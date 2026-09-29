@@ -14,10 +14,9 @@ from application.ports.subprocess_runner import (
     SubprocessCancelled,
     SubprocessNotFound,
     SubprocessPermissionDenied,
-    SubprocessResult,
-    SubprocessRunnerPort,
     SubprocessTimeout,
 )
+from application.ports.tool_runner import CliToolRunnerPort, ToolRunOutput
 from application.ports.user_prompt import UserPromptPort
 from core.project_paths import ProjectPaths
 from domain.tools.base import ToolResult, ToolWrapper
@@ -69,7 +68,7 @@ def sanitize_command(cmd: list[str]) -> list[str]:
 
 
 class _RunResult(NamedTuple):
-    proc: SubprocessResult
+    proc: ToolRunOutput
     start: float
     success: bool
 
@@ -80,13 +79,13 @@ class ToolExecutor:
         project_name: str,
         base_path: Path,
         prompt: UserPromptPort,
-        subprocess_runner: SubprocessRunnerPort,
+        cli_tool_runner: CliToolRunnerPort,
         reporter: ProgressReporter | None = None,
     ) -> None:
         self.project_name = project_name
         self.base_path = Path(base_path)
         self._prompt = prompt
-        self._subprocess_runner = subprocess_runner
+        self._cli_runner = cli_tool_runner
         self._reporter: ProgressReporter = reporter or NullProgressReporter()
         self._sudo_approved = False
         self._cancel_token: CancellationToken = no_op_token()
@@ -317,10 +316,10 @@ class ToolExecutor:
         cwd: str | None,
         env: dict[str, str] | None,
         stdin_data: str | None = None,
-    ) -> SubprocessResult:
-        """Delegate to the SubprocessRunner port; translate cancellation."""
+    ) -> ToolRunOutput:
+        """Delegate to the CLI tool runner; translate cancellation."""
         try:
-            return self._subprocess_runner.run(
+            return self._cli_runner.run(
                 cmd,
                 timeout=timeout,
                 cwd=cwd,

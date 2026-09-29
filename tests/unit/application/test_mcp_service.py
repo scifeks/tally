@@ -85,65 +85,13 @@ class TestFetchBatch:
         assert len(result["findings"]) == 2
         assert result["findings"][0]["finding_id"] == 101
 
-    def test_fetch_batch_computes_new_batches(self) -> None:
-        """No pending batches, untriaged findings exist, compute+create+claim."""
-        run_repo = MagicMock()
-        run_repo.latest_run_id.return_value = 1
-
-        triage_repo = MagicMock()
-        # First claim returns None (no pending batch)
-        # Second claim (after compute) returns a batch
-        batch = _make_batch_row(batch_id=10, run_id=1)
-        triage_repo.claim_batch.side_effect = [None, batch]
-
-        # Simulate untriaged findings
-        triage_repo.get_active_finding_combos.return_value = [
-            ("semgrep", "repo1", "sast")
-        ]
-        findings = [
-            {"id": 201, "tool": "semgrep", "file": "app.py", "severity": "high"},
-            {"id": 202, "tool": "semgrep", "file": "app.py", "severity": "low"},
-        ]
-        triage_repo.fetch_active_findings_for_batching.return_value = findings
-        triage_repo.create_batches.return_value = [(1, 1), (2, 1)]
-
-        summary = TriageRunSummary(
-            scan_run_id=1,
-            status="in_progress",
-            started_at="2024-01-01T00:00:00Z",
-            finished_at=None,
-            total_findings=2,
-            processed_findings=0,
-            total_batches=2,
-            counts_by_status={"pending": 2},
-        )
-        triage_repo.summarize_for_run.return_value = summary
-
-        tool = MagicMock()
-        tool.scan_segment = "sast"
-        tool_registry = MagicMock()
-        tool_registry.get_tool.return_value = tool
-
-        service = _make_service(
-            triage_repo=triage_repo,
-            run_repo=run_repo,
-            tool_registry=tool_registry,
-        )
-
-        result = service.fetch_batch("test-project")
-
-        assert result["batch_id"] == 10
-        assert result["total_batches"] == 2
-        triage_repo.create_batches.assert_called_once()
-
-    def test_fetch_batch_no_findings(self) -> None:
-        """No untriaged findings, returns null batch_id."""
+    def test_fetch_batch_no_pending_batches(self) -> None:
+        """No pending batches for the run, returns null batch_id."""
         run_repo = MagicMock()
         run_repo.latest_run_id.return_value = 1
 
         triage_repo = MagicMock()
         triage_repo.claim_batch.return_value = None
-        triage_repo.get_active_finding_combos.return_value = []
 
         service = _make_service(
             triage_repo=triage_repo,
@@ -154,7 +102,7 @@ class TestFetchBatch:
 
         assert result["batch_id"] is None
         assert "message" in result
-        assert "No untriaged findings" in result["message"]
+        assert "No pending batches" in result["message"]
 
     def test_fetch_batch_no_scan_runs(self) -> None:
         """latest_run_id returns None, returns message."""

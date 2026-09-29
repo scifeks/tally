@@ -172,6 +172,11 @@ def discover_tools(
         )
         _discover_fallback(registry, wrappers_dir)
 
+    try:
+        register_burp_tool(registry, base_path)
+    except Exception:
+        logger.debug("Burp registration skipped", exc_info=True)
+
 
 def _discover_from_config(
     registry: ToolRegistry, commands_config, wrappers_dir: Path
@@ -209,3 +214,34 @@ def _discover_fallback(registry: ToolRegistry, wrappers_dir: Path) -> None:
                     registry.register(obj())
                 except TypeError:
                     pass
+
+
+def register_burp_tool(
+    registry: ToolRegistry,
+    base_path: str,
+) -> None:
+    """Register Burp when configured and reachable."""
+    from core.config.manager import ConfigManager
+    from infrastructure.tools.burp.probe import (
+        probe_burp_availability,
+    )
+
+    try:
+        config = ConfigManager(base_path)
+    except Exception:
+        return
+
+    burp_config = config.global_config.burp
+    if burp_config is None:
+        return
+
+    available = probe_burp_availability(burp_config)
+    if not available:
+        return
+
+    from infrastructure.tools.wrappers.burp import (
+        BurpToolWrapper,
+    )
+
+    wrapper = BurpToolWrapper(burp_config=burp_config)
+    registry.register(wrapper)

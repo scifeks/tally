@@ -397,6 +397,34 @@ Tally asks if you want to ingest the output into the knowledge base after execut
 
 ---
 
+## Burp Suite
+
+### Starting a Burp scan
+
+The `burp scan` command triggers a Burp Suite crawl-and-audit scan using the base URLs configured on project repositories:
+
+```
+[myproject]> burp scan
+Starting burp scan...
+```
+
+To use a named Burp scan configuration:
+
+```
+[myproject]> burp scan Crawl and Audit - Balanced
+Starting burp scan (Crawl and Audit - Balanced)...
+```
+
+The scan configuration name must match a configuration defined in your Burp Suite installation. When omitted, Burp uses its default scan configuration.
+
+Burp scans require:
+
+- A running Burp Suite Professional instance with REST API enabled
+- Burp connection configured in `config/global.json` (see [docs/configuration.md](configuration.md#burp-suite-fields))
+- At least one repository service with `base_urls` configured
+
+---
+
 ## Working with Findings
 
 Findings are automatically ingested into the RAG knowledge base after each scan. You can then search, chat, and get statistics.
@@ -672,10 +700,13 @@ The Markdown report contains:
 
 ## Triaging Findings
 
-Triage uses an AI agent to assess SAST and API findings, producing a verdict with
-confidence, severity, and remediation guidance. SCA findings are skipped because
-they already reference confirmed CVEs. Triage requires Docker and a configured
-backend.
+Triage uses an AI agent to assess SAST, API, and DAST findings, producing a
+verdict with confidence, severity, and remediation guidance. SCA findings are
+skipped because they already reference confirmed CVEs. Auto-triage requires
+Docker and a configured backend. Frontier backends (Claude Code, OpenAI)
+additionally require an API key for auto-triage; without one, Tally runs
+triage in [MCP mode](triage.md#mcp-triage-mode) instead, where you process
+batches from your own Claude Code session rather than a Docker container.
 See [docs/triage.md](triage.md) for setup, the container security model, and
 backend accuracy tradeoffs.
 
@@ -696,7 +727,30 @@ Triage containers ready.
 Triage: 3 sessions run, 2 success, 1 failed, 0 incomplete
 ```
 
-To rebuild the triage Docker image (no active project required):
+### Triage Flags
+
+**Run the batching phase only:**
+
+Groups untriaged findings into batches without starting any triage sessions.
+Requires the same active project and configured backend as `triage`.
+
+```
+[acme-security-audit]> triage --batch
+Created 6 batches
+```
+
+**Render prompts without running them:**
+
+Runs the batching phase, then logs the exact prompt text that would be sent
+to the backend, without invoking it. Use this to preview what triage would
+send given the prompt injection risk described above.
+
+```
+[acme-security-audit]> triage --dry-run
+Rendered 6 batch prompt(s); see DEBUG log
+```
+
+**Rebuild the triage Docker image** (no active project required):
 
 ```
 [acme-security-audit]> triage --rebuild-container
@@ -867,35 +921,110 @@ full setup instructions and entity mapping details.
 
 ---
 
-## MCP Token Management
+## MCP Server
 
-Generate bearer tokens for MCP server authentication. Tokens are required when configuring external clients (like Claude Code) to connect to the `tally mcp serve` endpoint. See [triage.md](triage.md) for the MCP triage workflow and [claude-code-scanning.md](claude-code-scanning.md) for Claude Code scanning setup.
+Tally can run an MCP server that exposes triage batches (and Claude Code scanning tools) to external MCP clients such as Claude Code. See [triage.md](triage.md#mcp-triage-mode) for the full MCP triage workflow and [claude-code-scanning.md](claude-code-scanning.md) for Claude Code scanning setup.
+
+### Server lifecycle
+
+```
+[acme-audit]> mcp serve start
+MCP server started on 127.0.0.1:8765
+
+[acme-audit]> mcp serve status
+MCP server: running on 127.0.0.1:8765 (source: repl)
+
+[acme-audit]> mcp serve stop
+MCP server stopped
+
+[acme-audit]> mcp serve restart
+```
+
+`mcp serve start` runs the server in the background and returns immediately;
+the REPL prompt stays interactive while the server is running.
+
+Bare `mcp serve` (no subcommand) prints the same submenu instead of starting anything:
+
+```
+[acme-audit]> mcp serve
+MCP serve commands:
+  mcp serve start    Start the MCP server
+  mcp serve stop     Stop the MCP server
+  mcp serve restart  Restart the MCP server
+  mcp serve status   Show server status
+```
+
+### Connecting Claude Code
+
+```
+[acme-audit]> mcp show-config
+```
+
+Reads the token from the encrypted store and prints a ready-to-run
+`claude mcp add-json` command. Copy it, run it in a terminal, and
+restart Claude Code. One-time setup.
+
+### Creating triage batches
+
+```
+[acme-audit]> mcp triage prepare
+Created 12 batches (43 findings) for run 7
+```
+
+Groups untriaged SAST, API, and DAST findings from a scan run into batches for MCP processing. Pass a run ID to target a specific scan; omit it to use the most recent run:
+
+```
+[acme-audit]> mcp triage prepare 7
+```
+
+### Token management
+
+Generate bearer tokens for MCP server authentication. Tokens are required when configuring external clients (like Claude Code) to connect to the MCP server.
 
 Create a token:
 
 ```
 [acme-audit]> mcp token create ci-agent
-MCP token created: tly_abc123xyz789...
-Token name: ci-agent
-Warning: Copy this token now. It will not be shown again.
+Token created: ci-agent
+Token value (save this, it won't be shown again):
+Kx7vQ2wR9mLpN4tY8sJ3hF6dC1bA0eZ5g...
 ```
 
-Tally stores only the token hash in the project database, never the plaintext. Save the token in a secure location.
+Tally stores only an encrypted version of the token in the project database, never the plaintext. Save the token in a secure location.
 
 List registered tokens:
 
 ```
 [acme-audit]> mcp token list
-Name        Created
-ci-agent    2024-01-15T10:30:00Z
+ Name        | Created At
+ ci-agent    | 2024-01-15T10:30:00Z
 ```
 
 Revoke a token:
 
 ```
 [acme-audit]> mcp token revoke ci-agent
-Revoke token 'ci-agent'? [y/N]: y
-Token 'ci-agent' revoked.
+Token revoked: ci-agent
 ```
 
-Revoked tokens cannot be reactivated. Generate a new token if needed.
+Revocation is immediate; Tally does not prompt for confirmation. Revoked tokens cannot be reactivated. Generate a new token if needed.
+
+---
+
+## Burp Integration
+
+### Polling the Organizer
+
+The `burp poll` command starts a blocking polling loop that fetches items from Burp's Organizer and ingests them as findings. The command runs until you press Ctrl+C.
+
+```
+[myproject]> burp poll
+Polling Burp Organizer every 30s... (Ctrl+C to stop)
+```
+
+While polling, open Burp Suite and send requests to the Organizer. Tally picks them up on the next poll cycle and ingests them as `web` segment findings.
+
+**Prerequisites:**
+
+- Set `burp.mcp_url` in `config/global.json` to the Burp MCP server's root URL (e.g., `http://127.0.0.1:9876/`).
+- Burp Suite Professional must be running with the PortSwigger MCP extension active.

@@ -49,7 +49,7 @@ tally> mcp token revoke scanning
 
 ### Step 2: Start the MCP server
 
-In a separate terminal, start the MCP SSE server:
+In a separate terminal, start the MCP server:
 
 ```bash
 source .venv/bin/activate
@@ -62,11 +62,14 @@ The server binds to `127.0.0.1:8765` by default. Override the port with `--port`
 python3 tally-cli.py mcp --port 9000
 ```
 
-Or set `mcp_port` in `config/global.json`:
+Or set `mcp.port` in `config/global.json`:
 
 ```json
 {
-  "mcp_port": 9000
+  "mcp": {
+    "host": "127.0.0.1",
+    "port": 9000
+  }
 }
 ```
 
@@ -75,23 +78,21 @@ scanning session.
 
 ### Step 3: Configure Claude Code to connect
 
-Add Tally's MCP server to the `.mcp.json` file in the project you want to scan:
+Run `mcp show-config` in the Tally REPL. Tally reads the token from its
+encrypted store and prints a ready-to-run command:
 
-```json
-{
-  "mcpServers": {
-    "tally": {
-      "type": "sse",
-      "url": "http://127.0.0.1:8765/sse"
-    }
-  }
-}
+```
+tally> mcp show-config
+Run this command in your terminal:
+
+  claude mcp add-json tally '{"type":"http","url":"http://127.0.0.1:8765/mcp","headers":{"Authorization":"Bearer <token>"}}' --scope user
+
+One-time setup. Restart Claude Code after running.
 ```
 
-If you changed the port, update the URL to match.
-
-You can also add this to your Claude Code user settings for global availability. See
-Claude Code's MCP documentation for user-level configuration.
+Copy the command and run it in a terminal. Restart Claude Code afterward
+so it picks up the new server. This is a one-time setup; if you revoke
+and recreate the token, re-run `mcp show-config`.
 
 ### Step 4: Make scanner skills and agents available
 
@@ -258,19 +259,17 @@ detection patterns.
 
 ## MCP Tools Reference
 
-All tools require `auth_token` as a named parameter.
-
 | Tool | Parameters | Returns | Purpose |
 |---|---|---|---|
-| `list_projects` | `auth_token` | `[{project_id, project_name, path, latest_run_id}]` | Enumerate active projects |
-| `create_scan_run` | `project, project_id, repo_ids, auth_token` | `{run_id}` | Open a new scan run |
-| `submit_finding` | `project, project_id, repo_id, run_id, finding, auth_token` | `{finding_id, status}` | Submit one finding |
-| `get_duplicate_candidates` | `project, run_id, auth_token` | `{groups: [[id, ...]]}` | Find candidate duplicate groups |
-| `resolve_duplicates` | `project, run_id, survivor_id, removed_ids, auth_token` | `{status, count}` | Mark losers as duplicates |
-| `end_scan` | `project, project_id, run_id, auth_token` | `{status}` | Close a scan run |
-| `fetch_batch` | `project, auth_token` | `{batch_id, findings, ...}` | Fetch next triage batch |
-| `submit_verdicts` | `project, batch_id, verdicts, auth_token` | `{accepted, rejected}` | Submit triage verdicts |
-| `skip_batch` | `project, batch_id, auth_token` | `{status}` | Skip a triage batch |
+| `list_projects` | (none) | `[{project_id, project_name, path, latest_run_id}]` | Enumerate active projects |
+| `create_scan_run` | `project, project_id, repo_ids` | `{run_id}` | Open a new scan run |
+| `submit_finding` | `project, project_id, repo_id, run_id, finding` | `{finding_id, status}` | Submit one finding |
+| `get_duplicate_candidates` | `project, run_id` | `{groups: [[id, ...]]}` | Find candidate duplicate groups |
+| `resolve_duplicates` | `project, run_id, survivor_id, removed_ids` | `{status, count}` | Mark losers as duplicates |
+| `end_scan` | `project, project_id, run_id` | `{status}` | Close a scan run |
+| `fetch_batch` | `project` | `{batch_id, findings, ...}` | Fetch next triage batch |
+| `submit_verdicts` | `project, batch_id, verdicts` | `{accepted, rejected}` | Submit triage verdicts |
+| `skip_batch` | `project, batch_id` | `{status}` | Skip a triage batch |
 
 ---
 
@@ -278,20 +277,20 @@ All tools require `auth_token` as a named parameter.
 
 ### Connection refused
 
-Verify the MCP server is running and the port matches your `.mcp.json`:
+Verify the MCP server is running and the port matches your `~/.claude.json` entry:
 
 ```bash
-curl -s http://127.0.0.1:8765/sse
+curl -s http://127.0.0.1:8765/mcp
 ```
 
-If the port was changed in `config/global.json`, update the URL in `.mcp.json` to
-match.
+If the port was changed in `config/global.json`, update the URL in `~/.claude.json`
+to match.
 
 ### Invalid or missing MCP token
 
-The MCP server returns `PermissionError("Invalid or missing MCP token")` when the
-bearer token is wrong or expired. Create a new token with `mcp token create` in the
-Tally REPL.
+The MCP server returns `401 Unauthorized` when the `Authorization` header is
+missing, wrong, or expired. Create a new token with `mcp token create` in the
+Tally REPL and update `~/.claude.json` with `mcp show-config`.
 
 ### Findings rejected
 

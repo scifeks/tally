@@ -12,3 +12,4 @@ class IExecutionResources(Protocol):
     event_bus: Any
     display: Any
     event_sink: Any
+    http_runner: Any

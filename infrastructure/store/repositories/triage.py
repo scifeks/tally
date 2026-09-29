@@ -32,9 +32,8 @@ class TriageBatchRepository(TriageBatchRepositoryPort):
     ) -> list[dict[str, Any]]:
         """Return the active findings for *tool*/*repo*/*segment* in batching order.
 
-        Only the ``sast`` segment produces rows; every other segment
-        returns an empty list. Web/API findings are intentionally excluded
-        because the agentic trace is not cost-effective on that segment.
+        Only the ``sast`` and ``web`` segments produce rows; every other segment
+        returns an empty list.
         """
         params = (run_id, segment, tool, repo)
         if segment == "sast":
@@ -43,18 +42,61 @@ class TriageBatchRepository(TriageBatchRepositoryPort):
                     f.id, r.name AS repo, f.file, f.tool,
                     f.rule_id, f.severity, f.confidence,
                     f.description, f.cwe,
-                    json_extract(f.meta, '$.line_start') AS line_start,
-                    json_extract(f.meta, '$.code_snippet') AS code_snippet,
-                    json_extract(f.meta, '$.risk_type') AS risk_type,
-                    json_extract(f.meta, '$.owasp') AS owasp
+                    json_extract(f.meta, '$.line_start')
+                        AS line_start,
+                    json_extract(f.meta, '$.code_snippet')
+                        AS code_snippet,
+                    json_extract(f.meta, '$.risk_type')
+                        AS risk_type,
+                    json_extract(f.meta, '$.owasp')
+                        AS owasp
                 FROM findings f
                 JOIN repositories r ON f.repo_id = r.id
-                WHERE f.run_id = ? AND f.segment = ? AND f.tool = ? AND r.name = ?
+                WHERE f.run_id = ?
+                  AND f.segment = ?
+                  AND f.tool = ?
+                  AND r.name = ?
                   AND f.status = 'active'
                 ORDER BY
                     f.severity ASC,
                     f.file,
-                    CAST(json_extract(f.meta, '$.line_start') AS INTEGER)
+                    CAST(
+                        json_extract(f.meta, '$.line_start')
+                        AS INTEGER
+                    )
+            """
+        elif segment == "web":
+            sql = """
+                SELECT
+                    f.id, r.name AS repo, f.url, f.tool,
+                    f.rule_id, f.severity, f.confidence,
+                    f.description, f.cwe AS cwe_id,
+                    json_extract(f.meta, '$.alert_name')
+                        AS alert_name,
+                    json_extract(f.meta, '$.method')
+                        AS method,
+                    json_extract(f.meta, '$.evidence')
+                        AS evidence,
+                    json_extract(f.meta, '$.risk_type')
+                        AS risk_type,
+                    json_extract(f.meta, '$.param')
+                        AS param,
+                    json_extract(f.meta, '$.attack')
+                        AS attack,
+                    json_extract(f.meta, '$.remediation')
+                        AS remediation,
+                    json_extract(f.meta, '$.fingerprint_type')
+                        AS fingerprint_type
+                FROM findings f
+                JOIN repositories r ON f.repo_id = r.id
+                WHERE f.run_id = ?
+                  AND f.segment = ?
+                  AND f.tool = ?
+                  AND r.name = ?
+                  AND f.status = 'active'
+                ORDER BY
+                    f.severity ASC,
+                    f.url
             """
         else:
             return []

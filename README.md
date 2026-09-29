@@ -69,6 +69,28 @@ scan --tool=semgrep
 ui serve
 ```
 
+## REPL Commands
+
+Common commands available in the REPL after starting Tally:
+
+| Command | Description |
+|---|---|
+| `project add` | Create a new project |
+| `project switch <name>` | Switch to a different project |
+| `repo add` | Add a repository to scan |
+| `repo list` | List configured repositories |
+| `scan` | Run a full security scan across all tools |
+| `scan --tool=semgrep` | Run a specific tool (Semgrep in this example) |
+| `scan --repo=<name>` | Scan a specific repository |
+| `burp scan` | Start a Burp crawl-and-audit scan |
+| `burp scan <config>` | Start a Burp scan with a named configuration |
+| `triage` | Run AI triage on untriaged findings |
+| `report` | Generate a security assessment report |
+| `chat <question>` | Ask a question about findings |
+| `ui serve` | Launch the web UI |
+
+See [docs/repl.md](docs/repl.md) for detailed workflows and additional commands.
+
 ## Docker Support
 
 Tools can run locally or inside a Docker container. The execution mode is configured per-tool in `config/commands.json`.
@@ -114,6 +136,7 @@ Tools can run locally or inside a Docker container. The execution mode is config
 - [docs/antares-shim.md](docs/antares-shim.md) - Antares CWE scanner Ollama completions shim configuration
 - [docs/chat.md](docs/chat.md) - RAG chat configuration and usage
 - [docs/report.md](docs/report.md) - Report generation guide and PDF assembly
+- [docs/burp.md](docs/burp.md) - Burp Suite integration: REST API scans, Organizer polling, and scan configurations
 - [docs/triage.md](docs/triage.md) - AI triage: auto-triage and MCP triage modes, container lifecycle, and security model
 - [docs/claude-code-scanning.md](docs/claude-code-scanning.md) - Claude Code scanning: setup, skills, and MCP server
 - [docs/url-discovery.md](docs/url-discovery.md) - URL discovery pipeline for DAST tools

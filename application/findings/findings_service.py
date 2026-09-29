@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import uuid
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from application.findings.analyst_service import (
@@ -38,6 +39,15 @@ logger = logging.getLogger("application.findings_service")
 
 class ProjectNotFound(LookupError):
     """Raised when a project_id has no active row in the registry."""
+
+
+@dataclass
+class BatchDeleteResult:
+    """Result of a batch finding delete with per-id outcome tracking."""
+
+    deleted: list[int] = field(default_factory=list)
+    skipped_locked: list[int] = field(default_factory=list)
+    not_found: list[int] = field(default_factory=list)
 
 
 class FindingsService:
@@ -318,9 +328,11 @@ class FindingsService:
             holder = self._lock_query.finding_lock_holder(finding_id) or "unknown"
             raise FindingsBusy([finding_id], {finding_id: holder})
 
+        pre_read_rows = self._finding_repo.get_by_ids([finding_id])
+
         self._finding_repo.delete_finding_by_id(finding_id)
 
-        self._remove_from_vector_index(finding_id)
+        self._remove_from_vector_index(finding_id, pre_read_rows=pre_read_rows)
 
         self._event_sink.emit(
             FindingDeleted(
@@ -328,6 +340,42 @@ class FindingsService:
                 finding_id=finding_id,
             )
         )
+
+    def batch_delete_findings(self, ids: list[int]) -> BatchDeleteResult:
+        """Delete multiple findings by ID, skipping locked or missing ones.
+
+        Rows are pre-read before deletion so vector index cleanup does not
+        depend on rows that no longer exist in SQLite.
+        """
+        from domain.findings.events import FindingDeleted
+
+        rows_by_id = {row["id"]: row for row in self._finding_repo.get_by_ids(ids)}
+
+        result = BatchDeleteResult()
+        deleted_rows: list[dict] = []
+        for finding_id in ids:
+            row = rows_by_id.get(finding_id)
+            if row is None:
+                result.not_found.append(finding_id)
+                continue
+            if self._lock_query.is_finding_locked(finding_id):
+                result.skipped_locked.append(finding_id)
+                continue
+            self._finding_repo.delete_finding_by_id(finding_id)
+            result.deleted.append(finding_id)
+            deleted_rows.append(row)
+
+        self._remove_batch_from_vector_index(deleted_rows)
+
+        for finding_id in result.deleted:
+            self._event_sink.emit(
+                FindingDeleted(
+                    project_id=self._project_id,
+                    finding_id=finding_id,
+                )
+            )
+
+        return result
 
     def _emit_updated(self, finding: Finding) -> None:
         is_locked, lock_holder = self.lock_state_for(finding.id)
@@ -367,8 +415,17 @@ class FindingsService:
                 exc,
             )
 
-    def _remove_from_vector_index(self, finding_id: int) -> None:
-        """Best-effort vector-index removal after a manual finding delete."""
+    def _remove_from_vector_index(
+        self,
+        finding_id: int,
+        pre_read_rows: list[dict] | None = None,
+    ) -> None:
+        """Best-effort vector-index removal after a finding delete.
+
+        Accepts rows read before the SQLite delete so the row is still
+        available for removal; falls back to reading from the repo when
+        *pre_read_rows* is not supplied.
+        """
         try:
             knowledge_base = get_or_build_knowledge_base(
                 self._kb_cache,
@@ -385,7 +442,11 @@ class FindingsService:
         if knowledge_base is None:
             return
         try:
-            rows = self._finding_repo.get_by_ids([finding_id])
+            rows = (
+                pre_read_rows
+                if pre_read_rows is not None
+                else self._finding_repo.get_by_ids([finding_id])
+            )
             if not rows:
                 return
             self._indexer.remove_findings(
@@ -395,5 +456,33 @@ class FindingsService:
             logger.warning(
                 "vector cleanup: unexpected error for id=%s: %s",
                 finding_id,
+                exc,
+            )
+
+    def _remove_batch_from_vector_index(self, rows: list[dict]) -> None:
+        """Best-effort vector-index removal after a batch finding delete."""
+        if not rows:
+            return
+        try:
+            knowledge_base = get_or_build_knowledge_base(
+                self._kb_cache,
+                self._project_name,
+                self._base_path,
+            )
+        except Exception as exc:
+            logger.warning(
+                "vector cleanup: knowledge base init failed for batch delete: %s",
+                exc,
+            )
+            return
+        if knowledge_base is None:
+            return
+        try:
+            self._indexer.remove_findings(
+                knowledge_base, rows, caller_label="FindingsService"
+            )
+        except Exception as exc:
+            logger.warning(
+                "vector cleanup: unexpected error for batch delete: %s",
                 exc,
             )

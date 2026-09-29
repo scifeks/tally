@@ -13,6 +13,7 @@ if TYPE_CHECKING:
     from application.tools.registry import ToolRegistry
     from domain.pipeline.events import EventBus
     from domain.tools.display import DisplayProtocol
+    from infrastructure.tools.http_runner import HttpToolRunner
 
 
 @dataclass
@@ -23,3 +24,4 @@ class ExecutionResources:
     event_bus: EventBus
     display: DisplayProtocol
     event_sink: ScanEventSink = field(default_factory=NullScanEventSink)
+    http_runner: HttpToolRunner | None = None

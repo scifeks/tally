@@ -1,4 +1,4 @@
-"""MCP server factory with SSE transport for Tally triage and ingest."""
+"""MCP server factory with streamable HTTP transport for Tally triage and ingest."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server import MCPServer
 
 from application.mcp.ingest_service import (
     McpIngestService,
@@ -17,6 +17,7 @@ from application.rag.finding_indexer import FindingIndexer
 from application.rag.knowledge_base_cache import (
     get_or_build_knowledge_base,
 )
+from core.config import ConfigManager
 from core.project_paths import ProjectPaths
 from infrastructure.store.connection import ConnectionFactory
 from infrastructure.store.repositories.findings import (
@@ -26,9 +27,9 @@ from infrastructure.store.repositories.runs import RunRepository
 from infrastructure.store.repositories.triage import (
     TriageBatchRepository,
 )
-from mcp_server.auth import validate_bearer_token
 
 if TYPE_CHECKING:
+    from application.ports.event_publisher import EventPublisherPort
     from application.ports.mcp_token_repository import (
         McpTokenRepositoryPort,
     )
@@ -44,38 +45,27 @@ logger = logging.getLogger(__name__)
 def create_mcp_server(
     project_registry: ProjectRegistryService,
     tool_registry: ToolRegistry,
-    token_repo: McpTokenRepositoryPort,
-    encryption_key: bytes,
     base_path: str | Path,
-    port: int = 8765,
-) -> FastMCP:
+    event_publisher: EventPublisherPort | None = None,
+) -> MCPServer:
     """Create the MCP server with triage and ingest tools."""
-    server = FastMCP(
+    server = MCPServer(
         name="Tally MCP",
-        port=port,
         instructions=(
             "Tally MCP tools: fetch_batch, submit_verdicts,"
-            " skip_batch, list_projects, create_scan_run,"
-            " submit_finding, get_duplicate_candidates,"
-            " resolve_duplicates, end_scan. Pass your bearer"
-            " token as the auth_token parameter."
+            " skip_batch, get_triage_status, list_projects,"
+            " create_scan_run, submit_finding,"
+            " get_duplicate_candidates, resolve_duplicates,"
+            " end_scan."
         ),
     )
 
-    # KB cache for ingest service
     kb_cache: dict[str, Any] = {}
     base_path_obj = Path(base_path) if isinstance(base_path, str) else base_path
-
-    def _require_auth(auth_token: str) -> None:
-        if not validate_bearer_token(
-            f"Bearer {auth_token}",
-            token_repo,
-            encryption_key,
-        ):
-            raise PermissionError("Invalid or missing MCP token")
+    cfg = ConfigManager(str(base_path_obj)).global_config
+    max_agents = cfg.mcp_triage.max_concurrent_agents
 
     def _run_repo_factory(db_path: str) -> RunRepositoryPort:
-        """Create a RunRepository from a db_path string."""
         conn_factory = ConnectionFactory(Path(db_path))
         conn_factory.init_schema()
         return RunRepository(conn_factory)
@@ -90,11 +80,20 @@ def create_mcp_server(
         paths.sqlite_dir.mkdir(parents=True, exist_ok=True)
         factory = ConnectionFactory(paths.findings_db)
         factory.init_schema()
+        event_sink = None
+        if event_publisher is not None:
+            from web.adapters.event_bus_triage_sink import (
+                EventBusTriageSink,
+            )
+
+            event_sink = EventBusTriageSink(event_publisher)
         return McpTriageService(
             triage_repo=TriageBatchRepository(factory),
             finding_repo=FindingRepository(factory),
             run_repo=RunRepository(factory),
             tool_registry=tool_registry,
+            event_sink=event_sink,
+            max_concurrent_agents=max_agents,
         )
 
     def _get_ingest_service(project_name: str) -> McpIngestService:
@@ -118,9 +117,8 @@ def create_mcp_server(
         )
 
     @server.tool()
-    def fetch_batch(project: str, auth_token: str) -> dict[str, Any]:
+    def fetch_batch(project: str) -> dict[str, Any]:
         """Fetch the next triage batch for a project."""
-        _require_auth(auth_token)
         service = _get_service(project)
         return service.fetch_batch(project)
 
@@ -129,24 +127,26 @@ def create_mcp_server(
         project: str,
         batch_id: int,
         verdicts: list[dict[str, Any]],
-        auth_token: str,
     ) -> dict[str, Any]:
         """Submit verdicts for a triage batch."""
-        _require_auth(auth_token)
         service = _get_service(project)
         return service.submit_verdicts(batch_id, verdicts, project_name=project)
 
     @server.tool()
-    def skip_batch(project: str, batch_id: int, auth_token: str) -> dict[str, str]:
+    def skip_batch(project: str, batch_id: int) -> dict[str, str]:
         """Skip a triage batch without processing."""
-        _require_auth(auth_token)
         service = _get_service(project)
         return service.skip_batch(batch_id)
 
     @server.tool()
-    def list_projects(auth_token: str) -> list[dict[str, Any]]:
+    def get_triage_status(project: str) -> dict[str, Any]:
+        """Get triage progress summary without claiming."""
+        service = _get_service(project)
+        return service.get_triage_status(project)
+
+    @server.tool()
+    def list_projects() -> list[dict[str, Any]]:
         """Enumerate every active project with its latest run id."""
-        _require_auth(auth_token)
         return list_active_projects(project_registry, _run_repo_factory)
 
     @server.tool()
@@ -154,10 +154,8 @@ def create_mcp_server(
         project: str,
         project_id: int,
         repo_ids: list[str],
-        auth_token: str,
     ) -> dict[str, int]:
         """Open a new scan_run for an external Claude Code scan."""
-        _require_auth(auth_token)
         service = _get_ingest_service(project)
         return service.create_scan_run(project_id, repo_ids)
 
@@ -168,10 +166,8 @@ def create_mcp_server(
         repo_id: int,
         run_id: int,
         finding: dict[str, Any],
-        auth_token: str,
     ) -> dict[str, Any]:
         """Submit a single finding under an MCP scan_run."""
-        _require_auth(auth_token)
         service = _get_ingest_service(project)
         return service.submit_finding(run_id, finding)
 
@@ -179,10 +175,8 @@ def create_mcp_server(
     def get_duplicate_candidates(
         project: str,
         run_id: int,
-        auth_token: str,
     ) -> dict[str, Any]:
         """Return candidate duplicate groups for a scan run."""
-        _require_auth(auth_token)
         service = _get_ingest_service(project)
         return service.get_duplicate_candidates(run_id)
 
@@ -192,10 +186,8 @@ def create_mcp_server(
         run_id: int,
         survivor_id: int,
         removed_ids: list[int],
-        auth_token: str,
     ) -> dict[str, Any]:
         """Mark removed findings as duplicates of a survivor."""
-        _require_auth(auth_token)
         service = _get_ingest_service(project)
         return service.resolve_duplicates(run_id, survivor_id, removed_ids)
 
@@ -204,10 +196,8 @@ def create_mcp_server(
         project: str,
         project_id: int,
         run_id: int,
-        auth_token: str,
     ) -> dict[str, str]:
         """Mark a scan run as finished."""
-        _require_auth(auth_token)
         service = _get_ingest_service(project)
         return service.end_scan(project_id, run_id)
 
@@ -221,18 +211,23 @@ def start_mcp_server(
     token_repo: McpTokenRepositoryPort,
     encryption_key: bytes,
     base_path: str | Path,
+    event_publisher: EventPublisherPort | None = None,
 ) -> None:
-    """Launch the MCP server with SSE transport (blocking)."""
-    server = create_mcp_server(
+    """Launch the MCP server with streamable HTTP transport (blocking)."""
+    import uvicorn
+
+    from mcp_server.auth import BearerTokenMiddleware
+
+    mcp = create_mcp_server(
         project_registry,
         tool_registry,
-        token_repo,
-        encryption_key,
         base_path,
-        port=port,
+        event_publisher=event_publisher,
     )
+    app = mcp.streamable_http_app()
+    app = BearerTokenMiddleware(app, token_repo, encryption_key)
     logger.info(
-        "Starting MCP server on port %d with SSE transport",
+        "Starting MCP server on port %d with streamable HTTP transport",
         port,
     )
-    server.run(transport="sse")
+    uvicorn.run(app, host="127.0.0.1", port=port)

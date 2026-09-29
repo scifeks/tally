@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Search, X, Plus } from 'lucide-react'
+import { Search, X, Plus, Square, Trash2 } from 'lucide-react'
 import {
   useFindings,
   useFindingsCounts,
@@ -7,11 +7,16 @@ import {
   useFindingsFilterOptions,
   useProjectScanConfig,
   useUpdateFinding,
+  useDeleteFindings,
+  useBurpPollStatus,
+  useStartBurpPoll,
+  useCancelBurpPoll,
   type FindingFilters,
   type FindingSortKey,
 } from '@/lib/api'
 import { FindingMutationErrorModal } from '@/components/FindingMutationErrorModal'
 import { NoProjectSelectedState } from '@/components/NoProjectSelectedState'
+import { Modal, ModalButton } from '@/components/Modal'
 import { useProjects } from '@/lib/api'
 import { useUI } from '@/lib/store'
 import { cn } from '@/lib/utils'
@@ -52,6 +57,7 @@ export default function Findings() {
   const [selectedRow, setSelectedRow] = useState<number | null>(null)
   const [debouncedSearch, setDebouncedSearch] = useState<string>('')
   const [showCreateModal, setShowCreateModal] = useState(false)
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
 
   // Reset filters, sort, and selection on project / domain change.
   useEffect(() => {
@@ -72,6 +78,9 @@ export default function Findings() {
 
   const { data: scanConfig } = useProjectScanConfig(projectIdNum)
   const configuredDomains = useMemo(() => scanConfig?.segments ?? [], [scanConfig])
+  const { data: burpPollStatus } = useBurpPollStatus(projectIdNum)
+  const { mutate: startBurpPollMutation } = useStartBurpPoll()
+  const { mutate: cancelBurpPollMutation } = useCancelBurpPoll()
 
   const { data: counts } = useFindingsCounts(projectIdParam)
 
@@ -96,6 +105,7 @@ export default function Findings() {
   const total = findingsQuery.total
 
   const updateFindingMutation = useUpdateFinding()
+  const deleteFindingsMutation = useDeleteFindings()
 
   // Subscribe to project-scoped finding_updated SSE events so other tabs /
   // backend mutations land in the cache without a refetch.
@@ -180,6 +190,14 @@ export default function Findings() {
     [detail, activeProjectId, updateFindingMutation]
   )
 
+  const handleConfirmDelete = useCallback(() => {
+    if (activeProjectId === null) return
+    deleteFindingsMutation.mutate(
+      { projectId: String(activeProjectId), ids: Array.from(selectedFindingIds) },
+      { onSuccess: () => setShowDeleteModal(false) }
+    )
+  }, [activeProjectId, selectedFindingIds, deleteFindingsMutation])
+
   // Infinite-scroll sentinel - when the bottom marker enters the viewport
   // we fetch the next page (if any).
   const sentinelRef = useRef<HTMLDivElement>(null)
@@ -210,6 +228,30 @@ export default function Findings() {
         segment={domain}
         projectId={projectIdNum}
       />
+      <Modal
+        open={showDeleteModal}
+        onClose={() => setShowDeleteModal(false)}
+        title="Delete Findings"
+        tone="error"
+        width="sm"
+        footer={
+          <>
+            <ModalButton onClick={() => setShowDeleteModal(false)}>cancel</ModalButton>
+            <ModalButton
+              variant="danger"
+              onClick={handleConfirmDelete}
+              disabled={deleteFindingsMutation.isPending}
+            >
+              {deleteFindingsMutation.isPending ? 'Deleting...' : 'delete'}
+            </ModalButton>
+          </>
+        }
+      >
+        <p className="text-foreground leading-relaxed">
+          You are about to permanently delete {selectedFindingIds.size} finding(s). This cannot be
+          undone.
+        </p>
+      </Modal>
       {/* Unified filter row: [SEGMENT] + tabs | [SEVERITY] + chips | [SEARCH] + input */}
       <div className="flex items-stretch border-b border-border-strong bg-background shrink-0">
         {/* === SEGMENT SECTION === */}
@@ -292,6 +334,27 @@ export default function Findings() {
           </div>
         </div>
 
+        {/* === DELETE SECTION (40px left margin) === */}
+        <div className="flex items-stretch ml-10">
+          <button
+            onClick={() => setShowDeleteModal(true)}
+            disabled={selectedFindingIds.size === 0}
+            className={cn(
+              'flex items-center gap-1.5 px-3 h-9 text-[10px] uppercase tracking-[0.25em] font-bold text-red-400 transition-colors',
+              selectedFindingIds.size === 0
+                ? 'opacity-40 cursor-not-allowed pointer-events-none'
+                : 'hover:bg-red-600/15'
+            )}
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            <span>
+              <span className="text-accent">[</span>
+              <span className="px-1.5">- DELETE</span>
+              <span className="text-accent">]</span>
+            </span>
+          </button>
+        </div>
+
         {/* === SEARCH SECTION (40px left margin) === */}
         <div className="flex-1 min-w-0 flex items-center gap-2 px-4 ml-10 focus-within:bg-muted/30 transition-colors">
           <Search className="h-4 w-4 text-accent shrink-0" />
@@ -321,6 +384,26 @@ export default function Findings() {
             {filters.search ? `matches: ${total}` : 'press / to focus'}
           </span>
         </div>
+
+        {burpPollStatus?.active ? (
+          <button
+            onClick={() => cancelBurpPollMutation({ projectId: projectIdNum })}
+            className="shrink-0 flex items-center gap-1.5 px-3 h-9 border-l border-border text-[11px] uppercase tracking-wider font-bold text-amber-500 bg-amber-600/8 hover:bg-amber-600/15 transition-colors"
+          >
+            <Square className="h-3.5 w-3.5" />
+            stop polling
+          </button>
+        ) : burpPollStatus?.configured ? (
+          <button
+            onClick={() => {
+              startBurpPollMutation({ projectId: projectIdNum })
+              setDomain('web')
+            }}
+            className="shrink-0 flex items-center gap-1.5 px-3 h-9 border-l border-border text-[11px] uppercase tracking-wider font-bold text-orange-400 bg-orange-600/8 hover:bg-orange-600/15 transition-colors"
+          >
+            poll burp organizer
+          </button>
+        ) : null}
 
         <button
           onClick={() => setShowCreateModal(true)}

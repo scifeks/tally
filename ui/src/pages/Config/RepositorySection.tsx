@@ -171,9 +171,9 @@ export function RepositorySection({
   }
 
   const handleToggleMode = (newMode: ConfigMode) => {
-    if (newMode === 'advanced' && mode === 'basic') {
-      setMode('advanced')
-    }
+    if (newMode === mode) return
+    if (newMode === 'basic' && !canSwitchToBasic) return
+    setMode(newMode)
   }
 
   const canSwitchToBasic = formServices.length <= 1

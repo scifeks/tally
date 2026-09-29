@@ -12,7 +12,10 @@ _TALLY_ROOT = Path(__file__).resolve().parents[3]
 if str(_TALLY_ROOT) not in sys.path:
     sys.path.insert(0, str(_TALLY_ROOT))
 
-from application.triage.batching import compute_batches  # noqa: E402
+from application.triage.batching import (  # noqa: E402
+    batch_size_for_segment,
+    compute_batches,
+)
 from infrastructure.store.connection import ConnectionFactory  # noqa: E402
 from infrastructure.store.repositories.findings import FindingRepository  # noqa: E402
 from infrastructure.store.repositories.runs import RunRepository  # noqa: E402
@@ -27,7 +30,10 @@ def _batch_for(
     findings = triage_repo.fetch_active_findings_for_batching(
         run_id, tool, repo, segment
     )
-    return compute_batches(findings)
+    return compute_batches(
+        findings,
+        max_findings_per_batch=batch_size_for_segment(segment),
+    )
 
 
 pytestmark = pytest.mark.integration
@@ -218,7 +224,7 @@ class TestCreateTriageBatches:
             ]
         assert row_count == 0
 
-    def test_web_segment_excluded_from_batching(self, tmp_path: Path) -> None:
+    def test_web_segment_batched_size_one(self, tmp_path: Path) -> None:
         factory, run_repo, finding_repo, triage_repo = _make_repos(tmp_path)
         run_id = run_repo.create_run({})
         findings = [
@@ -229,7 +235,8 @@ class TestCreateTriageBatches:
         created = triage_repo.create_batches(
             run_id, _batch_for(triage_repo, seed_run_id, "zap", "myrepo", "web")
         )
-        assert created == []
+        assert len(created) == 2
+        assert all(count == 1 for _, count in created)
 
 
 class TestListForRunCancelledSemantics:

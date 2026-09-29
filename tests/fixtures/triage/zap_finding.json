@@ -1,0 +1,17 @@
+{
+  "id": 42,
+  "tool": "zap",
+  "repo": "example-app",
+  "segment": "web",
+  "alert_name": "SQL Injection - MySQL",
+  "severity": 3,
+  "confidence": "medium",
+  "description": "SQL injection may be possible",
+  "url": "https://example.com/api/users",
+  "method": "POST",
+  "param": "id",
+  "attack": "' OR '1'='1",
+  "evidence": "You have an error in your SQL syntax",
+  "cwe_id": 89,
+  "risk_type": "SQL Injection"
+}

@@ -4,10 +4,13 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from .burp_config import BurpConfig
 from .claude_config import ClaudeConfig
 from .defectdojo_config import DefectDojoGlobalConfig
 from .feature_inference_config import FeatureInferenceConfig
 from .local_inference_config import LocalInferenceConfig
+from .mcp_config import McpConfig
+from .mcp_triage_config import McpTriageConfig
 from .openai_config import OpenAIConfig
 from .opencode_config import OpenCodeConfig
 from .voyage_config import VoyageConfig
@@ -48,6 +51,7 @@ class GlobalConfig(BaseModel):
     openai: OpenAIConfig | None = None
     voyage: VoyageConfig | None = None
     defectdojo: DefectDojoGlobalConfig | None = None
+    burp: BurpConfig | None = None
     opencode: OpenCodeConfig | None = None
     chat_inference: FeatureInferenceConfig | None = None
     enrichment_inference: FeatureInferenceConfig | None = None
@@ -104,7 +108,10 @@ class GlobalConfig(BaseModel):
     web_ui_allowed_origins: list[str] | None = None
 
     # MCP server
-    mcp_port: int = Field(default=8765)
+    mcp: McpConfig = Field(default_factory=McpConfig)
+    mcp_triage: McpTriageConfig = Field(
+        default_factory=McpTriageConfig,
+    )
 
     @field_validator("blind_xss_callback_url")
     @classmethod

@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { Play, Square, RotateCcw, Settings2, Terminal, Check, ChevronDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Panel } from '@/components/tty'
+import { TagInput } from '@/pages/Config/shared'
 import { useUI } from '@/lib/store'
 import {
   useProjects,
@@ -15,6 +16,7 @@ import {
   useDeleteSavedScan,
   useToolArgProfileList,
   useRunSavedScan,
+  useStartBurpScan,
 } from '@/lib/api'
 import { useScanEvents, type SnapshotPayload } from '@/lib/api/useScans'
 import type { Segment, ScanLogEvent, ScanRunStatus, ScanOptions } from '@/lib/types'
@@ -42,16 +44,19 @@ export default function Scans() {
   const { mutate: startScanMutation } = useStartScan()
   const { mutate: cancelScanMutation } = useCancelScan()
   const { mutate: runSavedScanMutation } = useRunSavedScan()
+  const startBurpScan = useStartBurpScan()
   const queryClient = useQueryClient()
   const setScanMutationError = useUI(s => s.setScanMutationError)
 
   const project = projects.find(p => p.id === activeProjectId)
   const meta = projectMetaData
 
-  // Derived config data - memoized to avoid new array refs on every render
+  // Derived config data; memoized to avoid new array refs on every render
   const configuredRepos = useMemo(() => scanConfig?.repos ?? [], [scanConfig])
   const configuredTools = useMemo(() => scanConfig?.tools ?? [], [scanConfig])
   const configuredDomains = useMemo(() => scanConfig?.segments ?? [], [scanConfig])
+
+  const burpAvailable = scanConfig?.tools.some(t => t.id === 'burp') ?? false
 
   // Scan run state. When returning from another page, restore from the
   // Zustand snapshot that was saved on unmount.
@@ -88,6 +93,7 @@ export default function Scans() {
     setSkipEnrichment(false)
     setSelectedArgProfiles(new Set())
     setSelectedSavedScanId(null)
+    setBurpConfigs([])
     setScanWatchState(null)
   }, [activeProjectId, setScanWatchState])
 
@@ -110,6 +116,9 @@ export default function Scans() {
   const scanDropdownRef = useRef<HTMLDivElement>(null)
   const [staleItems, setStaleItems] = useState<StaleSavedScanItem[]>([])
 
+  // Burp scan state
+  const [burpConfigs, setBurpConfigs] = useState<string[]>([])
+
   useEffect(() => {
     function handleClick(e: MouseEvent) {
       if (scanDropdownRef.current && !scanDropdownRef.current.contains(e.target as Node)) {
@@ -120,7 +129,7 @@ export default function Scans() {
     return () => document.removeEventListener('mousedown', handleClick)
   }, [])
 
-  // Tool ↔ domain compatibility. Selecting domains restricts the tools list
+  // Tool and domain compatibility. Selecting domains restricts the tools list
   // to those whose `segment` is in the selected set; with no domains chosen,
   // every configured tool is compatible.
   const compatibleToolIds = useMemo(() => {
@@ -592,6 +601,29 @@ export default function Scans() {
                 <Settings2 className="h-4 w-4" />
                 {hasAdvancedOptions && <span className="text-[10px]">(custom)</span>}
               </button>
+            )}
+            {canStart && burpAvailable && (
+              <>
+                <button
+                  onClick={() => {
+                    startBurpScan.mutate({
+                      projectId: projectIdNum,
+                      configNames: burpConfigs.length > 0 ? burpConfigs : undefined,
+                    })
+                  }}
+                  className="flex items-center gap-2 px-4 h-9 bg-orange-600 text-white font-bold text-xs uppercase tracking-wider hover:bg-orange-500 transition-all"
+                >
+                  <Play className="h-4 w-4" />
+                  Start Burp Scan
+                </button>
+                <div className="w-64">
+                  <TagInput
+                    value={burpConfigs}
+                    onChange={setBurpConfigs}
+                    placeholder="Scan configs (optional)"
+                  />
+                </div>
+              </>
             )}
             {isRunning && (
               <button

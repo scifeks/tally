@@ -1,4 +1,4 @@
-"""Triage endpoints: history, SSE stream, dispatch, cancel, and detail."""
+"""Triage endpoints: history, SSE stream, dispatch, cancel and detail."""
 
 from __future__ import annotations
 
@@ -20,13 +20,14 @@ from application.triage.triage_service import (
 from domain.pipeline.bus_event import EOS
 from domain.triage.entry import TriageBatchRow
 from domain.triage.entry import TriageRunSummary as TriageRunSummaryRow
+from domain.triage.errors import TriageModeError
 from factories.persistence import (
     ProjectNotFound,
     create_triage_service,
     load_active_repos,
 )
 from web.adapters.event_bus_triage_sink import EventBusTriageSink
-from web.api._errors import Conflict, JobBusyError, NotFound, ValidationError
+from web.api._errors import Conflict, Forbidden, JobBusyError, NotFound, ValidationError
 from web.api._project_resolver import _resolve_project
 from web.api.schemas import (
     MaxBatchIdResponse,
@@ -191,8 +192,8 @@ async def get_latest_triage(
     """Return the most recent triage run summary for *project_id*.
 
     404 when the project has no triage history, when a newer scan
-    exists (the old triage is stale), or when the latest triage has
-    reached a terminal state (done, cancelled, or failed).
+    exists (the old triage is stale) or when the latest triage has
+    reached a terminal state (done, cancelled or failed).
     """
     service = _service(request, project_id)
     triage_repo = service.triage_repo
@@ -301,7 +302,7 @@ async def start_triage(
 
     The application core picks the latest scan_run_id for the project.
     Returns 409 ``JOB_ALREADY_RUNNING`` if another triage is in
-    progress, 422 if ``acknowledge_injection_risk`` is missing/false,
+    progress, 422 if ``acknowledge_injection_risk`` is missing/false
     or 404 if the project has no scan runs to triage.
     """
     if not body.acknowledge_injection_risk:
@@ -353,6 +354,8 @@ async def start_triage(
         raise NotFound(
             f"project {project_name!r} has no scan runs; run a scan before triage",
         ) from exc
+    except TriageModeError as exc:
+        raise Forbidden(str(exc)) from exc
     except JobBusy as exc:
         raise JobBusyError("triage", exc.current_holder) from exc
 

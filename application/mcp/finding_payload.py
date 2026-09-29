@@ -54,18 +54,30 @@ def validate_finding_payload(payload: dict[str, Any]) -> dict[str, Any]:
     if unknown:
         raise FindingPayloadError(f"Unknown top-level key: {sorted(unknown)[0]}")
 
+    segment = payload.get("segment")
+    if segment is not None:
+        if not isinstance(segment, str):
+            raise FindingPayloadError("segment must be a string")
+        if segment not in SEGMENT_ORDER:
+            raise FindingPayloadError(
+                f"Invalid segment: {segment} not in {SEGMENT_ORDER}"
+            )
+    is_web = segment == "web"
+
     file_val = payload.get("file") or payload.get("file_path")
     if not file_val:
-        raise FindingPayloadError("Missing required field: file (or file_path)")
-    if not isinstance(file_val, str):
+        if not is_web:
+            raise FindingPayloadError("Missing required field: file (or file_path)")
+        file_val = None
+    if file_val is not None and not isinstance(file_val, str):
         raise FindingPayloadError("file must be a string")
 
     line_val = payload.get("line_number")
     if line_val is None:
         line_val = payload.get("line_start")
-    if line_val is None:
+    if line_val is None and not is_web:
         raise FindingPayloadError("Missing required field: line_number (or line_start)")
-    if not isinstance(line_val, int):
+    if line_val is not None and not isinstance(line_val, int):
         raise FindingPayloadError("line_number must be an integer")
 
     description = payload.get("description", "")
@@ -135,15 +147,6 @@ def validate_finding_payload(payload: dict[str, Any]) -> dict[str, Any]:
         raise FindingPayloadError(
             "Missing or invalid required field in meta: remediation"
         )
-
-    segment = payload.get("segment")
-    if segment is not None:
-        if not isinstance(segment, str):
-            raise FindingPayloadError("segment must be a string")
-        if segment not in SEGMENT_ORDER:
-            raise FindingPayloadError(
-                f"Invalid segment: {segment} not in {SEGMENT_ORDER}"
-            )
 
     line_end = payload.get("line_end")
     if line_end is not None and not isinstance(line_end, int):

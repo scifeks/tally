@@ -10,6 +10,7 @@ MAX_SAME_FILE_FINDINGS = 3
 MAX_SIBLING_FINDINGS = 1
 MAX_FILES_PER_BATCH = 2
 MAX_FINDINGS_PER_BATCH = 4
+WEB_FINDINGS_PER_BATCH = 1
 _NO_FILL_SEVERITIES: frozenset[str] = frozenset({"critical", "high"})
 
 
@@ -130,3 +131,14 @@ def compute_batches(
             batches.append(chunk)
 
     return batches
+
+
+def batch_size_for_segment(
+    segment: str,
+    *,
+    default: int = MAX_FINDINGS_PER_BATCH,
+) -> int:
+    """Return the batch size limit for a finding segment."""
+    if segment == "web":
+        return WEB_FINDINGS_PER_BATCH
+    return default

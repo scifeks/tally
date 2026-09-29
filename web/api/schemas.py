@@ -146,6 +146,21 @@ class BatchFindingPatchRequest(BaseModel):
         return self
 
 
+class BatchDeleteRequest(BaseModel):
+    """Batch-delete request body for POST /api/findings/batch-delete."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    ids: list[int]
+
+    @field_validator("ids")
+    @classmethod
+    def validate_ids_nonempty(cls, v: list[int]) -> list[int]:
+        if not v:
+            raise ValueError("ids must not be empty")
+        return v
+
+
 class ManualFindingCreateRequest(BaseModel):
     """POST body for creating a manual finding."""
 
@@ -241,6 +256,20 @@ class BatchPatchResponse(BaseModel):
     skipped_locked: list[int]
     not_found: list[int]
     skip_reasons: dict[int, str]
+
+
+class BatchDeleteResponse(BaseModel):
+    """Response for POST /api/v1/findings/batch-delete.
+
+    Three disjoint id buckets:
+    - ``deleted``: ids successfully removed.
+    - ``skipped_locked``: ids held by another job at request time.
+    - ``not_found``: ids that do not exist.
+    """
+
+    deleted: list[int]
+    skipped_locked: list[int]
+    not_found: list[int]
 
 
 class ProjectListItem(BaseModel):
@@ -391,6 +420,7 @@ class CapabilitiesResponse(BaseModel):
     report_retention_enabled: bool
     max_report_history: int
     triage_backend_label: str | None
+    triage_mode: str | None = None
 
 
 class FindingHistoryItem(BaseModel):
@@ -555,6 +585,22 @@ class ScanStartRequest(BaseModel):
         default=None,
         validation_alias=AliasChoices("sinceCommit", "since_commit"),
     )
+
+
+class BurpScanStartRequest(BaseModel):
+    """POST body for /api/v1/projects/{id}/burp-scan."""
+
+    model_config = ConfigDict(populate_by_name=True, extra="ignore")
+
+    configNames: list[str] | None = Field(
+        default=None,
+        validation_alias=AliasChoices("configNames", "config_names"),
+    )
+    taskName: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("taskName", "task_name"),
+    )
+    timeout: int | None = None
 
 
 class ScanRunSummary(BaseModel):
@@ -921,3 +967,48 @@ class DocumentUploadResponse(BaseModel):
 class DocumentDeleteResponse(BaseModel):
     filename: str
     chunks_removed: int
+
+
+# Burp Poll
+class BurpPollStartResponse(BaseModel):
+    project_id: int
+    status: str
+
+
+class BurpPollCancelResponse(BaseModel):
+    project_id: int
+    status: str
+
+
+class BurpPollStatusResponse(BaseModel):
+    project_id: int
+    configured: bool
+    active: bool
+
+
+# MCP Serve
+class McpTriageStartRequest(BaseModel):
+    scan_run_id: int | None = Field(default=None, alias="scanRunId")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class McpTriageStartResponse(BaseModel):
+    host: str
+    port: int
+    token: str
+    batch_count: int = Field(alias="batchCount")
+    total_findings: int = Field(alias="totalFindings")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class McpServeStopResponse(BaseModel):
+    status: str
+
+
+class McpServeStatusResponse(BaseModel):
+    active: bool
+    host: str | None = None
+    port: int | None = None
+    source: str | None = None

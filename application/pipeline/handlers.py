@@ -114,6 +114,28 @@ class IngestHandler(BaseHandler):
         except Exception:
             return None
 
+    def _resolve_repos_by_url(self, rows: list[dict]) -> None:
+        if self._repo_repo is None:
+            return
+        try:
+            active = self._repo_repo.list_active()
+        except Exception:
+            return
+        if not active:
+            return
+        from application.tools.burp.repo_resolver import (
+            resolve_repo_by_url,
+        )
+
+        for row in rows:
+            url = row.get("url", "")
+            if not url:
+                continue
+            name, rid = resolve_repo_by_url(url, active)
+            if rid is not None:
+                row.setdefault("repo", name)
+                row.setdefault("repo_id", rid)
+
     def handle(self, event: ToolCompleted) -> None:
         result = event.result
         if (
@@ -176,6 +198,8 @@ class IngestHandler(BaseHandler):
                         row.setdefault("repo", event.repo)
                         if repo_id is not None:
                             row.setdefault("repo_id", repo_id)
+                else:
+                    self._resolve_repos_by_url(rows)
 
             normalized = []
             for r in rows:

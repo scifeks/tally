@@ -25,6 +25,7 @@ export type { FieldSpecs } from './useFieldSpecs'
 export { useCreateFinding } from './useCreateFinding'
 export type { CreateFindingInput } from './useCreateFinding'
 export { useDeleteFinding } from './useDeleteFinding'
+export { useDeleteFindings } from './useDeleteFindings'
 
 // Scan hooks
 export {
@@ -34,6 +35,7 @@ export {
   useProjectScanConfig,
   useStartScan,
   useCancelScan,
+  useStartBurpScan,
   useScanEvents,
 } from './useScans'
 
@@ -60,6 +62,10 @@ export type {
 // Platform hooks (cross-project)
 export { useCapabilities } from './useCapabilities'
 export type { Capabilities } from './useCapabilities'
+
+// MCP triage-mode hooks
+export { useMcpServeStatus, useStartMcpTriage, useStopMcpServe } from './useMcpServe'
+export type { McpServeStatus, McpTriageStartResult } from './useMcpServe'
 
 // Runtime / installed-tools hooks (cross-project)
 export { useRuntimeDependencies, useInstalledTools } from './useRuntime'
@@ -156,6 +162,10 @@ export {
   useRunSavedScan,
 } from './useSavedScans'
 export type { SavedScanListResponse, SavedScanWriteInput } from './useSavedScans'
+
+// Burp polling
+export { useBurpPollStatus, useStartBurpPoll, useCancelBurpPoll } from './useBurpPoll'
+export type { BurpPollStatus } from './useBurpPoll'
 
 // Tool argument profiles
 export {
