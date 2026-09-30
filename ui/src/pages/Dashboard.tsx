@@ -100,7 +100,11 @@ export default function Dashboard() {
         </section>
 
         {!hasScans ? (
-          <EmptyProjectState project={project} hasMeta={reposCount > 0} />
+          <EmptyProjectState
+            project={project}
+            hasMeta={reposCount > 0}
+            hasTools={enabledToolsCount > 0}
+          />
         ) : (
           <>
             {/* Quick actions */}
@@ -389,9 +393,11 @@ function ScanStatus({ status }: { status: string }) {
 function EmptyProjectState({
   project,
   hasMeta,
+  hasTools,
 }: {
   project: { code: string; name: string }
   hasMeta: boolean
+  hasTools: boolean
 }) {
   const steps = [
     {
@@ -402,7 +408,7 @@ function EmptyProjectState({
       icon: <GitBranch className="h-4 w-4" />,
     },
     {
-      done: false,
+      done: hasTools,
       label: 'enable tools',
       desc: 'pick your SAST / WEB / SECRETS / SCA scanners',
       to: '/config',
