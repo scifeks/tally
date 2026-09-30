@@ -27,6 +27,7 @@ def serialise_finding(
     payload["enriched"] = 1 if payload["enriched"] else 0
     payload["should_report"] = 1 if payload["should_report"] else 0
 
+    payload["line"] = meta.get("line_start")
     payload["target"] = payload.get("url") or ""
 
     is_locked, lock_holder = lock_state
