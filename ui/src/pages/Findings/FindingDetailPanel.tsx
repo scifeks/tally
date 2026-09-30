@@ -180,9 +180,8 @@ export function FindingDetailPanel({
         <Field label="segment" value={finding.segment.toUpperCase()} />
         <Field label="tool" value={finding.tool} />
         <Field label="target" value={finding.target} mono />
-        {finding.file && (
-          <Field label="file" value={`${finding.file}:${finding.line ?? ''}`} mono />
-        )}
+        {finding.file && <Field label="file" value={finding.file} mono />}
+        {finding.line != null && <Field label="line" value={String(finding.line)} mono />}
         <Field
           label="type"
           value={finding.findingType.length > 0 ? finding.findingType.join(', ') : '-'}
