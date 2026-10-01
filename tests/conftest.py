@@ -110,3 +110,32 @@ def _restore_lock_registry():
         reg.restore(saved)
     except ImportError:
         yield
+
+
+@pytest.fixture(autouse=True)
+def _guard_process_signals(monkeypatch):
+    """Fail any test that calls os.kill or os.killpg with a PID that is not int > 1."""
+    # MagicMock.__index__ returns 1; os.killpg(1, sig) is kill(-1, sig).
+    _real_kill = os.kill
+    _real_killpg = os.killpg
+
+    def _guarded_kill(pid, sig):
+        if not isinstance(pid, int) or isinstance(pid, bool) or pid <= 1:
+            raise RuntimeError(
+                f"os.kill() called with unsafe PID {pid!r} "
+                f"(type {type(pid).__name__}). "
+                f"Mock os.kill in your test."
+            )
+        return _real_kill(pid, sig)
+
+    def _guarded_killpg(pgid, sig):
+        if not isinstance(pgid, int) or isinstance(pgid, bool) or pgid <= 1:
+            raise RuntimeError(
+                f"os.killpg() called with unsafe PGID {pgid!r} "
+                f"(type {type(pgid).__name__}). "
+                f"Mock os.killpg in your test."
+            )
+        return _real_killpg(pgid, sig)
+
+    monkeypatch.setattr(os, "kill", _guarded_kill)
+    monkeypatch.setattr(os, "killpg", _guarded_killpg)
