@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import atexit
+import logging
 import os
 import secrets
+import signal
 import socket
 import subprocess
 import threading
@@ -24,6 +26,8 @@ if TYPE_CHECKING:
     from application.project.registry_service import ProjectRegistryService
     from application.tools.registry import ToolRegistry
 
+logger = logging.getLogger(__name__)
+
 _BANNED_HOSTS = {"0.0.0.0", "::", ""}
 
 
@@ -34,6 +38,7 @@ class WebUiRunner(WebUiRunnerPort):
         self._app_factory = app_factory
         self._vite_proc: subprocess.Popen[bytes] | None = None
         self._vite_log: Any | None = None
+        self._shutting_down = False
 
     def serve(
         self,
@@ -96,9 +101,14 @@ class WebUiRunner(WebUiRunnerPort):
                 log_level="warning",
                 ssl_keyfile=str(key_path),
                 ssl_certfile=str(cert_path),
+                timeout_graceful_shutdown=3,
             )
+        except KeyboardInterrupt:
+            pass
         except OSError:
             print(f"Port {api_port} is already in use or API server failed to start.")
+        finally:
+            self._stop_vite()
 
     @staticmethod
     def _write_env_local(
@@ -122,14 +132,31 @@ class WebUiRunner(WebUiRunnerPort):
         tmp.write_text(content, encoding="utf-8")
         os.replace(tmp, target)
 
+    @staticmethod
+    def _killpg_safe(pgid: object, sig: int) -> None:
+        """Signal a process group, refusing group IDs that are not int > 1."""
+        # MagicMock.__index__ returns 1; os.killpg(1, sig) is kill(-1, sig).
+        if not isinstance(pgid, int) or isinstance(pgid, bool) or pgid <= 1:
+            logger.error(
+                "Refusing os.killpg(%r, %s): not a valid process group ID",
+                pgid,
+                sig,
+            )
+            return
+        os.killpg(pgid, sig)
+
     def _stop_vite(self) -> None:
         if self._vite_proc is None:
             return
+        self._shutting_down = True
         try:
-            self._vite_proc.terminate()
+            self._killpg_safe(self._vite_proc.pid, signal.SIGTERM)
             self._vite_proc.wait(timeout=5)
         except Exception:
-            self._vite_proc.kill()
+            try:
+                self._killpg_safe(self._vite_proc.pid, signal.SIGKILL)
+            except OSError:
+                pass
         self._vite_proc = None
         if self._vite_log is not None:
             self._vite_log.close()
@@ -140,11 +167,12 @@ class WebUiRunner(WebUiRunnerPort):
         while self._vite_proc is not None:
             rc = self._vite_proc.poll()
             if rc is not None:
-                print(
-                    f"\nVite dev server exited (code {rc}). "
-                    f"The web UI will not load. "
-                    f"Check {log_path} for details."
-                )
+                if not self._shutting_down:
+                    print(
+                        f"\nVite dev server exited (code {rc}). "
+                        f"The web UI will not load. "
+                        f"Check {log_path} for details."
+                    )
                 return
             time.sleep(2)
 
@@ -164,6 +192,7 @@ class WebUiRunner(WebUiRunnerPort):
                 env=env,
                 stdout=self._vite_log,
                 stderr=self._vite_log,
+                start_new_session=True,
             )
         except FileNotFoundError:
             print("npm not found. Vite dev server not started.")

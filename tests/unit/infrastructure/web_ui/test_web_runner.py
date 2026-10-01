@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import signal
+import subprocess
 from pathlib import Path
 from typing import TypedDict
 from unittest.mock import MagicMock, patch
@@ -11,6 +13,15 @@ import pytest
 from application.project.registry_service import ProjectRegistryService
 from application.tools.registry import ToolRegistry
 from infrastructure.web_ui.runner import WebUiRunner
+
+
+@pytest.fixture(autouse=True)
+def _block_killpg(monkeypatch):
+    """Prevent any test from reaching the real os.killpg."""
+    monkeypatch.setattr(
+        "infrastructure.web_ui.runner.os.killpg",
+        MagicMock(name="blocked_killpg"),
+    )
 
 
 class _ServeKwargs(TypedDict):
@@ -99,6 +110,7 @@ class TestServe:
         assert call_kwargs.kwargs["port"] == 8080
         assert call_kwargs.kwargs["ssl_certfile"]
         assert call_kwargs.kwargs["ssl_keyfile"]
+        assert call_kwargs.kwargs["timeout_graceful_shutdown"] == 3
         out = capsys.readouterr().out
         assert "running at" in out
         opened_url = mock_open.call_args.args[0]
@@ -150,18 +162,41 @@ class TestServe:
     )
     @patch("infrastructure.web_ui.runner.WebUiRunner._start_vite")
     @patch("uvicorn.run", side_effect=KeyboardInterrupt)
-    def test_keyboard_interrupt_propagates(
+    def test_keyboard_interrupt_stops_cleanly(
         self,
         _mock_uvicorn_run,
         _mock_start_vite,
         _mock_wait,
         tmp_path,
     ) -> None:
-        """KeyboardInterrupt from uvicorn propagates to the caller."""
+        """KeyboardInterrupt is caught; serve() returns normally."""
         ui_dir = tmp_path / "ui"
         ui_dir.mkdir()
-        with pytest.raises(KeyboardInterrupt):
-            WebUiRunner(MagicMock()).serve(**_serve_kwargs(str(tmp_path)))
+        runner = WebUiRunner(MagicMock())
+        runner.serve(**_serve_kwargs(str(tmp_path)))
+
+    @patch(
+        "infrastructure.web_ui.runner.WebUiRunner._wait_for_port",
+        return_value=False,
+    )
+    @patch("infrastructure.web_ui.runner.subprocess.Popen")
+    @patch("infrastructure.web_ui.runner.atexit.register")
+    @patch("uvicorn.run")
+    def test_vite_started_in_own_session(
+        self,
+        _mock_uvicorn_run,
+        _mock_atexit,
+        mock_popen,
+        _mock_wait,
+        tmp_path,
+    ) -> None:
+        """Vite subprocess is started with start_new_session=True."""
+        ui_dir = tmp_path / "ui"
+        ui_dir.mkdir()
+        mock_popen.return_value = MagicMock()
+        WebUiRunner(MagicMock()).serve(**_serve_kwargs(str(tmp_path)))
+        _, call_kwargs = mock_popen.call_args
+        assert call_kwargs.get("start_new_session") is True
 
     @patch(
         "infrastructure.web_ui.runner.WebUiRunner._wait_for_port",
@@ -265,6 +300,88 @@ class TestMonitorVite:
         runner = WebUiRunner(MagicMock())
         runner._vite_proc = None
         runner._monitor_vite(Path("/unused"))
+
+    def test_silent_when_shutting_down(self, capsys) -> None:
+        """Monitor does not print when _shutting_down is True."""
+        proc = MagicMock()
+        proc.poll.return_value = -2
+        runner = WebUiRunner(MagicMock())
+        runner._vite_proc = proc
+        runner._shutting_down = True
+
+        runner._monitor_vite(Path("/unused"))
+
+        assert capsys.readouterr().out == ""
+
+
+class TestStopVite:
+    @patch("infrastructure.web_ui.runner.os.killpg")
+    def test_kills_process_group(self, mock_killpg) -> None:
+        """_stop_vite sends SIGTERM to the process group, not just the process."""
+        proc = MagicMock()
+        proc.pid = 12345
+        runner = WebUiRunner(MagicMock())
+        runner._vite_proc = proc
+
+        runner._stop_vite()
+
+        mock_killpg.assert_called_once_with(12345, signal.SIGTERM)
+        proc.wait.assert_called_once_with(timeout=5)
+        assert runner._vite_proc is None
+
+    @patch("infrastructure.web_ui.runner.os.killpg")
+    def test_sigkill_fallback_on_timeout(self, mock_killpg) -> None:
+        """Falls back to SIGKILL when SIGTERM + wait times out."""
+        proc = MagicMock()
+        proc.pid = 12345
+        proc.wait.side_effect = subprocess.TimeoutExpired("npm", 5)
+        runner = WebUiRunner(MagicMock())
+        runner._vite_proc = proc
+
+        runner._stop_vite()
+
+        assert mock_killpg.call_count == 2
+        mock_killpg.assert_any_call(12345, signal.SIGTERM)
+        mock_killpg.assert_any_call(12345, signal.SIGKILL)
+
+    def test_noop_when_no_proc(self) -> None:
+        """_stop_vite does nothing when _vite_proc is None."""
+        runner = WebUiRunner(MagicMock())
+        runner._stop_vite()
+
+
+class TestKillpgSafe:
+    """Verify the PID guard rejects invalid values before signaling."""
+
+    @patch("infrastructure.web_ui.runner.os.killpg")
+    def test_refuses_mock_pid(self, mock_killpg) -> None:
+        WebUiRunner._killpg_safe(MagicMock(), signal.SIGTERM)
+        mock_killpg.assert_not_called()
+
+    @patch("infrastructure.web_ui.runner.os.killpg")
+    def test_refuses_pid_zero(self, mock_killpg) -> None:
+        WebUiRunner._killpg_safe(0, signal.SIGTERM)
+        mock_killpg.assert_not_called()
+
+    @patch("infrastructure.web_ui.runner.os.killpg")
+    def test_refuses_pid_one(self, mock_killpg) -> None:
+        WebUiRunner._killpg_safe(1, signal.SIGTERM)
+        mock_killpg.assert_not_called()
+
+    @patch("infrastructure.web_ui.runner.os.killpg")
+    def test_refuses_negative_pid(self, mock_killpg) -> None:
+        WebUiRunner._killpg_safe(-1, signal.SIGTERM)
+        mock_killpg.assert_not_called()
+
+    @patch("infrastructure.web_ui.runner.os.killpg")
+    def test_refuses_bool(self, mock_killpg) -> None:
+        WebUiRunner._killpg_safe(True, signal.SIGTERM)
+        mock_killpg.assert_not_called()
+
+    @patch("infrastructure.web_ui.runner.os.killpg")
+    def test_accepts_valid_pid(self, mock_killpg) -> None:
+        WebUiRunner._killpg_safe(12345, signal.SIGTERM)
+        mock_killpg.assert_called_once_with(12345, signal.SIGTERM)
 
 
 class TestWriteEnvLocal:
