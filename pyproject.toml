@@ -42,6 +42,9 @@ dev = [
     "pytest-xdist>=3.0.0",
     "pexpect>=4.8",
 ]
+tools = [
+    "pip-audit",
+]
 
 [tool.ruff]
 line-length = 88
