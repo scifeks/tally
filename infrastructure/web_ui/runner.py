@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import atexit
 import logging
 import os
@@ -29,6 +30,26 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 _BANNED_HOSTS = {"0.0.0.0", "::", ""}
+
+
+class _ShutdownGuard:
+    """Absorb CancelledError from in-flight requests during graceful shutdown.
+
+    Uvicorn cancels ASGI tasks when its graceful-shutdown timeout expires.
+    StreamingResponse.listen_for_disconnect holds a long-lived receive()
+    that raises CancelledError on cancellation. Without this wrapper,
+    the error propagates to uvicorn's run_asgi, which logs a noisy
+    'Exception in ASGI application' traceback on every open connection.
+    """
+
+    def __init__(self, app: Any) -> None:
+        self._app = app
+
+    async def __call__(self, scope: Any, receive: Any, send: Any) -> None:
+        try:
+            await self._app(scope, receive, send)
+        except asyncio.CancelledError:
+            pass
 
 
 class WebUiRunner(WebUiRunnerPort):
@@ -95,7 +116,7 @@ class WebUiRunner(WebUiRunnerPort):
         print("Press Ctrl+C to stop the server.")
         try:
             uvicorn.run(
-                app,
+                _ShutdownGuard(app),
                 host=host,
                 port=api_port,
                 log_level="warning",
