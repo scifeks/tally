@@ -151,7 +151,7 @@ class TestRunSavedScanStaleness:
         assert stale_items[0].name == "auth-service"
         assert stale_items[0].kind == "repo"
 
-    def test_unregistered_tool_marks_stale(
+    def test_unregistered_tool_dropped_silently(
         self,
         service: SavedScansService,
         factory: ConnectionFactory,
@@ -168,17 +168,10 @@ class TestRunSavedScanStaleness:
             arg_profile_ids=[],
         )
 
-        # Unregister the tool.
         tool_registry.clear()
 
-        with pytest.raises(StaleSavedScanError) as excinfo:
-            service.run_saved_scan(hydrated.saved_scan.id)
-
-        stale_items = excinfo.value.stale_items
-        assert len(stale_items) == 1
-        assert isinstance(stale_items[0], StaleSavedScanToolItem)
-        assert stale_items[0].name == "gitleaks"
-        assert stale_items[0].kind == "tool"
+        result = service.run_saved_scan(hydrated.saved_scan.id)
+        assert result.tools == []
 
     def test_orphan_arg_profile_marks_stale(
         self,
@@ -228,21 +221,16 @@ class TestRunSavedScanStaleness:
             arg_profile_ids=[profile_id],
         )
 
-        # Soft-delete the repo.
         _soft_delete_repo(factory, repo_id, "2026-05-03T00:00:00Z")
-
-        # Unregister semgrep.
         tool_registry.clear()
-
-        # Drop the profile.
         _drop_profile_with_fk_off(factory, profile_id)
 
         with pytest.raises(StaleSavedScanError) as excinfo:
             service.run_saved_scan(hydrated.saved_scan.id)
 
         stale_items = excinfo.value.stale_items
-        assert len(stale_items) == 3
-        assert [s.kind for s in stale_items] == ["repo", "tool", "argProfile"]
+        assert len(stale_items) == 2
+        assert [s.kind for s in stale_items] == ["repo", "argProfile"]
 
     def test_clean_run_with_empty_repo_list_no_op(
         self,

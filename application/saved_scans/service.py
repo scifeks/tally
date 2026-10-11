@@ -1,19 +1,14 @@
-"""Application-layer service for saved scans.
-
-CRUD orchestration with structured validation. Depends on the saved-
-scans repository port, the tool-arg-profiles repository port for
-membership checks against existing profile ids, and the in-process
-ToolRegistry for tool-name membership checks. No infrastructure
-imports.
-"""
+"""Application-layer service for saved scans."""
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from application.saved_scans.errors import StaleSavedScanError
 from domain.saved_scans.entry import (
+    SavedScanHydrated,
     StaleSavedScanArgProfileItem,
     StaleSavedScanItem,
     StaleSavedScanRepoItem,
@@ -28,9 +23,10 @@ if TYPE_CHECKING:
     )
     from application.tools.registry import ToolRegistry
     from domain.saved_scans.entry import (
-        SavedScanHydrated,
         SavedScanListItem,
     )
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -94,12 +90,7 @@ class SavedScansService:
         segments: list[str],
         arg_profile_ids: list[int],
     ) -> SavedScanHydrated:
-        """Create a new saved scan.
-
-        Validates inputs first; raises SavedScanValidationError on any
-        failure. Propagates SavedScanNameConflict from the repository.
-        Returns the freshly hydrated saved scan.
-        """
+        """Create a new saved scan."""
         self._validate_input(
             name=name,
             tool_names=tool_names,
@@ -132,13 +123,7 @@ class SavedScansService:
         segments: list[str],
         arg_profile_ids: list[int],
     ) -> SavedScanHydrated:
-        """Replace an existing saved scan.
-
-        Validates inputs first. Reads the current row to detect missing
-        ids early; raises SavedScanNotFound when the row does not exist.
-        Propagates SavedScanNameConflict from the repository. Returns
-        the freshly hydrated saved scan.
-        """
+        """Replace an existing saved scan."""
         self._validate_input(
             name=name,
             tool_names=tool_names,
@@ -164,21 +149,11 @@ class SavedScansService:
         return result
 
     def delete(self, saved_scan_id: int) -> None:
-        """Delete the saved scan; cascades join rows via the schema.
-
-        The route layer maps the missing-id case to 404 by querying
-        first.
-        """
+        """Delete the saved scan; cascades join rows via the schema."""
         self._repo.delete(saved_scan_id)
 
     def run_saved_scan(self, saved_scan_id: int) -> SavedScanHydrated:
-        """Load a saved scan and validate all references still exist.
-
-        Raises SavedScanNotFound if the saved scan does not exist.
-        Raises StaleSavedScanError if any repo is soft-deleted, any
-        tool is unregistered, or any arg profile no longer exists.
-        Returns the hydrated saved scan if validation passes.
-        """
+        """Load and validate a saved scan, silently dropping unregistered tools."""
         hydrated = self._repo.get_hydrated(saved_scan_id)
         if hydrated is None:
             raise SavedScanNotFound(saved_scan_id)
@@ -190,9 +165,14 @@ class SavedScansService:
                 stale.append(StaleSavedScanRepoItem(id=r.id, name=r.name))
 
         registered = set(self._tool_registry.list_tool_names())
-        for t in hydrated.tools:
-            if t.tool_name not in registered:
-                stale.append(StaleSavedScanToolItem(name=t.tool_name))
+        live_tools = [t for t in hydrated.tools if t.tool_name in registered]
+        dropped_tools = [t for t in hydrated.tools if t.tool_name not in registered]
+        for t in dropped_tools:
+            logger.warning(
+                "Saved scan %d: dropping unregistered tool %r",
+                saved_scan_id,
+                t.tool_name,
+            )
 
         raw_profile_ids = self._repo.list_arg_profile_ids(saved_scan_id)
         if raw_profile_ids:
@@ -203,6 +183,16 @@ class SavedScansService:
 
         if stale:
             raise StaleSavedScanError(stale)
+
+        if dropped_tools:
+            hydrated = SavedScanHydrated(
+                saved_scan=hydrated.saved_scan,
+                repos=hydrated.repos,
+                tools=live_tools,
+                skip_tool_names=hydrated.skip_tool_names,
+                segments=hydrated.segments,
+                arg_profiles=hydrated.arg_profiles,
+            )
 
         return hydrated
 
