@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.requests import Request
-from starlette.responses import Response
+from starlette.types import ASGIApp, Receive, Scope, Send
 
 from web.api._errors import error_response
 
@@ -16,20 +15,30 @@ _EXEMPT = frozenset(
 )
 
 
-class SessionAuthMiddleware(BaseHTTPMiddleware):
+class SessionAuthMiddleware:
     """Require a valid tally_session cookie on /api/* paths (except exempt)."""
 
-    async def dispatch(
-        self, request: Request, call_next: RequestResponseEndpoint
-    ) -> Response:
+    def __init__(self, app: ASGIApp) -> None:
+        self._app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self._app(scope, receive, send)
+            return
+
+        request = Request(scope)
         if not request.url.path.startswith("/api/"):
-            return await call_next(request)
+            await self._app(scope, receive, send)
+            return
         if request.url.path in _EXEMPT:
-            return await call_next(request)
+            await self._app(scope, receive, send)
+            return
 
         store = request.app.state.session_store
         session_id = request.cookies.get("tally_session", "")
         if not session_id or not store.verify(session_id):
-            return error_response(401, "UNAUTHENTICATED", "Authentication required")
-        request.state.session_id = session_id
-        return await call_next(request)
+            response = error_response(401, "UNAUTHENTICATED", "Authentication required")
+            await response(scope, receive, send)
+            return
+        scope.setdefault("state", {})["session_id"] = session_id
+        await self._app(scope, receive, send)

@@ -87,7 +87,7 @@ class TestToolOnRepoScan:
                 mock_config, mock_resources
             )
 
-    def test_tool_not_registered_raises_value_error(
+    def test_tool_not_registered_skips(
         self,
         mock_config: Any,
         mock_resources: Any,
@@ -99,10 +99,16 @@ class TestToolOnRepoScan:
         repo_repo.list_active.return_value = [_make_mock_repo()]
         mock_config.repo_repo = repo_repo
 
-        with pytest.raises(ValueError, match="not registered"):
-            ToolOnRepoScan("semgrep", "my-repo").execute(mock_config, mock_resources)
+        summary = ToolOnRepoScan("semgrep", "my-repo").execute(
+            mock_config, mock_resources
+        )
 
-    def test_factory_error_raises_value_error(
+        assert summary.total_tools_skipped == 1
+        assert summary.total_tools_run == 0
+        row = mock_resources.display.print_tool_line.call_args[0][0]
+        assert row.skip_reason == "not registered"
+
+    def test_factory_error_skips(
         self,
         mock_config: Any,
         mock_resources: Any,
@@ -115,10 +121,16 @@ class TestToolOnRepoScan:
         repo_repo.list_active.return_value = [_make_mock_repo()]
         mock_config.repo_repo = repo_repo
 
-        with pytest.raises(ValueError, match="factory error"):
-            ToolOnRepoScan("semgrep", "my-repo").execute(mock_config, mock_resources)
+        summary = ToolOnRepoScan("semgrep", "my-repo").execute(
+            mock_config, mock_resources
+        )
 
-    def test_tool_not_available_raises_value_error(
+        assert summary.total_tools_skipped == 1
+        assert summary.total_tools_run == 0
+        row = mock_resources.display.print_tool_line.call_args[0][0]
+        assert row.skip_reason == "factory error"
+
+    def test_tool_not_available_skips(
         self,
         mock_config: Any,
         mock_resources: Any,
@@ -133,10 +145,16 @@ class TestToolOnRepoScan:
         repo_repo.list_active.return_value = [_make_mock_repo()]
         mock_config.repo_repo = repo_repo
 
-        with pytest.raises(ValueError, match="not installed"):
-            ToolOnRepoScan("semgrep", "my-repo").execute(mock_config, mock_resources)
+        summary = ToolOnRepoScan("semgrep", "my-repo").execute(
+            mock_config, mock_resources
+        )
 
-    def test_requires_base_urls_raises_when_empty(
+        assert summary.total_tools_skipped == 1
+        assert summary.total_tools_run == 0
+        row = mock_resources.display.print_tool_line.call_args[0][0]
+        assert row.skip_reason == "not installed"
+
+    def test_requires_base_urls_skips_when_empty(
         self,
         mock_config: Any,
         mock_resources: Any,
@@ -152,5 +170,35 @@ class TestToolOnRepoScan:
         repo_repo.list_active.return_value = [_make_mock_repo(base_urls=[])]
         mock_config.repo_repo = repo_repo
 
-        with pytest.raises(ValueError, match="requires base_urls"):
-            ToolOnRepoScan("zap", "my-repo").execute(mock_config, mock_resources)
+        summary = ToolOnRepoScan("zap", "my-repo").execute(mock_config, mock_resources)
+
+        assert summary.total_tools_skipped == 1
+        assert summary.total_tools_run == 0
+        row = mock_resources.display.print_tool_line.call_args[0][0]
+        assert row.skip_reason == "no base_urls configured"
+
+    def test_noir_unsupported_skips(
+        self,
+        mock_config: Any,
+        mock_resources: Any,
+    ) -> None:
+        from unittest.mock import patch
+
+        from application.tools.scan_types.tool_on_repo import ToolOnRepoScan
+
+        repo_repo = MagicMock()
+        repo_repo.list_active.return_value = [_make_mock_repo()]
+        mock_config.repo_repo = repo_repo
+
+        with patch(
+            "application.tools.scan_types.tool_on_repo.noir_skip_reason",
+            return_value="language not supported",
+        ):
+            summary = ToolOnRepoScan("noir", "my-repo").execute(
+                mock_config, mock_resources
+            )
+
+        assert summary.total_tools_skipped == 1
+        assert summary.total_tools_run == 0
+        row = mock_resources.display.print_tool_line.call_args[0][0]
+        assert row.skip_reason == "noir unsupported: language not supported"

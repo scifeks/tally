@@ -159,17 +159,16 @@ class TestSavedScansRun:
             {"kind": "repo", "id": repo_id, "name": "going-away"},
         ]
 
-    async def test_run_409_stale_tool(self, app_client, monkeypatch) -> None:
-        """Saved scan referencing an unregistered tool returns 409 STALE."""
+    async def test_run_drops_stale_tool_and_proceeds(
+        self, app_client, monkeypatch
+    ) -> None:
+        """Saved scan referencing an unregistered tool drops it and runs."""
         client, _fid, _kb, factory, mut_headers, project_id = app_client
         monkeypatch.setattr(
             "application.tools.scan_service.ScanService._run_worker",
             lambda self, **kw: None,
         )
 
-        # Bypass service validation by inserting through the repo directly:
-        # the repo is unconstrained on tool names, so a name absent from the
-        # local-wrappers fallback registry will register as STALE at run time.
         saved = SavedScansRepository(factory)
         scan_id = saved.insert(
             name="stale-tool",
@@ -185,11 +184,9 @@ class TestSavedScansRun:
             f"/api/v1/projects/{project_id}/saved-scans/{scan_id}/run",
             headers=mut_headers,
         )
-        assert resp.status_code == 409, resp.text
+        assert resp.status_code == 202
         body = resp.json()
-        assert body["error"]["code"] == "STALE_SAVED_SCAN"
-        items = body["error"]["details"]["staleItems"]
-        assert items == [{"kind": "tool", "name": "definitely-not-a-tool"}]
+        assert "definitely-not-a-tool" not in body["tool_ids"]
 
     async def test_run_409_stale_arg_profile(self, app_client, monkeypatch) -> None:
         """Orphan arg-profile join row returns 409 STALE_SAVED_SCAN."""

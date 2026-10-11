@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
-from starlette.requests import Request
-from starlette.responses import Response
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 CSP = (
     "default-src 'self'; "
@@ -19,23 +17,30 @@ CSP = (
     "frame-ancestors 'none'"
 )
 
+_SECURITY_HEADERS: list[tuple[bytes, bytes]] = [
+    (b"content-security-policy", CSP.encode()),
+    (b"x-frame-options", b"DENY"),
+    (b"x-content-type-options", b"nosniff"),
+    (b"referrer-policy", b"no-referrer"),
+]
 
-class SecurityHeadersMiddleware(BaseHTTPMiddleware):
-    """Attach Tally's hardening headers to every response.
 
-    The Content-Security-Policy intentionally omits ``'unsafe-inline'`` from
-    both ``script-src`` and ``style-src``. Tailwind v4 + Vite production
-    builds emit static CSS / bundled JS, and React's ``style={{...}}`` prop
-    sets DOM properties at runtime (which CSP does not block), so strict
-    ``'self'`` is sufficient for the production SPA bundle.
-    """
+class SecurityHeadersMiddleware:
+    """Attach Tally's hardening headers to every response."""
 
-    async def dispatch(
-        self, request: Request, call_next: RequestResponseEndpoint
-    ) -> Response:
-        response = await call_next(request)
-        response.headers["Content-Security-Policy"] = CSP
-        response.headers["X-Frame-Options"] = "DENY"
-        response.headers["X-Content-Type-Options"] = "nosniff"
-        response.headers["Referrer-Policy"] = "no-referrer"
-        return response
+    def __init__(self, app: ASGIApp) -> None:
+        self._app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self._app(scope, receive, send)
+            return
+
+        async def _inject_headers(message: Message) -> None:
+            if message["type"] == "http.response.start":
+                headers = list(message.get("headers", []))
+                headers.extend(_SECURITY_HEADERS)
+                message = {**message, "headers": headers}
+            await send(message)
+
+        await self._app(scope, receive, _inject_headers)
