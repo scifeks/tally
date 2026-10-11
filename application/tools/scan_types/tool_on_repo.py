@@ -106,15 +106,25 @@ class ToolOnRepoScan(ScanType):
         _noir_skip = noir_skip_reason(service)
         if self.tool_name == "noir" and _noir_skip is not None:
             return _skip_summary(
-                self.tool_name, f"noir unsupported: {_noir_skip}", 0.0,
-                config, resources, repo.name, "",
+                self.tool_name,
+                f"noir unsupported: {_noir_skip}",
+                0.0,
+                config,
+                resources,
+                repo.name,
+                "",
             )
 
         tool_config = registry.get_tool_config(self.tool_name)
         if tool_config is None:
             return _skip_summary(
-                self.tool_name, "not registered", 0.0,
-                config, resources, repo.name, "",
+                self.tool_name,
+                "not registered",
+                0.0,
+                config,
+                resources,
+                repo.name,
+                "",
             )
 
         try:
@@ -122,20 +132,34 @@ class ToolOnRepoScan(ScanType):
         except Exception as exc:
             logger.warning("Factory failed for %r: %s", self.tool_name, exc)
             return _skip_summary(
-                self.tool_name, "factory error", 0.0,
-                config, resources, repo.name, "",
+                self.tool_name,
+                "factory error",
+                0.0,
+                config,
+                resources,
+                repo.name,
+                "",
             )
 
         if not tool.check_available():
             return _skip_summary(
-                self.tool_name, "not installed", 0.0,
-                config, resources, repo.name, "",
+                self.tool_name,
+                "not installed",
+                0.0,
+                config,
+                resources,
+                repo.name,
+                "",
             )
 
         if tool.requires_base_urls and not service.base_urls:
             return _skip_summary(
-                self.tool_name, "no base_urls configured", 0.0,
-                config, resources, repo.name,
+                self.tool_name,
+                "no base_urls configured",
+                0.0,
+                config,
+                resources,
+                repo.name,
                 getattr(tool, "scan_segment", "") or "",
             )
 

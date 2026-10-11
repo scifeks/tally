@@ -12,7 +12,6 @@ from domain.saved_scans.entry import (
     StaleSavedScanArgProfileItem,
     StaleSavedScanItem,
     StaleSavedScanRepoItem,
-    StaleSavedScanToolItem,
 )
 from domain.tools.scan_types.models import SEGMENT_ORDER
 

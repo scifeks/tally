@@ -15,7 +15,6 @@ from application.tools.registry import ToolRegistry
 from domain.saved_scans.entry import (
     StaleSavedScanArgProfileItem,
     StaleSavedScanRepoItem,
-    StaleSavedScanToolItem,
 )
 from infrastructure.store.connection import ConnectionFactory
 from infrastructure.store.repositories.saved_scans import (

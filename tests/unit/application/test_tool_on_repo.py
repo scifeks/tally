@@ -170,9 +170,7 @@ class TestToolOnRepoScan:
         repo_repo.list_active.return_value = [_make_mock_repo(base_urls=[])]
         mock_config.repo_repo = repo_repo
 
-        summary = ToolOnRepoScan("zap", "my-repo").execute(
-            mock_config, mock_resources
-        )
+        summary = ToolOnRepoScan("zap", "my-repo").execute(mock_config, mock_resources)
 
         assert summary.total_tools_skipped == 1
         assert summary.total_tools_run == 0

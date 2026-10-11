@@ -132,7 +132,7 @@ def _to_response(override) -> ToolOverrideResponse:
 
 @tools_v1_router.get("/catalog", response_model=ToolCatalogResponse)
 def get_tools_catalog(request: Request) -> ToolCatalogResponse:
-    """Return tool metadata from the startup snapshot, immune to per-project registry mutations."""
+    """Return tool metadata from the startup snapshot."""
     tools_dict, _configs = request.app.state.tool_catalog_snapshot
     tools = list(tools_dict.values())
     items = [
