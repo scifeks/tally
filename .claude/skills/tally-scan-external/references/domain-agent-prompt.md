@@ -10,10 +10,10 @@ The recon phase has produced a manifest for your partition. Below is your comple
 ${PARTITION_DATA}
 ```
 
-This includes:
+The partition data is structured text extracted from the recon attack surface spec. It includes:
 - Partition ID and assignment reason
-- Input inventory with source, type, and trust boundary
-- Entry point handlers (functions where inputs arrive)
+- Endpoints, each with HTTP method, path, handler, source location (file and line), and auth level (from `x-audit-trust-boundary`: `unauth`, `auth`, or `admin`)
+- Parameters per endpoint, each with name, location, type, validation, and sink flows (sink type from the 12 typed categories in `.claude/skills/tally-scan-external/references/attack-surface-schema.md`, plus sink location)
 - App-specific files you own (including transitive dependencies within your partition)
 - Shared infrastructure nodes (cross-partition, read-only for trace verification)
 - Trust boundary definitions and partition boundaries
@@ -54,7 +54,7 @@ Start with the entry points listed in your partition scope. Read the full handle
 
 ### Step 2: Trace each numbered input forward
 
-For every input in your partition's input inventory:
+For every parameter of each endpoint in the partition data:
 
 a. **Find the first access.** Locate where the input variable is first accessed in the entry point handler.
 
@@ -64,7 +64,7 @@ b. **Follow the taint forward.** Trace every code path the variable takes throug
    - Repeat for every callee's callees until you reach a sink or a partition boundary
    - Do not stop at abstraction boundaries: routers, middleware, factories, decorators, and dependency injection all must be traced through
 
-c. **Identify sinks.** When the variable reaches a sink from any of your family's detection matrices, record a **potential finding** with the file, line number, and sink type.
+c. **Identify sinks.** When the variable reaches a sink from any of your family's detection matrices, record a **potential finding** with the file, line number, and sink type. Classify the sink using the 12 typed sink categories defined in `.claude/skills/tally-scan-external/references/attack-surface-schema.md`. Start from the sink flows recon recorded for the parameter, but confirm them in code and report sinks recon missed.
 
 d. **Track variable name changes.** As the variable passes through functions and is assigned to different parameter names, follow the name changes. Use the input number (e.g., "Input #3") to track provenance.
 
@@ -97,6 +97,7 @@ For each finding that passes the scanning procedure, construct a JSON object:
 - Copy the default `rule_id`, CWE, severity, and `owasp_name` from the matched skill file
 - Adjust severity and confidence based on gate verdicts per gate rules guidance
 - Record the gate verdicts in `meta.gate_results`
+- Set `meta.auth_phase` from the endpoint's auth level in the partition data (`x-audit-trust-boundary`): `unauth` maps to `unauthenticated`, `auth` to `authenticated`, `admin` to `admin`
 - Include all evidence fields (file, line, snippet, taint source, remediation)
 
 See Section 6 (Evidence requirements) for the complete field list.
@@ -124,9 +125,10 @@ Every finding must include all of the following:
 | `meta.owasp_name` | OWASP category from the skill file (e.g., "Injection") |
 | `meta.code_snippet` | 2-6 lines of source code around the sink, preserving indentation |
 | `meta.taint_source` | The input variable path and input number (e.g., "Input #3: request.json['username']") |
-| `meta.gate_results` | Structured object with keys: `reachability`, `attacker_control`, `sanitization`, `impact`. Each maps to a string verdict (e.g., `"production"`, `"direct"`, `"none"`, `"data_exfiltration"`) |
+| `meta.gate_results` | Structured object with keys: `reachability`, `attacker_control`, `sanitization`, `impact`, and optional `auth_level`. Each maps to a string verdict (see `gate-rules.md` for valid values) |
 | `meta.remediation` | Library-specific remediation code or guidance from the skill file |
 | `meta.cross_partition` | Boolean, true if the trace crosses partition boundaries |
+| `meta.auth_phase` | `unauthenticated`, `authenticated`, or `admin`, from the endpoint's `x-audit-trust-boundary` |
 
 ## What NOT to report
 

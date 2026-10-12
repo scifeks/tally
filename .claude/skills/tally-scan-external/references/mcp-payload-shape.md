@@ -55,6 +55,10 @@ Useful additions:
 - `meta.method`, `meta.url` for web-segment findings.
 - `meta.package_name`, `meta.package_version`, `meta.ecosystem`
   for sca-segment findings.
+- `meta.auth_phase` indicating the authentication context of the
+  endpoint where this finding was discovered. Values:
+  `unauthenticated`, `authenticated`, `admin`. Populated by
+  domain agents from the partition data's `x-audit-trust-boundary`.
 
 ## Server-set fields
 
