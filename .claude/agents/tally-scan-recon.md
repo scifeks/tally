@@ -11,6 +11,11 @@ model: claude-sonnet-4-6
 tools: Read, Grep, Glob, Bash, Write
 ---
 
+> **RETIRED.** This agent is replaced by multi-agent recon dispatch
+> from the orchestrator using `tally-scan-recon-mapper` agents
+> (TAL-262). The orchestrator's legacy fallback skips recon entirely
+> rather than dispatching this agent.
+
 You are a codebase reconnaissance agent for security scanning.
 Your job is to map the attack surface of a target codebase and
 produce a structured manifest that downstream vulnerability

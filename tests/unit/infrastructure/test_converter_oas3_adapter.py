@@ -17,8 +17,59 @@ _MINIMAL_OAS3 = {
     "paths": {},
 }
 
+_MINIMAL_OAS31 = {
+    "openapi": "3.1.0",
+    "info": {"title": "Test 3.1", "version": "1.0.0"},
+    "paths": {},
+}
+
+_OAS31_WITH_EXTENSIONS = {
+    "openapi": "3.1.0",
+    "info": {
+        "title": "Attack Surface",
+        "version": "1.0.0",
+        "x-audit-meta": {"agent": "mapper-1"},
+    },
+    "paths": {
+        "/api/users": {
+            "get": {
+                "x-audit-trust-boundary": "unauth",
+                "x-audit-source": "app/routes.py:42",
+                "responses": {"200": {"description": "ok"}},
+            }
+        }
+    },
+}
+
 
 class TestOAS3PassthroughAdapter:
+    def test_valid_oas31_json_passes_validate(self, tmp_path: Path) -> None:
+        f = tmp_path / "spec.json"
+        f.write_text(json.dumps(_MINIMAL_OAS31), encoding="utf-8")
+        OAS3PassthroughAdapter().validate(f)
+
+    def test_valid_oas31_yaml_passes_validate(self, tmp_path: Path) -> None:
+        f = tmp_path / "spec.yaml"
+        f.write_text(yaml.dump(_MINIMAL_OAS31), encoding="utf-8")
+        OAS3PassthroughAdapter().validate(f)
+
+    def test_oas31_with_x_audit_extensions_passes_validate(
+        self, tmp_path: Path
+    ) -> None:
+        f = tmp_path / "spec.yaml"
+        f.write_text(yaml.dump(_OAS31_WITH_EXTENSIONS), encoding="utf-8")
+        OAS3PassthroughAdapter().validate(f)
+
+    def test_convert_oas31_copies_to_seed_json(self, tmp_path: Path) -> None:
+        src = tmp_path / "spec.yaml"
+        src.write_text(yaml.dump(_MINIMAL_OAS31), encoding="utf-8")
+        out_dir = tmp_path / "out"
+        out_dir.mkdir()
+        result = OAS3PassthroughAdapter().convert(src, out_dir)
+        assert result == out_dir / "seed.json"
+        output = json.loads(result.read_text(encoding="utf-8"))
+        assert output["openapi"] == "3.1.0"
+
     def test_valid_oas3_json_passes_validate(self, tmp_path: Path) -> None:
         f = tmp_path / "spec.json"
         f.write_text(json.dumps(_MINIMAL_OAS3), encoding="utf-8")

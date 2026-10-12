@@ -17,15 +17,26 @@ from application.rag.finding_indexer import FindingIndexer
 from application.rag.knowledge_base_cache import (
     get_or_build_knowledge_base,
 )
+from application.url_inventory.service import UrlInventoryService
+from application.url_inventory.url_list_service import UrlListService
 from core.config import ConfigManager
 from core.project_paths import ProjectPaths
+from infrastructure.endpoints.converters.endpoint_file_converter import (
+    EndpointFileConverter,
+)
 from infrastructure.store.connection import ConnectionFactory
 from infrastructure.store.repositories.findings import (
     FindingRepository,
 )
+from infrastructure.store.repositories.repositories import (
+    RepositoryRepository,
+)
 from infrastructure.store.repositories.runs import RunRepository
 from infrastructure.store.repositories.triage import (
     TriageBatchRepository,
+)
+from infrastructure.store.repositories.url_findings import (
+    UrlFindingRepository,
 )
 
 if TYPE_CHECKING:
@@ -190,6 +201,59 @@ def create_mcp_server(
         """Mark removed findings as duplicates of a survivor."""
         service = _get_ingest_service(project)
         return service.resolve_duplicates(run_id, survivor_id, removed_ids)
+
+    @server.tool()
+    def ingest_attack_surface(
+        project: str,
+        repo_name: str,
+        spec_path: str,
+    ) -> dict[str, Any]:
+        """Ingest an OpenAPI attack-surface spec into a repo's URL inventory."""
+        try:
+            row = project_registry.resolve_by_name(project)
+            if row is None or row.archived_at:
+                raise ValueError(f"Project '{project}' not found")
+            spec_file = Path(spec_path)
+            if not spec_file.is_file():
+                raise FileNotFoundError(f"Spec file not found: {spec_path}")
+            contents = spec_file.read_bytes()
+
+            paths = ProjectPaths.from_registry_row(row)
+            paths.sqlite_dir.mkdir(parents=True, exist_ok=True)
+            conn_factory = ConnectionFactory(paths.findings_db)
+            conn_factory.init_schema()
+            url_repo = UrlFindingRepository(conn_factory)
+            repo_store = RepositoryRepository(conn_factory)
+            repo = repo_store.get_by_name(repo_name)
+            repo_id = repo_store.find_id_by_name(repo_name)
+            if repo is None or repo_id is None:
+                raise ValueError(f"Repository '{repo_name}' not found")
+
+            UrlListService(
+                url_repo=url_repo,
+                project_repo=repo_store,
+                inventory=UrlInventoryService(url_repo),
+                converter=EndpointFileConverter(),
+                findings_db_exists=True,
+                paths=paths,
+                project_name=row.name,
+            ).ingest_uploaded_endpoint_file(
+                repo=repo,
+                repo_id=repo_id,
+                filename=spec_file.name,
+                contents=contents,
+            )
+
+            merged_urls = paths.endpoint_dir(str(repo_id)) / "merged_urls.txt"
+            count = 0
+            if merged_urls.exists():
+                count = sum(
+                    1 for line in merged_urls.read_text().splitlines() if line.strip()
+                )
+            return {"status": "ok", "endpoints_ingested": count}
+        except Exception as exc:
+            logger.warning("ingest_attack_surface failed: %s", exc)
+            return {"status": "error", "error": str(exc)}
 
     @server.tool()
     def end_scan(

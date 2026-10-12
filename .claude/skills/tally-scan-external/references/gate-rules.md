@@ -86,6 +86,20 @@ Does exploiting this give the attacker a meaningful new capability?
 | Write to attacker-controlled location only (XSS to self, SSRF to attacker's server) | Downgrade one tier | Limited blast radius |
 | No observable difference between exploit and normal behavior | `informational` severity, `["weakness"]` | The pattern is dangerous but not currently exploitable |
 
+### Auth-level severity context
+
+Apply after the impact assessment above:
+
+| Auth level of endpoint | Adjustment |
+|---|---|
+| unauthenticated | No adjustment |
+| authenticated (low-priv) | No adjustment |
+| admin | Downgrade one severity tier |
+
+The endpoint's auth level comes from the partition data's
+`x-audit-trust-boundary` field. This adjustment is cumulative
+with the impact-based adjustments above.
+
 ## Recording gate results
 
 Every finding must include gate results in two places.
@@ -124,6 +138,19 @@ Valid values for each gate:
 - `impact`: `data_exfiltration`, `rce`, `auth_bypass`,
   `privilege_escalation`, `limited_read`, `limited_write`,
   `no_observable`
+
+The Gate 4 auth-level sub-check is recorded as an additional key,
+`auth_level`, alongside `impact`:
+
+```json
+{
+  "impact": "data_exfiltration",
+  "auth_level": "admin"
+}
+```
+
+- `auth_level`: `unauth`, `auth`, `admin` (the endpoint's
+  `x-audit-trust-boundary` value)
 
 ## Cumulative adjustments
 

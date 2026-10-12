@@ -1,29 +1,30 @@
-# Codebase Reconnaissance for Vulnerability Scanning
+# Attack Surface Reconnaissance
 
 ## Mission
 
-Map the target codebase's attack surface to produce a structured reconnaissance
-manifest. You are NOT performing vulnerability analysis. Your job is to discover
-entry points, enumerate user-controlled inputs, build a shallow call graph to
-dangerous sinks, map trust boundaries, partition code for parallel scanning, and
-identify dead code.
+Map the attack surface of your assigned directories. You are NOT performing
+vulnerability analysis. Record that input X reaches sink Y; whether it is
+exploitable is a later phase.
 
-The output is a single markdown file containing the attack surface map that
-downstream scanner agents will consume.
+The output is structured YAML, not markdown: OpenAPI 3.1 for HTTP, AsyncAPI 3.0
+for WebSocket and streaming, hardware YAML for serial, USB, and GPIO. Format,
+`x-audit-*` extensions, and the 12 typed sink categories are defined in
+`.claude/skills/tally-scan-external/references/attack-surface-schema.md`. Read it
+before Phase 1 and do not restate it in your output.
+
+Exclude test files (`test_*.py`, `*_test.py`, `*.test.js`, `*.spec.js`,
+`__tests__`, `tests`, `test`), vendored code (`vendor/`, `node_modules/`),
+generated code, and build artifacts.
 
 ---
 
-## Step 1: Language and Framework Detection
+## Phase 1: Framework Detection and Route Discovery
 
-Detect the languages, frameworks, and package managers present in the codebase.
-
-Run globbing patterns to identify source files:
+Detect languages, frameworks, and package managers, then enumerate every route.
 
 ```bash
 find . -type f \( -name '*.py' -o -name '*.php' -o -name '*.js' -o -name '*.jsx' -o -name '*.ts' -o -name '*.tsx' \) | grep -v node_modules | grep -v vendor | grep -v __pycache__ | head -20
 ```
-
-Detect frameworks by grepping for characteristic imports:
 
 ```bash
 # Python frameworks
@@ -34,171 +35,96 @@ grep -r "use Illuminate\\\|use Slim\\\|use Symfony\\\|use Laminas\\\\" . --inclu
 
 # JavaScript/TypeScript frameworks
 grep -r "require.*express\|from.*express\|require.*koa\|from.*koa\|require.*fastify\|from.*graphql\|from.*@apollo\|from.*commander\|from.*yargs" . --include="*.js" --include="*.ts" 2>/dev/null | head -3
-```
 
-Detect package managers:
-
-```bash
+# Package managers
 ls -la package.json requirements.txt pyproject.toml composer.json 2>/dev/null
 ```
 
-Record in the output:
-- Languages found (Python, PHP, JavaScript, TypeScript, or combinations)
-- Frameworks detected (Flask, Django, FastAPI, Express, Laravel, Slim, Strawberry, etc.)
-- Package managers present
-
-Budget: 5-10 grep/glob calls maximum.
-
----
-
-## Step 2: Entry Point Enumeration
-
-Discover every production entry point. Use framework-specific patterns.
-
 ### HTTP Routes
 
-**Flask:**
-
 ```bash
+# Flask
 grep -rn "@app.route\|@blueprint.route\|add_url_rule" . --include="*.py" 2>/dev/null
-```
 
-**Django:**
-
-```bash
+# Django
 grep -rn "urlpatterns\|path(\|re_path(" . --include="*.py" 2>/dev/null
-```
 
-**FastAPI:**
-
-```bash
+# FastAPI
 grep -rn "@app.get\|@app.post\|@router.get\|@router.post" . --include="*.py" 2>/dev/null
-```
 
-**Express/Koa:**
-
-```bash
+# Express/Koa
 grep -rn "app.get(\|app.post(\|router.get(\|router.post(" . --include="*.js" --include="*.ts" 2>/dev/null
-```
 
-**Laravel:**
-
-```bash
+# Laravel
 grep -rn "Route::get\|Route::post\|Route::resource" . --include="*.php" 2>/dev/null
-```
 
-**Slim:**
-
-```bash
+# Slim
 grep -rn "\$app->get(\|\$app->post(" . --include="*.php" 2>/dev/null
 ```
 
-### CLI Handlers
+### Other Entry Points
 
 ```bash
-# Click, argparse, typer
+# CLI: click, argparse, typer
 grep -rn "@click.command\|@click.group\|add_parser(\|add_argument(\|@app.command" . --include="*.py" 2>/dev/null
 
-# Commander, yargs
-grep -rn ".command(\|.command(" . --include="*.js" --include="*.ts" 2>/dev/null
-```
+# CLI: commander, yargs
+grep -rn ".command(" . --include="*.js" --include="*.ts" 2>/dev/null
 
-### GraphQL Resolvers
-
-```bash
+# GraphQL
 grep -rn "@strawberry.type\|@strawberry.mutation\|resolve_\|typeDefs\|resolvers" . --include="*.py" --include="*.js" --include="*.ts" 2>/dev/null
-```
 
-### WebSocket, Queue, Cron, Middleware
-
-```bash
+# WebSocket, queue, cron, middleware
 grep -rn "@socketio.on\|ws.on(\|@celery.task\|@periodic_task\|@app.before_request\|app.use(" . --include="*.py" --include="*.js" --include="*.ts" --include="*.php" 2>/dev/null
+
+# Hardware
+grep -rn "serial.Serial(\|pyusb\|RPi.GPIO\|serialport\|dio_open(" . --include="*.py" --include="*.js" --include="*.ts" --include="*.php" 2>/dev/null
 ```
 
-For each entry point, record:
-- HTTP method (GET, POST, PUT, DELETE, etc., if applicable)
-- Route pattern or command name
-- Handler function or method name
-- File and line number
+After the route search, grep for request-access patterns (query, form, JSON body,
+files, headers, cookies) and confirm each sits inside a handler you already
+found. Check catch-all routes, error handlers, and dynamic route mounting.
 
-Exclude test files (`test_*.py`, `*_test.py`, `*.test.js`, `*.spec.js`, `__tests__`, `tests`, `test`),
-vendored code (`vendor/`, `node_modules/`), and generated code.
+Record each HTTP endpoint as an OpenAPI 3.1 path item with `operationId` and
+`x-audit-source` (`file:line` of the handler). WebSocket and streaming endpoints
+become AsyncAPI channels. Serial, USB, and GPIO interfaces become hardware
+interfaces. Cover every route; do not summarize.
 
 ---
 
-## Step 3: Input Inventory
+## Phase 2: Parameter Extraction and Sink Tracing
 
-For each entry point discovered in Step 2, identify user-controlled inputs by
-reading the handler function (1-2 reads per entry point).
+Read each handler in full. For every input, record name, location (path, query,
+header, cookie, body, file), type, required or optional, and default.
 
 Input sources:
 
-- HTTP query parameters: `request.args`, `request.GET`, `req.query`, `$_GET`
-- HTTP body: `request.json`, `request.form`, `req.body`, `$_POST`, `request.data`
-- HTTP headers: `request.headers`, `req.headers`, `$_SERVER['HTTP_*']`
-- HTTP cookies: `request.cookies`, `req.cookies`, `$_COOKIE`
-- URL path parameters: route variables like `<id>`, `:id`, `{id}`
-- File uploads: `request.files`, `req.file`, `$_FILES`
-- CLI arguments: parsed args from argparse, click, typer, commander
-- WebSocket message body
-- Queue message payload
+- Query: `request.args`, `request.GET`, `req.query`, `$_GET`
+- Body: `request.json`, `request.form`, `req.body`, `$_POST`, `request.data`
+- Headers: `request.headers`, `req.headers`, `$_SERVER['HTTP_*']`
+- Cookies: `request.cookies`, `req.cookies`, `$_COOKIE`
+- Path: route variables like `<id>`, `:id`, `{id}`
+- Files: `request.files`, `req.file`, `$_FILES`
+- CLI arguments, WebSocket message bodies, queue message payloads
 
-For each entry point, produce a row in a table:
+Follow each value at least one call deep, to the sink if reachable. Classify
+where it lands using the 12 typed sink categories in the schema reference. A
+parameter that reaches several sinks lists all types.
 
-```
-| # | Source Type | Location | Variable Name | Entry Point | Trust Level |
-|---|---|---|---|---|---|
-| 1 | query param | /api/users | user_id | GET /api/users | unauth |
-| 2 | body field | /api/upload | file_name | POST /api/upload | auth |
-```
+Record on each parameter:
 
-Trust level values:
-- `unauth`: No authentication check before this input is consumed
-- `auth`: Authentication middleware or decorator present
-- `internal`: Not reachable from outside the application
+- `x-audit-source`: where the value is read
+- `x-audit-sink`: `<type> at file:line` of the traced sink
+- `x-audit-sink-type`: list of categories
+- `x-audit-validation`: the check applied, or `none`
 
-Budget: 1-2 reads per entry point.
+Record a sink only when a request-derived value reaches it. A parameter with no
+sink still gets an entry with its validation noted. If an endpoint accepts no
+user-supplied input at all, set `x-audit-no-params: true` on the operation.
 
 ---
 
-## Step 4: Shallow Call Graph
-
-For each entry point handler function, map the call chain to dangerous sinks.
-
-For each entry point:
-
-1. Read the handler function body (1 read)
-2. List every function or method defined in the codebase (not framework/library) that it calls directly
-3. For each Level 1 callee, read its body and list functions it calls (Level 2)
-4. Identify which functions reach dangerous sinks
-
-Dangerous sink patterns:
-
-- SQL execution: `.execute(`, `.query(`, `.raw(`, `cursor.`
-- OS command execution: `system(`, `exec(`, `popen(`, `subprocess.`, `shell_exec(`
-- File I/O: `open(`, `read(`, `write(`, `unlink(`, `file_get_contents(`
-- HTTP/Network: `requests.get(`, `fetch(`, `curl(`, `http.get(`
-- Template rendering: `render(`, `render_to_string(`, `Markup(`
-- Deserialization: `pickle.loads(`, `unserialize(`, `json.loads(` in eval context
-
-For each entry point, produce a row:
-
-```
-| Entry Point | Inputs | App Functions Called | Sinks Reached | Files Touched |
-|---|---|---|---|---|
-| GET /api/users | user_id, role | get_user() -> fetch_profile() | SQL execute | models/user.py, services/auth.py |
-```
-
-Budget: 2-4 reads per entry point total. Do NOT trace deep data flow paths; that
-is the scanner's job. Stop at Level 2.
-
----
-
-## Step 5: Trust Boundary Map
-
-Identify authentication boundaries and external system calls.
-
-### Auth Boundaries
+## Phase 3: Auth Boundary Mapping
 
 Grep for authentication middleware and decorators:
 
@@ -206,162 +132,99 @@ Grep for authentication middleware and decorators:
 grep -rn "@login_required\|@requires_auth\|IsAuthenticated\|authMiddleware\|auth:" . --include="*.py" --include="*.js" --include="*.ts" --include="*.php" 2>/dev/null
 ```
 
-For each entry point, note whether it is protected by an auth check or not.
+Also read global middleware registration, role checks inside handlers, and any
+route that skips the middleware its siblings use.
 
-### External System Calls
+Tag each operation with:
 
-From the call graph (Step 4), identify where data flows to:
-- Databases (SQL, NoSQL, ORM calls)
-- External APIs (HTTP/HTTPS calls to third-party services)
-- File system (file read/write operations)
-- Subprocesses (command execution)
-- Message queues (Celery, RabbitMQ, SQS, etc.)
+- `x-audit-trust-boundary`: `unauth`, `auth`, or `admin`
+- `x-audit-auth-discovered`: list of mechanisms found in code, for example
+  `session-cookie`, `bearer-jwt`, `api-key-header`, `basic`
 
-### Third-Party Integrations
-
-List external services the codebase integrates with:
-- Payment processors (Stripe, PayPal, etc.)
-- Email services (SendGrid, AWS SES, etc.)
-- Cloud storage (AWS S3, GCP Cloud Storage, etc.)
-- Analytics (Segment, Mixpanel, etc.)
-- Chat/messaging (Slack, Discord, Twilio, etc.)
-
-Output as a narrative list with file:line references:
-
-```
-- Auth boundary at middleware/auth.py:15 (protects routes under /api/protected)
-- Database writes to PostgreSQL via ORM in services/user.py
-- External HTTP call to Stripe API in payment/processor.py:42
-- File uploads stored to /var/uploads via handlers/upload.py:18
-```
+Report what the code enforces, even where it differs from a declared security
+scheme. Only record what is visible at the auth phase given in the dispatch
+prompt.
 
 ---
 
-## Step 6: Shared Infrastructure Catalog
+## Phase 4: Cross-Boundary Flow Recording
 
-Identify modules imported by more than 50% of entry point handler chains.
-These are shared infrastructure and should NOT define partition boundaries.
+Identify calls from your slice into shared infrastructure and modules owned by
+other slices: queue publishes, RPC calls, imported services, DB wrappers, IPC.
 
-Method:
-1. For each app-defined module in the call graph, count how many entry point chains import it
-2. If import count > 50% of total entry points, add to shared infrastructure
-
-Examples:
-- Logger modules imported by all endpoints
-- ORM models imported by most data handlers
-- Auth utility modules imported by protected endpoints
-- Configuration modules imported everywhere
-
-Output as a table:
-
-```
-| Module | Role | Files | Entry Points Using | Percentage |
-|---|---|---|---|---|
-| application.auth | Authentication | auth.py, decorators.py | 18 | 72% |
-| domain.models | Data models | models.py | 22 | 88% |
-```
+Record `x-audit-cross-boundary` on each parameter that flows out of your
+directories, with `from`, `to`, and `via` (the call and its `file:line`). Follow
+the value through tracing paths far enough to name the sink, and record it. Do
+not map endpoints defined in tracing paths. If a flow cannot be traced past your
+tracing paths, record it as unresolved with the last location reached. Do not
+drop it.
 
 ---
 
-## Step 7: Partition Computation
+## Phase 5: Dynamic Confirmation
 
-Compute scope partitions for parallel scanning using union-find.
+Run only if SCOPING.md permits dynamic testing.
 
-1. Start with each entry point in its own set
-2. For each app-specific function in the call graph (NOT in shared infrastructure),
-   find all entry points that call it
-3. Merge those entry points' sets
-4. Each result is a partition (labeled SG-1, SG-2, etc.)
-
-Handle pathological cases:
-
-- Partition with >20 inputs or >15 files: sub-partition by route prefix or file
-- Single function connecting everything: promote to shared infrastructure and
-  recompute
-- Cannot split below 20 inputs: mark `SEQUENTIAL-FALLBACK`
-- Partition with <=2 inputs and 1 file: merge with nearest partition
-
-Output as a table:
-
-```
-| Partition | Input Count | Entry Points | App-Specific Files | Shared Nodes | Status |
-|---|---|---|---|---|---|
-| SG-1 | 8 | GET /users, GET /users/:id, POST /users | services/user.py, models/user.py | auth, logging | parallel |
-| SG-2 | 5 | POST /upload, GET /file/:id | handlers/upload.py | auth, storage | parallel |
-| SG-3 | 18 | (all admin routes) | admin/*.py | auth, logging, models | SEQUENTIAL-FALLBACK |
-```
-
----
-
-## Step 8: Dead Code Inventory
-
-Identify unreachable code by comparing all source files against partition
-membership.
-
-1. List all production source files (Python, PHP, JavaScript, TypeScript) excluding tests, vendor, generated
-2. List all files appearing in any partition's "App-Specific Files"
-3. The difference is the dead code inventory
-
-For each dead code file, determine:
-- Whether it contains dangerous sinks from Step 4
-- Whether it defines unused functions or classes (check for imports)
-- Whether it appears abandoned, legacy, or a failed feature
-
-Output as a table:
-
-```
-| File | Contains Sinks | Unused Symbols | Notes |
-|---|---|---|---|
-| legacy/old_payment.py | yes | process_payment, validate_card | Appears abandoned; newer payment logic in payment/processor.py |
-| utils/deprecated_auth.py | no | login_user, logout_user | Unused utilities; production uses auth.py |
-```
+- Probe only RFC1918 hosts that SCOPING.md names as targets. Never contact any
+  other host. Never touch the WAN.
+- Use GET, HEAD, and OPTIONS only, unless the dispatch prompt explicitly
+  authorizes write methods.
+- Confirm each discovered endpoint responds. Do not fuzz or send payloads.
+- Set `x-audit-dynamic-confirmed: true` when the endpoint responds as mapped,
+  `false` when it does not respond or was not probed.
+- If you need a credential, it must come from the dispatch prompt. Do not search
+  for one.
 
 ---
 
 ## Output Format
 
-Write a single markdown file with these H2 sections in the order listed:
+Write the partial specs to the output paths in the dispatch prompt, in the format
+defined by `attack-surface-schema.md`:
 
-1. `## Codebase Profile` (languages, frameworks, package managers, file counts)
-2. `## Entry Points` (count and brief summary)
-3. `## Input Inventory` (numbered table with >5 example rows)
-4. `## Trust Boundary Map` (auth boundaries, external calls, integrations)
-5. `## Application Call Graph` (entry point to sinks table)
-6. `## Shared Infrastructure` (table)
-7. `## Scope Partitions` (table with partition allocation)
-8. `## Dead Code Inventory` (table with dangerous sink callouts)
+- `<agent-name>.partial.yaml`: OpenAPI 3.1 for HTTP endpoints
+- `<agent-name>.async.partial.yaml`: AsyncAPI 3.0 for WebSocket, SockJS, streaming
+- `<agent-name>.hardware.partial.yaml`: hardware YAML for serial, USB, GPIO
 
-Use H1 for the document title. Use H3 for subsections within major sections if
-needed. Use fenced code blocks with language hints for grep patterns. Use
-markdown tables for all structured output.
+Write only the files your slice produces. Set `x-audit-meta` under `info` with
+`components`, `auth-phase`, and `agent`. If the slice has no detectable entry
+points, write a spec with empty `paths` and say so in `info.description`.
+
+---
+
+## Budget
+
+The budget is per agent and comes from the dispatch prompt. The orchestrator
+computes it as:
+
+```text
+budget = 20 + (files / 100) * 15 + (loc / 10000) * 10
+```
+
+with a floor of 30 and a ceiling of 300.
+
+- The budget covers all discovery tool calls: Grep, Glob, Read, and Bash
+  commands used for route and pattern discovery (Phases 1 through 4).
+- Bash calls for Phase 5 dynamic confirmation are counted separately,
+  capped at 20.
+- Spend the budget on exhaustive route discovery first, then handler reads,
+  then cross-boundary tracing.
+- When the budget is spent, stop and record remaining work in
+  `info.description`. Do not exceed it.
 
 ---
 
 ## Constraints
 
-- Return message must be under 20 words (the manifest file itself IS the output)
-- Do NOT perform vulnerability analysis; only map the attack surface
-- Exclude test files, vendored code, generated code, build artifacts
-- If no detectable entry points (pure library): report that explicitly and
-  produce an empty partition table
-- Budget: aim for 50-80 total grep/read calls for entire recon; be efficient
-- Follow LANGUAGE.md rules:
-  - No em dashes; restructure sentences instead
-  - American English spelling (color, analyze, initialize, behavior)
+- Return message must be under 20 words, confirming completion and output paths.
+- Map only endpoints in your assigned directories. Tracing paths are read-only.
+- Do not scan outside assigned and tracing directories.
+- Read-only against the target. The only files you write are your partial specs.
+- Every entry traces to a `file:line` you read or a dynamic observation. Do not
+  assume an endpoint accepts a parameter because similar ones do.
+- Do not perform vulnerability analysis.
+- Follow LANGUAGE.md:
+  - No em dashes; restructure sentences
+  - American English spelling
   - No emoji or decorative unicode
   - Terse and direct prose
-  - Line length: 88 characters maximum
-
----
-
-## Success Criteria
-
-The manifest is complete when:
-- All entry points in the codebase are enumerated
-- All user-controlled inputs for each entry point are identified
-- Call chains from entry points to dangerous sinks are mapped
-- Trust boundaries (auth, data flow) are documented
-- Partitions are feasible for parallel scanning (no partition >20 inputs or >15
-  files without SEQUENTIAL-FALLBACK marker)
-- Dead code inventory accounts for all non-partition files
-- Every table and structured section matches the format shown above

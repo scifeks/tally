@@ -3,22 +3,27 @@ name: tally-scan-external
 description: >
   Run an external Claude Code security scan on the developer's local
   code and submit developer-ready findings back to Tally through
-  MCP. Runs a reconnaissance phase to map the attack surface, then
-  dispatches domain family agents per code partition, sweeps dead
-  code, runs optional adversarial verification, and submits every
-  finding through Tally's ingest tools. Invoke when the user says
-  "scan with tally", "run tally scan", "tally-scan-external", or
-  asks to security-scan a repo with the Tally skill family.
+  MCP. Begins with scoping (SCOPING.md), runs multi-agent
+  reconnaissance to produce structured attack-surface specs (OpenAPI
+  3.1, AsyncAPI 3.0, hardware YAML), ingests specs via OAS3 MCP
+  tool, dispatches domain family agents per code partition with auth
+  phase awareness, sweeps dead code, runs optional adversarial
+  verification, and submits every finding through Tally's ingest
+  tools. Invoke when the user says "scan with tally", "run tally
+  scan", "tally-scan-external", or asks to security-scan a repo
+  with the Tally skill family.
 ---
 
 # Tally external scan orchestrator
 
 Runs a multi-phase security scan against the developer's local
-code. Phase 1 (recon) maps entry points, inputs, call graph, trust
-boundaries, and dead code. Phase 2 dispatches domain family agents
-per code partition with recon context. Phase 3 sweeps dead code.
-Phase 4 optionally runs adversarial verification. Phase 5 submits
-all findings to Tally through MCP and deduplicates.
+code. Phase 1 establishes scope. Phase 2 dispatches parallel recon
+mapper agents to build structured attack-surface specs. Phase 3
+ingests the merged spec into Tally's URL inventory. Phase 4
+dispatches domain family agents per code partition using partition
+data extracted from the specs. Phase 5 sweeps dead code. Phase 6
+optionally runs adversarial verification. Phase 7 submits all
+findings to Tally through MCP and deduplicates.
 
 The orchestrator never inspects the target code itself. It
 dispatches subagents, reads their structured output, routes
@@ -46,6 +51,7 @@ JSON dict.
 | `get_duplicate_candidates` | Return candidate duplicate groups after all submits complete. |
 | `resolve_duplicates` | Mark losers as duplicates of a picked survivor. |
 | `end_scan` | Close the scan_run and set finished_at. |
+| `ingest_attack_surface` | Populate URL inventory from a merged attack-surface spec. Takes `project`, `repo_name`, `spec_path`. Returns `{"status": "ok", "endpoints_ingested": int}`. |
 
 The exact per-tool argument list is documented at
 `mcp_server/server.py`. Every tool takes `auth_token` as a named
@@ -53,7 +59,33 @@ parameter.
 
 ## Steps
 
-### Step 1: Pick the project and repos
+### Step 1: Scoping
+
+Check for an existing `SCOPING.md` at
+`projects/<name>/agentic/SCOPING.md` (the path under
+`ProjectPaths.agentic_dir`).
+
+- **If present:** ask the developer via `AskUserQuestion` whether
+  to reuse the existing scope or redo it.
+- **If absent or redoing:** if the project is already known (from
+  step 2 of a previous run or the user's invocation), use it. If
+  not, call `list_projects` and ask the developer to pick. Read
+  `project.json` and repo configs to auto-populate
+  draft fields:
+  - Project name from `project.json`.
+  - Local paths from repo configs.
+  - Permitted targets from `RepoService.base_urls`.
+  - Auth contexts from `RepoAuth`.
+  - Languages from `RepoService.languages`.
+  Then invoke the `writing-scopes` skill via the Skill tool with
+  the pre-filled defaults. Skip Q5 (pinned state) and Q15
+  (authorization). Write the final `SCOPING.md` to
+  `projects/<name>/agentic/SCOPING.md`.
+
+Create the `agentic/` directory with `mkdir -p` using the path
+from `ProjectPaths.agentic_dir` before writing.
+
+### Step 2: Pick the project and repos
 
 Call `list_projects(auth_token=<token>)`. The response is a list
 of `{project_id, project_name, path, latest_run_id}` entries.
@@ -64,12 +96,12 @@ default to every repo the project has.
 Record `project_name`, `project_id`, `repo_ids`, `repo_paths`,
 and `latest_run_id` for later steps.
 
-### Step 2: Continue-mode or new-mode
+### Step 3: Continue-mode or new-mode
 
 Ask the developer whether to continue an existing run or start a
 new one. Use `AskUserQuestion` with two options:
 
-- Continue previous run (uses `latest_run_id` from step 1).
+- Continue previous run (uses `latest_run_id` from step 2).
 - Start a new scan.
 
 If the developer picks continue and `latest_run_id` is null, fall
@@ -89,7 +121,7 @@ create_scan_run(
 Record the returned `run_id`. This `run_id` MUST be reused for
 every submit, dedup, and end_scan call in this invocation.
 
-### Step 3: Adversarial verification opt-in
+### Step 4: Adversarial verification opt-in
 
 Ask the developer: `Run adversarial verification pass?
 (default: no)`. Use `AskUserQuestion` with two options:
@@ -97,59 +129,171 @@ Ask the developer: `Run adversarial verification pass?
 - No, submit findings directly.
 - Yes, run adversarial verification first.
 
-Record the answer for step 7. Adversarial verification is off by
+Record the answer for step 8. Adversarial verification is off by
 default; the developer opts in per invocation when they want extra
 rigor.
 
-### Step 4: Reconnaissance
+### Step 5: Reconnaissance
 
-Dispatch a recon subagent using agent type `tally-scan-recon`
-(defined in `.claude/agents/tally-scan-recon.md`, which pins
-the model to `claude-sonnet-4-6`).
+#### 5a: Check for existing recon
 
-The subagent's dispatch prompt must include:
+Check for an existing merged spec at
+`projects/<name>/agentic/recon/attack-surface.yaml`. If present,
+ask the developer via `AskUserQuestion` whether to reuse it or
+redo recon. If reusing, skip 5b through 5h and proceed to 5i
+(ingest), then step 6.
 
-- The target repo paths to scan. These are the directories
-  containing the code the user wants scanned. If the user is
-  running Claude Code from within the target project, the repo
-  path is the current working directory. If the Tally project
-  registry returns paths for the selected repos, use those.
-  When in doubt, use the cwd.
-- The path to write the manifest file (use
-  `<repo_path>/.tally-recon-manifest.md`).
-- An instruction to read `references/recon-prompt.md` for the
-  full methodology.
+#### 5b: Source tree survey
 
-The subagent's return message must be under 20 words; the
-manifest file IS the output.
+Run a bash survey of the source tree. Use `find` to count source
+files and lines of code per directory. Do not read source file
+contents at this stage.
 
-After the subagent returns, read the manifest file. It contains:
+```bash
+find <repo_path> -type f \( -name '*.py' -o -name '*.php' \
+  -o -name '*.js' -o -name '*.jsx' -o -name '*.ts' \
+  -o -name '*.tsx' \) \
+  | grep -v node_modules | grep -v vendor \
+  | grep -v __pycache__ | wc -l
+```
 
-1. **Codebase Profile**: languages, frameworks, package managers
-2. **Input Inventory**: numbered table of user-controlled inputs
-3. **Trust Boundary Map**: auth boundaries, external calls
-4. **Application Call Graph**: entry points to sinks
-5. **Shared Infrastructure**: modules used by >50% of endpoints
-6. **Scope Partitions**: SG-N groups with files and inputs
-7. **Dead Code Inventory**: unreachable files with sink flags
+```bash
+find <repo_path> -type f \( -name '*.py' -o -name '*.php' \
+  -o -name '*.js' -o -name '*.jsx' -o -name '*.ts' \
+  -o -name '*.tsx' \) \
+  | grep -v node_modules | grep -v vendor \
+  | grep -v __pycache__ | xargs wc -l 2>/dev/null | tail -1
+```
 
-If the manifest is empty or malformed, report to the developer
-that recon failed and fall back to legacy mode (step 4b).
+Record per-directory file counts and LOC totals.
 
-#### Step 4b: Legacy fallback
+#### 5c: Split decision
 
-If recon fails, fall back to the original dispatch mode:
-enumerate every `tally-scan-*` skill directory and dispatch one
-subagent per skill against the full repo, without recon context.
-This is the pre-partition behavior. Skip steps 5 and 6; proceed
-to step 7 with the collected findings.
+One recon mapper agent per repo by default. Apply these overrides:
 
-### Step 5: Dispatch domain agents per partition
+- **Subdivide** repos exceeding 200 source files or 30k LOC along
+  top-level directories.
+- **Group** repos under 20 source files into a single agent.
+- Separate infrastructure code from application code.
+- Read-only-for-tracing repos do not get their own agent.
+
+#### 5d: Agent manifest
+
+Build a text table of planned agents:
+
+| Agent name | Repo | Directories | Estimated size | Tracing paths | Output description |
+
+Present to the developer via `AskUserQuestion`. Wait for approval
+before dispatching.
+
+#### 5e: Dispatch recon mapper agents
+
+Dispatch `tally-scan-recon-mapper` agents in parallel (agent
+definition at `.claude/agents/tally-scan-recon-mapper.md`, model
+`claude-opus-4-6[1m]`).
+
+Each agent receives in its dispatch prompt:
+
+- SCOPING.md content (from step 1).
+- Assigned directories (from 5c).
+- Tracing paths (directories the agent may read but does not map).
+- Auth phase (from SCOPING.md auth contexts).
+- Budget, computed per agent from 5b survey data:
+  `20 + (files / 100) * 15 + (loc / 10000) * 10`, floor 30,
+  ceiling 300.
+- Output path:
+  `projects/<name>/agentic/recon/partials/<agent-name>.partial.yaml`.
+- Instruction to read `references/recon-prompt.md` for methodology
+  and `references/attack-surface-schema.md` for the spec format.
+
+The subagent's return message must be under 20 words; the partial
+spec files are the output.
+
+#### 5f: Collect partials
+
+After all agents return, read each partial file. Validate that
+each is valid YAML. Log any agent that produced empty or malformed
+output.
+
+#### 5g: Merge partials
+
+Merge all valid partials into a single spec at
+`projects/<name>/agentic/recon/attack-surface.yaml`. If agents
+produced AsyncAPI or hardware partials, merge those into
+`attack-surface-async.yaml` and `attack-surface-hardware.yaml`
+respectively.
+
+Duplicate endpoint resolution: when two partials contain the same
+endpoint, keep the one with more parameters.
+
+#### 5h: Completeness checklist
+
+Run the five completeness checks against the merged spec:
+
+1. **File coverage.** Every source file in 5b's survey appears in
+   at least one partition's file list in the merged spec. Source
+   files that do not appear in any partition are the **dead code
+   list** (consumed by step 7). Flag any uncovered files.
+2. **Endpoint exhaustiveness.** Run an independent `grep` for
+   route decorators and URL patterns across all in-scope repos.
+   Compare the count against the merged spec's total endpoint
+   count. A discrepancy greater than 10% triggers a warning.
+3. **Parameter completeness.** Every endpoint has at least one
+   parameter documented, or an explicit
+   `x-audit-no-params: true` annotation.
+4. **Cross-boundary resolution.** Every
+   `x-audit-cross-boundary` entry has a corresponding entry on
+   the other side (another partition's spec), or is flagged as
+   unresolved.
+5. **Auth boundary coverage.** Every auth middleware or decorator
+   found by `grep` in the codebase is referenced by at least one
+   endpoint's `x-audit-auth-discovered`. Unreferenced auth
+   checks suggest missed endpoints behind that auth.
+
+Present results to the developer. Ask whether to proceed or
+re-run specific components.
+
+#### 5i: Ingest attack surface
+
+Call the `ingest_attack_surface` MCP tool to populate the URL
+inventory from the merged spec:
+
+```
+ingest_attack_surface(
+  project=<project_name>,
+  repo_name=<repo_name>,
+  spec_path=<path to merged attack-surface.yaml>,
+)
+```
+
+The tool returns `{"status": "ok", "endpoints_ingested": <int>}`.
+Call once per repo if multiple repos produced separate merged
+specs. Log the ingested endpoint count.
+
+#### 5-fallback: Legacy mode
+
+If all mapper agents fail (empty or malformed output from every
+agent), skip recon entirely. Dispatch individual `tally-scan-*`
+skills against the full repo without partition context. Do NOT
+dispatch the retired `tally-scan-recon` agent.
+
+Legacy mode replaces steps 5 through 7 with direct skill
+dispatch (no partitions, no dead code sweep). The `tally-scan-*`
+skills produce findings directly. Proceed to step 8
+(adversarial) with those findings.
+
+### Step 6: Dispatch domain agents per partition
 
 Read `references/family-map.md` for the 10 domain family
 definitions and their component skills.
 
-For each partition in the recon manifest:
+Extract partition data from the merged YAML specs as structured
+text, following the extraction format in
+`references/attack-surface-schema.md` (Partition Data Extraction
+section). Each partition becomes a `${PARTITION_DATA}` block for
+the domain agent prompt.
+
+For each partition in the merged spec:
 
 1. Determine which languages are present in the partition's files
    (by file extension).
@@ -163,20 +307,24 @@ For each partition in the recon manifest:
       `references/domain-agent-prompt.md`, filling in:
       - `${FAMILY_NAME}`: the family name from family-map.md
       - `${PARTITION_ID}`: the partition label (SG-1, SG-2, etc.)
-      - `${PARTITION_DATA}`: the partition's section from the
-        recon manifest (inputs, entry points, files, shared
-        infrastructure, trust boundaries)
+      - `${PARTITION_DATA}`: the structured text block extracted
+        from the merged YAML for this partition
       - `${SKILL_FILE_LIST}`: paths to each component skill's
         SKILL.md (from family-map.md "Skill Directories" column)
       - `${LANGUAGE_REF_LIST}`: paths to per-language reference
         files (e.g., `tally-scan-injection-sql/references/python.md`)
         for languages present in the partition
-   d. Dispatch the subagent using agent type `tally-scan-domain`.
+   d. Include the auth-phase mapping instruction in the prompt:
+      domain agents set `meta.auth_phase` per finding from each
+      endpoint's `x-audit-trust-boundary` in the partition data.
+      `unauth` maps to `unauthenticated`, `auth` to
+      `authenticated`, `admin` to `admin`.
+   e. Dispatch the subagent using agent type `tally-scan-domain`.
 
 Dispatch agents in parallel. Each agent returns a JSON list of
 findings.
 
-For partitions marked `SEQUENTIAL-FALLBACK` in the recon manifest,
+For partitions from repos that exceeded the 5c split thresholds,
 dispatch families sequentially (one at a time) to avoid context
 overload. Still dispatch all relevant families.
 
@@ -189,15 +337,17 @@ output:
   output").
 - Exclude it from the batch and continue with the remaining
   subagents' findings.
-- Track the failure for the summary in step 10.
+- Track the failure for the summary in step 11.
 
 The scan is best-effort; a single domain agent failure should not
 abort the whole run.
 
-### Step 6: Dead code sweep
+### Step 7: Dead code sweep
 
-Read the dead code inventory section from the recon manifest. If
-the inventory is empty, skip to step 7.
+Build the dead code list from the file coverage check in step 5h:
+source files that appear in the 5b survey but not in any
+partition's file list in the merged spec. If the list is empty,
+skip to step 8.
 
 For each domain family in `family-map.md`:
 
@@ -206,37 +356,37 @@ For each domain family in `family-map.md`:
 2. Build the subagent prompt from
    `references/dead-code-sweep-prompt.md`, filling in:
    - `${FAMILY_NAME}`: the family name
-   - `${DEAD_CODE_INVENTORY}`: the dead code inventory table
-     from the recon manifest
-   - `${SKILL_FILE_LIST}`: same as step 5
-   - `${LANGUAGE_REF_LIST}`: same as step 5, filtered to
+   - `${DEAD_CODE_INVENTORY}`: the dead code file list derived
+     from the 5h file coverage check
+   - `${SKILL_FILE_LIST}`: same as step 6
+   - `${LANGUAGE_REF_LIST}`: same as step 6, filtered to
      languages present in the dead code files
 
 Dispatch sweep agents in parallel using agent type
-`tally-scan-domain` (same agent type as step 5; the dispatch
+`tally-scan-domain` (same agent type as step 6; the dispatch
 prompt differentiates the behavior). Each returns a JSON list
 of findings (all with `confidence: potential` and
 `finding_type: ["weakness"]`).
 
 Collect sweep findings and merge them with the domain agent
-findings from step 5.
+findings from step 6.
 
-### Step 7: Optional adversarial pass
+### Step 8: Optional adversarial pass
 
-Concatenate all findings from steps 5 and 6 into a single batch.
+Concatenate all findings from steps 6 and 7 into a single batch.
 
-If step 3 was `no`: skip to step 8 with the raw batch.
+If step 4 was `no`: skip to step 9 with the raw batch.
 
-If step 3 was `yes`:
+If step 4 was `yes`:
 
 - Check for `.claude/skills/tally-scan-adversarial/` on disk.
 - If absent: report to the developer that the adversarial skill
-  is not installed, and proceed to step 8 with the raw batch.
+  is not installed, and proceed to step 9 with the raw batch.
 - If present: dispatch the `tally-scan-adversarial` skill on the
   batch. Its output is `{verified: [...], dropped: [...]}`.
-  Proceed to step 8 with the `verified` list.
+  Proceed to step 9 with the `verified` list.
 
-### Step 8: Submit each finding
+### Step 9: Submit each finding
 
 For each finding in the (possibly filtered) batch, call:
 
@@ -252,6 +402,8 @@ submit_finding(
 ```
 
 The `finding_payload` must conform to `mcp-payload-shape.md`.
+Domain agents set `meta.auth_phase` on each finding (see step
+6.d). Verify each submitted finding has this field populated.
 Track accepted and rejected counts by `rule_id`.
 
 On per-finding rejection, log the returned error string and
@@ -265,19 +417,19 @@ Never log:
 - The raw finding payload beyond `finding_id` and `status`. Code
   snippets in finding bodies may themselves contain secrets.
 
-### Step 9: Required dedup pass
+### Step 10: Required dedup pass
 
 Call `get_duplicate_candidates(project=<project_name>,
 run_id=<run_id>, auth_token=<token>)`. The response is
 `{"groups": [[<finding_id>, ...], ...]}`.
 
-If the groups list is empty, proceed to step 10.
+If the groups list is empty, proceed to step 11.
 
 For each group:
 
 - Fetch each finding's fields you need to reason about the
   survivor. If the finding data is not in your context from
-  step 8's accepted responses, do not skip; err on the side of
+  step 9's accepted responses, do not skip; err on the side of
   keeping every group's data explicit.
 - Pick the survivor by these criteria, in order:
   1. Tightest `line_number` (closest to the true sink).
@@ -304,7 +456,7 @@ For each group:
 This pass is required, not opt-in. Never skip it, even when every
 group appears to be a single-element self-group.
 
-### Step 10: Close the scan_run
+### Step 11: Close the scan_run
 
 Call:
 
@@ -317,33 +469,38 @@ end_scan(
 )
 ```
 
-Clean up the recon manifest file if one was written.
+Keep recon partials in `recon/partials/` for reuse and audit
+reference. Do not delete them.
 
 Report to the developer:
 
-- Recon results: number of entry points, inputs, partitions,
-  and dead code files identified.
-- Number of domain agents dispatched (by family and partition)
+- **Recon results:** number of recon mapper agents dispatched and
+  how many succeeded. Number of entry points, inputs, partitions,
+  and dead code files identified from the merged spec.
+- **Completeness checklist results:** pass or fail status for each
+  of the 5 checks from step 5h.
+- **Domain agents:** number dispatched (by family and partition)
   and how many succeeded.
-- Number of dead code sweep agents dispatched and how many
-  succeeded.
-- Names of any agents that failed (with family, partition, and
-  reason).
-- Number of findings collected: from domain agents vs. dead
-  code sweep.
-- Number accepted, rejected, and marked as duplicates.
-- Run ID for downstream inspection.
+- **Dead code sweep:** number of sweep agents dispatched and how
+  many succeeded.
+- **Failures:** names of any agents that failed (with family,
+  partition, and reason).
+- **Finding counts:** total collected from domain agents vs. dead
+  code sweep. Counts accepted, rejected, and marked as duplicate.
+- **Auth phase breakdown:** number of findings per auth phase
+  (`unauthenticated`, `authenticated`, `admin`).
+- **Run ID** for downstream inspection.
 
 ## Constraints
 
 - Reuse the same `run_id` for every submit, dedup, and end_scan
   call in this invocation. Never create a second run mid-flow.
-- The dedup pass in step 9 is required. Never skip it.
+- The dedup pass in step 10 is required. Never skip it.
 - Never log the `auth_token` value. Never log a raw finding
   payload beyond `finding_id` and `status`. Source snippets in
   finding bodies may themselves contain secrets.
-- The recon subagent MUST use model `claude-sonnet-4-6`. Do not
-  use the session model for recon.
+- Recon mapper agents MUST use model `claude-opus-4-6[1m]`. Do
+  not use the session model for recon.
 - Domain agents and sweep agents use the session's default model.
 - Dispatch domain agents per partition, not per individual skill.
   Each domain agent loads all its family's component skills as
@@ -357,6 +514,9 @@ Report to the developer:
   template for individual `tally-scan-*` skills.
 - `references/recon-prompt.md`: recon subagent prompt with
   attack surface mapping methodology.
+- `references/attack-surface-schema.md`: structured spec format
+  for OpenAPI 3.1, AsyncAPI 3.0, and hardware YAML with
+  `x-audit-*` extensions and the 12 typed sink categories.
 - `references/family-map.md`: maps domain families to their
   component `tally-scan-*` skills.
 - `references/gate-rules.md`: classification gate definitions
@@ -370,13 +530,13 @@ Report to the developer:
 
 ### No scanner skills installed
 
-If step 5 finds no `tally-scan-*` directories matching any
+If step 6 finds no `tally-scan-*` directories matching any
 family in `family-map.md`, report to the developer that no
 scanner skills are installed and stop. Do not create a scan_run.
 
 ### `list_projects` returns empty
 
-If step 1's `list_projects` returns no projects, report to the
+If step 2's `list_projects` returns no projects, report to the
 developer that no accessible projects exist for this token and
 stop.
 
@@ -389,10 +549,11 @@ different token.
 
 ### Recon fails
 
-If the recon subagent crashes or produces an empty/malformed
-manifest, fall back to legacy mode (step 4b): dispatch individual
-`tally-scan-*` skills against the full repo without recon context.
-Report the recon failure to the developer. Skip steps 5 and 6.
+If all recon mapper agents crash or produce empty/malformed
+output, fall back to legacy mode (step 5-fallback): dispatch
+individual `tally-scan-*` skills against the full repo without
+partition context. Report the recon failure to the developer.
+Legacy mode replaces steps 5 through 7 (see step 5-fallback).
 
 ### One domain agent fails
 
@@ -403,7 +564,8 @@ not abort the whole run.
 
 ### Pure library (no entry points)
 
-If recon reports no entry points, the entire codebase is treated
-as dead code. Skip step 5 (no partitions to scan). Step 6 sweeps
-every source file as dead code. Findings will all be
-`finding_type: ["weakness"]` with `confidence: potential`.
+If the merged spec has no entry points (empty `paths`), the
+entire codebase is treated as dead code. Skip step 6 (no
+partitions to scan). Step 7 sweeps every source file as dead
+code. Findings will all be `finding_type: ["weakness"]` with
+`confidence: potential`.
