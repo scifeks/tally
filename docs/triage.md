@@ -14,23 +14,12 @@ Two backends are supported:
   default).
 - **OpenCode** connects to a local Ollama instance running any compatible model.
 
-Triage also runs in one of two modes. Your configuration determines which one
-applies; it is not a preference you set directly.
+Triage runs in one of two interaction modes, picked per run:
 
-- **Auto-triage** runs headless inside a Docker container with filesystem and
-  network sandboxing, with no interaction required once started. It requires
-  either an Anthropic API key (Claude Code backend) or a local model (OpenCode
-  backend).
-- **MCP triage** runs interactively inside your own Claude Code session
-  instead of the container, using the `/tally-triage` skill. It is required
-  when using Claude Code without an API key: provider terms reserve
-  subscription sessions for direct interactive use, not headless automation,
-  so Tally cannot run Claude Code unattended inside the container in that
-  case. See [MCP Triage Mode](#mcp-triage-mode) for setup and usage.
+- **Interactive** runs inside your own Claude Code session using the `/tally-triage` skill through Tally's MCP server. You drive the session; Tally observes tool calls.
+- **Background** runs are spawned by Tally as an Agent SDK process that works through batches unattended. Background runs require a billing method, `plan` or `api`. See [Background triage](#background-triage) below and [Credential and Billing Model](credential-and-billing-model.md).
 
-In auto-triage, the agent receives the finding and source content inline,
-produces a structured JSON verdict, and exits. No persistent agent state is
-kept between findings.
+A legacy Docker container path still exists for local-provider (`"ollama"`, `"llama_cpp"`) runs and for Claude backend auto-triage with an API key; see [MCP Triage Mode](#mcp-triage-mode) and [Example: Enable Claude Code Triage](configuration.md#example-enable-claude-code-triage) in the configuration docs.
 
 Triage can also be started from the web UI. The Triage page shows batch progress in real time and lets you resume failed runs. See [docs/web-ui.md](web-ui.md) for the UI walkthrough.
 
@@ -134,6 +123,48 @@ Triage: 3 sessions run, 2 success, 1 failed, 0 incomplete
 
 The image build message appears only on the first run. On later runs, containers
 start within a few seconds if they are not already running.
+
+---
+
+## Background triage
+
+Background triage spawns an Agent SDK process that works through batches without you driving the session. It requires a billing method: `plan` for OAuth-backed usage against your Claude plan rate limits, or `api` for API-key billing. See [Credential and Billing Model](credential-and-billing-model.md) for the full credential and billing picture.
+
+### Starting a run
+
+CLI:
+
+```
+tally --project NAME --command triage --interaction-mode background --billing-method plan
+```
+
+REPL: `triage start --background --billing plan`.
+
+Omitting `--billing-method` applies `claude.default_billing_method` from `config/global.json` (fallback: `ANTHROPIC_DEFAULT_BILLING_METHOD` env var). If neither is set, Tally starts on plan and auto-fails-over to API on `RATE_LIMIT_PLAN`.
+
+### Auto-failover
+
+Auto-failover is permitted only when both `--billing-method` and `claude.default_billing_method` are absent, and an API key is available. The sequence:
+
+1. Attempt 1 runs on plan. On `RATE_LIMIT_PLAN`, Tally writes `triage_batch_executions.status = "rate_limited"` with `usage_pool = "plan"` and emits `BatchAttemptRateLimited`.
+2. Attempt 2 is started automatically on API. Tally writes a new attempt row with `usage_pool = "api"` and emits `BatchAttemptStarted`.
+3. If attempt 2 succeeds, status is `completed`. If it also rate-limits, the run aborts with no further automatic retry.
+
+Failover only runs plan-then-API. An explicit `--billing-method api` run that hits `RATE_LIMIT_API` does not auto-fail-over to plan.
+
+### Rate-limit and resume
+
+If a background run aborts with a rate limit, resume it with a chosen billing method:
+
+```
+tally --project NAME --command triage --resume RUN_ID --interaction-mode background --billing-method api
+```
+
+The resume path records the new attempt against the same run id. Prior attempts stay in `triage_batch_executions` as history.
+
+### Observable events
+
+The web UI subscribes to the triage SSE stream, which emits `BatchAttemptStarted`, `BatchAttemptRateLimited`, `BatchAttemptCompleted`, `BatchAttemptFailed`, `RunStarted`, `RunCompleted`, `RunFailed`, and `RunRateLimited`.
 
 ---
 

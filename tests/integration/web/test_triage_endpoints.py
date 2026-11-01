@@ -308,6 +308,10 @@ async def test_start_triage_returns_202_and_acquires_slot(
         started.update(kwargs)
 
     monkeypatch.setattr(TriageService, "_run_worker", fake_run_worker)
+    monkeypatch.setattr(
+        "application.mcp.token_minting.mint_bearer_token",
+        lambda tag, base_path: "tok-test",
+    )
 
     resp = await client.post(
         f"/api/v1/projects/{project_id}/triage",
@@ -361,6 +365,10 @@ async def test_start_triage_runs_worker_end_to_end(app_client, monkeypatch) -> N
 
     monkeypatch.setattr(_ctr, "ensure_triage_image", lambda *a, **kw: None)
     monkeypatch.setattr(_ctr, "ensure_triage_containers", lambda *a, **kw: None)
+    monkeypatch.setattr(
+        "application.mcp.token_minting.mint_bearer_token",
+        lambda tag, base_path: "tok-e2e",
+    )
 
     resp = await client.post(
         f"/api/v1/projects/{project_id}/triage",
@@ -778,6 +786,10 @@ async def test_resume_202_dispatches_with_explicit_scan_run_id(
         started.update(kwargs)
 
     monkeypatch.setattr(TriageService, "_run_worker", fake_run_worker)
+    monkeypatch.setattr(
+        "application.mcp.token_minting.mint_bearer_token",
+        lambda tag, base_path: "tok-resume-test",
+    )
 
     resp = await client.post(
         f"/api/v1/projects/{project_id}/triage/{run_id}/resume",
@@ -796,19 +808,22 @@ async def test_resume_202_dispatches_with_explicit_scan_run_id(
 # Repository: reset_for_resume
 
 
-def test_reset_for_resume_flips_in_progress_and_failed(app_client_sync) -> None:
+def test_reset_for_resume_flips_in_progress_failed_and_rate_limited(
+    app_client_sync,
+) -> None:
     factory = app_client_sync
     repo = TriageBatchRepository(factory)
     _seed_triage_batch(factory, run_id=11, finding_ids=[1], status="in_progress")
     _seed_triage_batch(factory, run_id=11, finding_ids=[2], status="failed")
     _seed_triage_batch(factory, run_id=11, finding_ids=[3], status="completed")
+    _seed_triage_batch(factory, run_id=11, finding_ids=[4], status="rate_limited")
 
     n = repo.reset_for_resume(11)
-    assert n == 2
+    assert n == 3
 
     rows = repo.list_for_run(11)
     statuses = sorted(r.status for r in rows)
-    assert statuses == ["completed", "pending", "pending"]
+    assert statuses == ["completed", "pending", "pending", "pending"]
 
 
 def test_reset_for_resume_resets_failed_regardless_of_attempts(
@@ -910,6 +925,10 @@ async def test_start_response_includes_previous_max_batch_id(
         return None
 
     monkeypatch.setattr(TriageService, "_run_worker", _noop)
+    monkeypatch.setattr(
+        "application.mcp.token_minting.mint_bearer_token",
+        lambda tag, base_path: "tok-prev-max",
+    )
 
     resp = await client.post(
         f"/api/v1/projects/{project_id}/triage",

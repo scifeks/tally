@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal, cast
 
 from application.cli.adapters import CliProgressReporter, CliPromptAdapter
 from application.cli.exit_codes import (
@@ -15,16 +15,24 @@ from application.cli.exit_codes import (
 )
 from application.cli.project import ProjectResolutionError, resolve_project
 from application.locking.exceptions import JobBusy
+from application.mcp.token_minting import mint_bearer_token
 from application.project.repositories_service import ProjectRepositoriesService
 from application.tools.orchestrator import ScanCancelled
 from core.config.manager import ConfigManager
 from core.project_paths import ProjectPaths
+from domain.scans.vuln_scanner_registry import (
+    UnknownScannerSkill,
+    group_by_family,
+    list_scanners,
+    resolve_display_slug,
+)
 from factories.persistence import (
     create_finding_repo,
     create_overrides_repo,
     create_repo_repo,
     create_scan_repos,
     create_url_finding_repo,
+    load_active_repos,
 )
 from factories.scanning import create_git_diff, get_scan_service
 
@@ -42,6 +50,22 @@ def cmd_scan(
     base_path: Path,
 ) -> int:
     """Run a scan and return an exit code."""
+    if args.list_skills:
+        return _cmd_scan_list_skills()
+
+    if args.resume is not None:
+        return _cmd_scan_resume(args, project_registry, base_path)
+
+    mode_flags_present = (
+        args.interaction_mode
+        or args.billing_method
+        or args.api_key_override
+        or args.only
+        or args.exclude
+    )
+    if mode_flags_present:
+        return _cmd_scan_background(args, project_registry, base_path)
+
     try:
         project_id, project_row = resolve_project(project_registry, args.project)
         project_name = project_row.name
@@ -71,6 +95,263 @@ def cmd_scan(
         )
     finally:
         discover_tools(tool_registry, str(base_path))
+
+
+def _cmd_scan_list_skills() -> int:
+    """Display available vulnerability scanner skills and exit."""
+    print("Available Vulnerability Scanner Skills:\n")
+    for entry in list_scanners():
+        print(f"  {entry.display_slug:30} {entry.family:15} {entry.description}")
+    return SUCCESS
+
+
+def _cmd_scan_resume(
+    args: Namespace,
+    project_registry: ProjectRegistryService,
+    base_path: Path,
+) -> int:
+    """Resume a paused background scan."""
+    try:
+        project_id, project_row = resolve_project(project_registry, args.project)
+        project_name = project_row.name
+    except ProjectResolutionError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return PROJECT_NOT_FOUND
+
+    interaction_mode: Literal["interactive", "background"] | None = cast(
+        Literal["interactive", "background"] | None, args.interaction_mode
+    )
+    if interaction_mode is None:
+        interaction_mode = _infer_scan_mode(str(base_path), project_name, args.resume)
+
+    if interaction_mode == "interactive":
+        background_only = _check_background_only_flags(args)
+        if background_only:
+            print(
+                f"Error: {background_only} requires --interaction-mode background",
+                file=sys.stderr,
+            )
+            return INVALID_ARGS
+        _print_interactive_scan_info(str(base_path), project_name)
+        return SUCCESS
+
+    if args.only or args.exclude:
+        print(
+            "Error: --only and --exclude are not supported for resume",
+            file=sys.stderr,
+        )
+        return INVALID_ARGS
+
+    return _schedule_scan_launch(
+        project_id=project_id,
+        project_name=project_name,
+        base_path=str(base_path),
+        interaction_mode=interaction_mode,
+        billing_method=cast(Literal["plan", "api"] | None, args.billing_method),
+        api_key_override=args.api_key_override,
+        only=None,
+        exclude=None,
+        run_id=args.resume,
+        is_resume=True,
+    )
+
+
+def _infer_scan_mode(
+    base_path: str, project_name: str, run_id: int
+) -> Literal["interactive", "background"]:
+    """Infer the original interaction mode from execution history.
+
+    A usage_pool value of plan/api means background. When no usage_pool
+    is recorded, default to interactive (the safe mode).
+    """
+    paths = ProjectPaths.from_canonical(Path(base_path), project_name)
+    run_repo = create_scan_repos(paths.findings_db)[0]
+    pool = run_repo.get_latest_usage_pool(run_id)
+    if pool in ("plan", "api"):
+        return "background"
+    return "interactive"
+
+
+def _check_background_only_flags(args: Namespace) -> str | None:
+    """Return the first flag name that requires background mode, or None."""
+    if args.only:
+        return "--only"
+    if args.exclude:
+        return "--exclude"
+    if args.api_key_override:
+        return "--api-key-override"
+    if args.billing_method:
+        return "--billing-method"
+    return None
+
+
+def _cmd_scan_background(
+    args: Namespace,
+    project_registry: ProjectRegistryService,
+    base_path: Path,
+) -> int:
+    """Start a background or interactive scan using mode flags."""
+    try:
+        project_id, project_row = resolve_project(project_registry, args.project)
+        project_name = project_row.name
+    except ProjectResolutionError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return PROJECT_NOT_FOUND
+
+    repos = load_active_repos(str(base_path), project_name)
+    if not repos:
+        print(f"Error: project {project_name!r} has no active repos", file=sys.stderr)
+        return GENERAL_ERROR
+
+    interaction_mode: Literal["interactive", "background"] = cast(
+        Literal["interactive", "background"],
+        args.interaction_mode or "interactive",
+    )
+
+    if interaction_mode == "interactive":
+        background_only = _check_background_only_flags(args)
+        if background_only:
+            print(
+                f"Error: {background_only} requires --interaction-mode background",
+                file=sys.stderr,
+            )
+            return INVALID_ARGS
+        _print_interactive_scan_info(str(base_path), project_name)
+        return SUCCESS
+
+    only: list[str] | None = None
+    exclude: list[str] | None = None
+
+    if args.only and args.exclude:
+        print("Error: --only and --exclude are mutually exclusive", file=sys.stderr)
+        return INVALID_ARGS
+
+    try:
+        if args.only:
+            only_items = [s.strip() for s in args.only.split(",") if s.strip()]
+            only = _resolve_scanner_slugs(only_items)
+        if args.exclude:
+            exclude_items = [s.strip() for s in args.exclude.split(",") if s.strip()]
+            exclude = _resolve_scanner_slugs(exclude_items)
+    except (UnknownScannerSkill, ValueError) as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return INVALID_ARGS
+
+    return _schedule_scan_launch(
+        project_id=project_id,
+        project_name=project_name,
+        base_path=str(base_path),
+        interaction_mode=interaction_mode,
+        billing_method=cast(Literal["plan", "api"] | None, args.billing_method),
+        api_key_override=args.api_key_override,
+        only=only,
+        exclude=exclude,
+        run_id=None,
+    )
+
+
+def _print_interactive_scan_info(base_path: str, project_name: str) -> None:
+    """Mint an MCP bearer token and print connection info for interactive scan."""
+    token = mint_bearer_token(
+        f"scan-interactive-{project_name}",
+        base_path=Path(base_path),
+    )
+    cfg = ConfigManager(base_path).global_config
+    mcp_url = f"http://{cfg.mcp.host}:{cfg.mcp.port}/mcp"
+
+    print("Interactive scan ready.")
+    print(
+        "Paste the connection info below into your Claude Code session "
+        "and run /tally-scan-external.\n"
+    )
+    print(f"  mcp_url:          {mcp_url}")
+    print(f"  mcp_bearer_token: {token}")
+
+
+def _resolve_scanner_slugs(items: list[str]) -> list[str]:
+    """Expand family names to display slugs and validate."""
+    families = group_by_family()
+    result: list[str] = []
+    for item in items:
+        if item in families:
+            result.extend(e.display_slug for e in families[item])
+        else:
+            resolve_display_slug(item)
+            result.append(item)
+    return list(dict.fromkeys(result))
+
+
+def _schedule_scan_launch(
+    *,
+    project_id: int,
+    project_name: str,
+    base_path: str,
+    interaction_mode: Literal["interactive", "background"],
+    billing_method: Literal["plan", "api"] | None,
+    api_key_override: str | None,
+    only: list[str] | None,
+    exclude: list[str] | None,
+    run_id: int | None,
+    is_resume: bool = False,
+) -> int:
+    """Create or reuse a scan row and launch via ScanBackgroundLauncher."""
+    from application.anthropic.mode_availability import (
+        BackgroundModeAvailabilityService,
+    )
+    from application.mcp.ingest_service import McpIngestService
+    from application.scans.background_launcher import ScanBackgroundLauncher
+
+    paths = ProjectPaths.from_canonical(Path(base_path), project_name)
+    run_repo = create_scan_repos(paths.findings_db)[0]
+    finding_repo = create_finding_repo(paths.findings_db)
+
+    cfg = ConfigManager(base_path).global_config
+    mcp_service = McpIngestService(
+        finding_repo=finding_repo,
+        run_repo=run_repo,
+    )
+    # CLI has no live SSE subscribers; events dropped on the floor.
+    launcher = ScanBackgroundLauncher(
+        mcp_service=mcp_service,
+        availability=BackgroundModeAvailabilityService(cfg),
+        config=cfg,
+        scan_phase_repo=mcp_service,
+        scan_event_sink=None,
+        scan_run_status_repo=run_repo,
+    )
+
+    is_new = run_id is None
+    if is_new:
+        run_id = run_repo.create(
+            project_id=project_id,
+            repo_ids=[],
+            tool_ids=["claudecode"],
+            domains=["llm"],
+            skip_enrichment=True,
+            status="queued",
+        )
+
+    try:
+        launcher.launch(
+            run_id=run_id,
+            project_name=project_name,
+            base_path=base_path,
+            interaction_mode=interaction_mode,
+            billing_method=billing_method,
+            only=only,
+            exclude=exclude,
+            adversarial=False,
+            api_key_source=api_key_override,
+        )
+    except ValueError as exc:
+        if not is_resume:
+            run_repo.set_status(run_id, "failed")
+        print(f"Error: {exc}", file=sys.stderr)
+        return GENERAL_ERROR
+
+    verb = "started" if is_new else "resumed"
+    print(f"Background scan {verb}: run_id={run_id}")
+    return SUCCESS
 
 
 def _cmd_scan_inner(

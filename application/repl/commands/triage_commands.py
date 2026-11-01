@@ -6,9 +6,12 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from application.locking import JobBusy
+from application.mcp.token_minting import mint_bearer_token
 from application.repl.adapters.console_triage_event_sink import (
     ConsoleTriageEventSink,
 )
+from application.repl.commands.scan_commands import _parse_shared_mode_flags
+from application.repl.exceptions import ReplArgumentError
 from application.triage.compose import ComposeGenerationError
 from application.triage.container import (
     DockerNotAvailableError,
@@ -26,6 +29,7 @@ from application.triage.orchestrator import (
     run_triage_dry_run,
 )
 from application.triage.runner import NoScanRunError
+from core.config import ConfigManager
 from factories.persistence import (
     ProjectNotFound,
     create_triage_service,
@@ -44,7 +48,18 @@ class TriageCommands:
     ) -> None:
         self._repl = repl
 
+    _TRIAGE_SUB_COMMANDS = {"start", "resume"}
+
     def cmd_triage(self, _cmd: str, args: list[str]) -> None:
+        if args and args[0] in self._TRIAGE_SUB_COMMANDS:
+            sub = args.pop(0)
+            dispatch = {
+                "start": self.cmd_triage_start,
+                "resume": self.cmd_triage_resume,
+            }
+            dispatch[sub](_cmd, args)
+            return
+
         if "--rebuild-container" in args:
             self._rebuild_container()
             return
@@ -157,6 +172,15 @@ class TriageCommands:
             )
             return
         result = handle.result.result()
+
+        if result.get("status") == "rate_limited":
+            self._repl.console.print(
+                f"[yellow]Triage paused: rate limited after "
+                f"{result['sessions_run']} session(s). "
+                f"Resume with: triage --resume[/yellow]"
+            )
+            return
+
         self._repl.console.print(
             f"Triage: {result['sessions_run']} sessions run, "
             f"{result['success']} success, "
@@ -239,3 +263,256 @@ class TriageCommands:
             self._repl.console.print(f"[red]Error:[/red] {exc}")
             return
         self._repl.console.print("[green]Triage agent image rebuilt.[/green]")
+
+    def cmd_triage_start(self, _cmd: str, args: list[str]) -> None:
+        """Start triage.
+
+        triage start [--interactive | --background]
+            [--billing plan|api] [--api-key-override <key>]
+        """
+        if not self._repl.active_project:
+            self._repl.console.print("[red]Error:[/red] No active project set.")
+            return
+
+        try:
+            interaction_mode, billing_method, api_key_override = (
+                _parse_shared_mode_flags(args)
+            )
+        except ReplArgumentError as exc:
+            self._repl.console.print(f"[red]Error:[/red] {exc}")
+            return
+
+        if args:
+            self._repl.console.print(f"[red]Error:[/red] Unknown flag: {args[0]}")
+            return
+
+        if interaction_mode is None:
+            interaction_mode = "interactive"
+
+        if interaction_mode == "interactive" and billing_method is not None:
+            self._repl.console.print(
+                "[red]Error:[/red] --billing requires --background mode"
+            )
+            return
+
+        readiness = self._repl.triage_readiness
+        if not readiness.enabled:
+            self._repl.console.print(f"[red]Error:[/red] {readiness.reason}")
+            return
+
+        if interaction_mode == "interactive":
+            if not self._ensure_image():
+                return
+            repos = load_active_repos(
+                self._repl.base_path,
+                self._repl.active_project,
+            )
+            repo_paths = {r.name: Path(r.path) for r in repos if r.path}
+            if not self._ensure_containers(repo_paths):
+                return
+
+        row = self._repl.project_registry.resolve_by_name(self._repl.active_project)
+        if row is None or row.archived_at:
+            self._repl.console.print(
+                f"[red]Error:[/red] project {self._repl.active_project!r} not found"
+            )
+            return
+
+        repos = load_active_repos(
+            self._repl.base_path,
+            self._repl.active_project,
+        )
+        repo_paths = {r.name: Path(r.path) for r in repos if r.path}
+
+        try:
+            service = create_triage_service(
+                self._repl.project_registry,
+                row.id,
+                repo_paths=repo_paths,
+            )
+        except ProjectNotFound:
+            self._repl.console.print(
+                f"[red]Error:[/red] project {self._repl.active_project!r} not found"
+            )
+            return
+
+        try:
+            handle = service.start_triage(
+                base_path=self._repl.base_path,
+                project_id=row.id,
+                project_name=self._repl.active_project,
+                tool_registry=self._repl.tool_registry,
+                event_sink=ConsoleTriageEventSink(self._repl.console),
+                interaction_mode=interaction_mode,
+                billing_method=billing_method,
+                api_key=api_key_override,
+            )
+        except NoScanRunError as exc:
+            self._repl.console.print(f"[red]Error:[/red] {exc}")
+            return
+        except JobBusy as exc:
+            self._repl.console.print(
+                "[yellow]Another triage is in progress"
+                f" (holder={exc.current_holder}).[/yellow]"
+            )
+            return
+
+        if interaction_mode == "interactive":
+            self._print_interactive_triage_info(
+                self._repl.base_path, handle.scan_run_id
+            )
+
+        result = handle.result.result()
+
+        if result.get("status") == "rate_limited":
+            self._repl.console.print(
+                f"[yellow]Triage paused: rate limited after "
+                f"{result['sessions_run']} session(s). "
+                f"Resume with: triage resume[/yellow]"
+            )
+            return
+
+        self._repl.console.print(
+            f"Triage: {result['sessions_run']} sessions run, "
+            f"{result['success']} success, "
+            f"{result['failed']} failed, "
+            f"{result['incomplete']} incomplete"
+        )
+
+    def cmd_triage_resume(self, _cmd: str, args: list[str]) -> None:
+        """Resume triage.
+
+        triage resume <scan_run_id>
+            [--interactive | --background]
+            [--billing plan|api] [--api-key-override <key>]
+        """
+        if not self._repl.active_project:
+            self._repl.console.print("[red]Error:[/red] No active project set.")
+            return
+
+        if not args:
+            self._repl.console.print(
+                "[red]Usage:[/red] triage resume <scan_run_id> [options]"
+            )
+            return
+
+        try:
+            scan_run_id = int(args[0])
+        except ValueError:
+            self._repl.console.print("[red]Error:[/red] scan_run_id must be an integer")
+            return
+
+        remaining_args = args[1:]
+        try:
+            interaction_mode, billing_method, api_key_override = (
+                _parse_shared_mode_flags(remaining_args)
+            )
+        except ReplArgumentError as exc:
+            self._repl.console.print(f"[red]Error:[/red] {exc}")
+            return
+
+        if remaining_args:
+            self._repl.console.print(
+                f"[red]Error:[/red] Unknown flag: {remaining_args[0]}"
+            )
+            return
+
+        if interaction_mode is None:
+            interaction_mode = "interactive"
+
+        if interaction_mode == "interactive" and billing_method is not None:
+            self._repl.console.print(
+                "[red]Error:[/red] --billing requires --background mode"
+            )
+            return
+
+        readiness = self._repl.triage_readiness
+        if not readiness.enabled:
+            self._repl.console.print(f"[red]Error:[/red] {readiness.reason}")
+            return
+
+        if interaction_mode == "interactive":
+            if not self._ensure_image():
+                return
+            repos = load_active_repos(
+                self._repl.base_path,
+                self._repl.active_project,
+            )
+            repo_paths = {r.name: Path(r.path) for r in repos if r.path}
+            if not self._ensure_containers(repo_paths):
+                return
+
+        row = self._repl.project_registry.resolve_by_name(self._repl.active_project)
+        if row is None or row.archived_at:
+            self._repl.console.print(
+                f"[red]Error:[/red] project {self._repl.active_project!r} not found"
+            )
+            return
+
+        repos = load_active_repos(
+            self._repl.base_path,
+            self._repl.active_project,
+        )
+        repo_paths = {r.name: Path(r.path) for r in repos if r.path}
+
+        try:
+            service = create_triage_service(
+                self._repl.project_registry,
+                row.id,
+                repo_paths=repo_paths,
+            )
+        except ProjectNotFound:
+            self._repl.console.print(
+                f"[red]Error:[/red] project {self._repl.active_project!r} not found"
+            )
+            return
+
+        try:
+            handle = service.resume_triage(
+                base_path=self._repl.base_path,
+                project_id=row.id,
+                project_name=self._repl.active_project,
+                scan_run_id=scan_run_id,
+                tool_registry=self._repl.tool_registry,
+                event_sink=ConsoleTriageEventSink(self._repl.console),
+                interaction_mode=interaction_mode,
+                billing_method=billing_method,
+                api_key=api_key_override,
+            )
+        except JobBusy as exc:
+            self._repl.console.print(
+                "[yellow]Another triage is in progress"
+                f" (holder={exc.current_holder}).[/yellow]"
+            )
+            return
+
+        if interaction_mode == "interactive":
+            self._print_interactive_triage_info(self._repl.base_path, scan_run_id)
+
+        result = handle.result.result()
+
+        if result.get("status") == "rate_limited":
+            self._repl.console.print(
+                f"[yellow]Triage paused: rate limited after "
+                f"{result['sessions_run']} session(s).[/yellow]"
+            )
+            return
+
+        self._repl.console.print(
+            f"Triage: {result['sessions_run']} sessions run, "
+            f"{result['success']} success, "
+            f"{result['failed']} failed, "
+            f"{result['incomplete']} incomplete"
+        )
+
+    def _print_interactive_triage_info(self, base_path: str, scan_run_id: int) -> None:
+        """Mint an MCP bearer token and print connection info for interactive triage."""
+        token = mint_bearer_token(
+            f"triage-interactive-{scan_run_id}",
+            base_path=Path(base_path),
+        )
+        cfg = ConfigManager(base_path).global_config
+        mcp_url = f"http://{cfg.mcp.host}:{cfg.mcp.port}/mcp"
+
+        self._repl.console.print(f"\n  mcp_url:          {mcp_url}")
+        self._repl.console.print(f"  mcp_bearer_token: {token}\n")

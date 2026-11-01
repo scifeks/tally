@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 from application.ports.triage_agent import OneshotTriageBackendPort
 
@@ -39,6 +39,9 @@ class ResolvedTriageConfig:
     timeout_seconds: int
     retry_count: int
     debug: bool
+    billing_method: Literal["plan", "api"] | None = None
+    api_key_source: str | None = None
+    auto_failover: bool = False
 
 
 def resolve_triage_config(*, app_root: Path) -> ResolvedTriageConfig:
@@ -75,6 +78,9 @@ def resolve_triage_config(*, app_root: Path) -> ResolvedTriageConfig:
         if val is not None:
             merged[key] = val
 
+    billing_method = merged.get("default_billing_method")
+    api_key_source = merged.get("api_key") if billing_method == "api" else None
+
     return ResolvedTriageConfig(
         provider_name=provider_name,
         base_url=merged.get("base_url", ""),
@@ -82,6 +88,8 @@ def resolve_triage_config(*, app_root: Path) -> ResolvedTriageConfig:
         timeout_seconds=merged.get("timeout_seconds", 300),
         retry_count=merged.get("retry_count", 0),
         debug=feature.debug,
+        billing_method=billing_method,
+        api_key_source=api_key_source,
     )
 
 
@@ -114,8 +122,22 @@ class TriageAgentFactory:
     def __init__(self, *, app_root: Path) -> None:
         self._app_root = app_root
 
-    def create(self) -> OneshotTriageBackendPort:
-        resolved = resolve_triage_config(app_root=self._app_root)
+    def create(
+        self, resolved: ResolvedTriageConfig | None = None
+    ) -> OneshotTriageBackendPort:
+        if resolved is None:
+            resolved = resolve_triage_config(app_root=self._app_root)
+
+        if resolved.provider_name == "claude_sdk":
+            from infrastructure.anthropic.claude_sdk_triage_agent import (
+                AgentSDKTriageAgent,
+            )
+
+            return AgentSDKTriageAgent(
+                billing_method=resolved.billing_method or "plan",
+                api_key_source=resolved.api_key_source,
+                model=resolved.model,
+            )
 
         from application.triage.compose import (
             COMPOSE_RELATIVE_PATH,
@@ -163,8 +185,13 @@ def build_triage_runner(
     project_id: int | None = None,
     scan_run_id: int | None = None,
     reset_for_resume_scan_run_id: int | None = None,
+    resolved_config: ResolvedTriageConfig | None = None,
 ) -> TriageRunner:
-    """Build a runner with the configured backend."""
+    """Build a runner with the configured backend.
+
+    When ``resolved_config`` is provided (background mode), it is used
+    directly instead of reading the provider from disk config.
+    """
     paths = ProjectPaths.from_canonical(app_root, project)
     if not paths.findings_db.exists():
         raise FileNotFoundError(f"Project database not found: {paths.findings_db}")
@@ -172,10 +199,20 @@ def build_triage_runner(
     if reset_for_resume_scan_run_id is not None:
         triage_repo.reset_for_resume(reset_for_resume_scan_run_id)
 
-    resolved = resolve_triage_config(app_root=app_root)
-    triage_provider = "anthropic" if resolved.provider_name == "claude" else "opencode"
+    resolved = resolved_config or resolve_triage_config(app_root=app_root)
+
+    if resolved.provider_name == "claude_sdk":
+        triage_provider = "anthropic"
+    elif resolved.provider_name == "claude":
+        triage_provider = "anthropic"
+    else:
+        triage_provider = "opencode"
     triaged_by = "auto_triage"
-    max_batch = MAX_FINDINGS_PER_BATCH if resolved.provider_name == "claude" else 1
+    max_batch = (
+        MAX_FINDINGS_PER_BATCH
+        if resolved.provider_name in ("claude", "claude_sdk")
+        else 1
+    )
 
     agent_factory = TriageAgentFactory(app_root=app_root)
 
@@ -189,7 +226,7 @@ def build_triage_runner(
         cancel_token=cancel_token,
         project_id=project_id,
         scan_run_id=scan_run_id,
-        triage_backend=agent_factory.create(),
+        triage_backend=agent_factory.create(resolved),
         session_timeout_seconds=resolved.timeout_seconds,
         retry_count=resolved.retry_count,
         tool_registry=tool_registry,
@@ -199,4 +236,9 @@ def build_triage_runner(
         triaged_by=triaged_by,
         debug=resolved.debug,
         max_findings_per_batch=max_batch,
+        billing_method=resolved.billing_method,
+        agent_factory=agent_factory,
+        resolved_config=resolved,
+        enable_auto_failover=resolved.auto_failover,
+        api_key_available=resolved.api_key_source is not None,
     )

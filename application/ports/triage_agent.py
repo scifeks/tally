@@ -17,7 +17,14 @@ class TriageBackendUnavailable(RuntimeError):
     Adapters raise this when their persistent process (relay, MCP host,
     etc.) has died. The runner catches it, aborts the whole triage run,
     and leaves remaining batches ``pending`` so a resume can retry them.
+
+    ``error_class`` carries the classified error kind from the adapter's
+    error classifier so the runner can persist it on the execution row.
     """
+
+    def __init__(self, *args: object, error_class: object = None) -> None:
+        super().__init__(*args)
+        self.error_class = error_class
 
 
 @dataclass(frozen=True)
@@ -99,4 +106,4 @@ class OneshotTriagePort(Protocol):
 
 @runtime_checkable
 class OneshotTriageBackendPort(OneshotTriagePort, TriageSessionPreparerPort, Protocol):
-    """One-shot backend contract. Adapters implement this from 2.2."""
+    """One-shot backend contract."""

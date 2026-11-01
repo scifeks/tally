@@ -219,20 +219,6 @@ class TestSubmitFindingHappyPath:
         assert finding.meta["title"] == "SQL Injection in User Lookup"
         assert finding.meta["owasp_name"] == "Injection"
 
-    def test_sets_triaged_at_timestamp(
-        self,
-        run_id: int,
-        finding_repo: FindingRepository,
-        run_repo: RunRepository,
-    ) -> None:
-        service = McpIngestService(finding_repo=finding_repo, run_repo=run_repo)
-        payload = _valid_payload()
-        result = service.submit_finding(run_id, payload)
-
-        finding = finding_repo.get_finding(result["finding_id"])
-        assert finding is not None
-        assert finding.meta.get("triaged_at") is not None
-
 
 class TestSubmitFindingValidation:
     def test_rejects_missing_description(

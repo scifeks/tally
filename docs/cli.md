@@ -33,6 +33,10 @@ Run security scans across one or more repositories.
 ```
 tally --project NAME --command scan [--repo REPOS] [--tool TOOLS | --skip-tools TOOLS]
                                     [--domain DOMAINS] [--since-commit COMMIT] [--skip-enrichment]
+                                    [--interaction-mode MODE] [--billing-method METHOD]
+                                    [--api-key-override KEY]
+                                    [--only SLUGS | --exclude SLUGS] [--list-skills]
+                                    [--resume RUN_ID]
 ```
 
 | Flag | Description |
@@ -43,6 +47,13 @@ tally --project NAME --command scan [--repo REPOS] [--tool TOOLS | --skip-tools 
 | `--domain DOMAINS` | Comma-separated domains (for DAST tools) |
 | `--since-commit COMMIT` | Scan only files changed since this commit |
 | `--skip-enrichment` | Skip finding enrichment after scanning |
+| `--interaction-mode MODE` | `interactive` or `background`. Default: `interactive` on start; inferred from the latest attempt's `usage_pool` on resume. |
+| `--billing-method METHOD` | `plan` or `api`. Only accepted with `--interaction-mode background`. Omitted means apply `claude.default_billing_method`. See [credential-and-billing-model.md](credential-and-billing-model.md). |
+| `--api-key-override KEY` | Override `claude.api_key` for this run. Only accepted with `--interaction-mode background`. |
+| `--only SLUGS` | Run only these vuln scanner skills. Comma-separated display slugs (`scan-xss-stored`) or family names (`xss`). |
+| `--exclude SLUGS` | Exclude these scanner skills. Same format as `--only`. Mutually exclusive with `--only`. |
+| `--list-skills` | Print the available vuln scanner skills and exit. |
+| `--resume RUN_ID` | Resume a prior scan run by its id. |
 
 `--tool` and `--skip-tools` are mutually exclusive. Repository, tool, and domain names are validated against the project configuration; unknown names exit with code 2.
 
@@ -141,6 +152,9 @@ Classify and score findings using an LLM agent.
 
 ```
 tally --project NAME --command triage [--batch] [--dry-run]
+                                      [--interaction-mode MODE] [--billing-method METHOD]
+                                      [--api-key-override KEY]
+                                      [--resume RUN_ID]
 tally --command triage --rebuild-container
 ```
 
@@ -149,8 +163,14 @@ tally --command triage --rebuild-container
 | `--batch` | Run in batch mode (non-interactive) |
 | `--dry-run` | Preview what would be triaged without executing |
 | `--rebuild-container` | Stop containers, rebuild the triage image, and exit |
+| `--interaction-mode MODE` | `interactive` or `background`. Default: `interactive` on start; inferred from the latest attempt's `usage_pool` on resume. |
+| `--billing-method METHOD` | `plan` or `api`. Only accepted with `--interaction-mode background`. Omitted means apply `claude.default_billing_method`. See [credential-and-billing-model.md](credential-and-billing-model.md). |
+| `--api-key-override KEY` | Override `claude.api_key` for this run. Only accepted with `--interaction-mode background`. |
+| `--resume RUN_ID` | Resume a prior triage run by its id. |
 
 Full triage requires Docker. It builds the triage agent image if needed, starts containers, and runs triage sessions against untriaged findings.
+
+Background triage auto-fails-over from plan to API only when `claude.default_billing_method` is unset and no explicit `--billing-method` is passed. See [triage.md](triage.md#background-triage) and [credential-and-billing-model.md](credential-and-billing-model.md).
 
 `--rebuild-container` does not require `--project`.
 

@@ -86,7 +86,7 @@ export interface Finding {
 
 /**
  * Mirrors `ApiError` from `lib/api/client.ts` but in plain-object form so it
- * can live in the Zustand UI store without serialising an Error class. Used
+ * can live in the Zustand UI store without serializing an Error class. Used
  * by the global mutation-error modal to show the user when an optimistic
  * update was rolled back.
  */
@@ -155,7 +155,7 @@ export interface Scan {
   id: number
   /** Numeric project id (matches backend `project_id: int`). */
   projectId: number
-  status: 'queued' | 'running' | 'done' | 'failed' | 'cancelling' | 'cancelled'
+  status: 'queued' | 'running' | 'done' | 'failed' | 'rate_limited' | 'cancelling' | 'cancelled'
   startedAt: string
   finishedAt: string | null
   /** Repository names included in the run (backend serializes as strings). */
@@ -290,7 +290,14 @@ export interface ScanLogEvent {
  * emitted on SSE `snapshot` events. Matches `TriageRun.status` in
  * `web/api/schemas.py`.
  */
-export type TriageRunStatus = 'queued' | 'running' | 'done' | 'failed' | 'cancelling' | 'cancelled'
+export type TriageRunStatus =
+  | 'queued'
+  | 'running'
+  | 'done'
+  | 'failed'
+  | 'rate_limited'
+  | 'cancelling'
+  | 'cancelled'
 
 /**
  * UI-only page status used by the `useUI` store to gate project switching.
@@ -299,7 +306,13 @@ export type TriageRunStatus = 'queued' | 'running' | 'done' | 'failed' | 'cancel
  */
 export type TriagePageStatus = 'idle' | 'running' | 'completed' | 'cancelled' | 'failed'
 
-export type TriageBatchStatus = 'pending' | 'in_progress' | 'completed' | 'failed' | 'cancelled'
+export type TriageBatchStatus =
+  | 'pending'
+  | 'in_progress'
+  | 'completed'
+  | 'failed'
+  | 'rate_limited'
+  | 'cancelled'
 
 /**
  * One batch within a triage run. Mirrors `TriageBatchItem` in
@@ -351,8 +364,13 @@ export type TriageLogEventType =
   | 'batch_completed'
   | 'batch_failed'
   | 'batch_retry'
+  | 'batch_attempt_started'
+  | 'batch_attempt_completed'
+  | 'batch_attempt_failed'
+  | 'batch_attempt_rate_limited'
   | 'run_completed'
   | 'run_cancelled'
+  | 'run_rate_limited'
   | 'triage_failed'
 
 export interface TriageLogEvent {
@@ -822,7 +840,7 @@ export interface ProjectInfo {
   findingCount: number
 }
 
-/** PATCH body for `useUpdateProjectInfo` - only the three mutable fields. */
+/** PATCH body for `useUpdateProjectInfo`, limited to the three mutable fields. */
 export interface ProjectInfoUpdate {
   companyName?: string
   departmentName?: string

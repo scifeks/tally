@@ -366,7 +366,7 @@ def test_cancel_during_batch_loop_cleans_up(
         cancel_token=token,
     )
 
-    def _claim_then_cancel(run_id: int) -> TriageBatchRow | None:
+    def _claim_then_cancel(run_id: int, **_kwargs: object) -> TriageBatchRow | None:
         del run_id
         batch = _make_semgrep_batch(1, [10])
         store.claim_batch.side_effect = [None]

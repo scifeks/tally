@@ -44,6 +44,19 @@ Tally is a security auditing platform that eliminates the noise and busy work in
   - llama.cpp. See [docs/llm-providers.md](docs/llm-providers.md) for setup.
 - **Security tools are optional**. Tally skips tools that are not installed. On first run, an interactive setup wizard detects available tools and configures them.
 
+### Four supported credential configurations
+
+Background triage and scan runs pick one of four Anthropic credential paths. Tally never intermediates credentials; the Agent SDK or `claude` binary picks the ambient credential by its own precedence.
+
+| Config | Auth source | Bills against |
+|---|---|---|
+| 1 | `claude /login` or `claude setup-token` (OAuth) | Claude plan rate limits |
+| 2 | `ANTHROPIC_API_KEY` from a Console org linked to the plan | Monthly API credit allocation, then per-token |
+| 3 | `ANTHROPIC_API_KEY` from a Console org linked to the plan (separate quota from interactive) | Same credit allocation |
+| 4 | `ANTHROPIC_API_KEY` not linked to a plan | Pure pay-as-you-go API rates |
+
+See [docs/credential-and-billing-model.md](docs/credential-and-billing-model.md) for setup, auto-failover rules, and the rate-limit resume flow.
+
 ## Quick Start
 
 ```bash
@@ -126,26 +139,27 @@ Tools can run locally or inside a Docker container. The execution mode is config
 
 ## Documentation
 
-- [docs/usage.md](docs/usage.md) - Choosing an interface: web UI, REPL, or CLI
-- [docs/web-ui.md](docs/web-ui.md) - Web UI walkthrough: dashboard, findings, scans, triage, reports, chat, and configuration
-- [docs/repl.md](docs/repl.md) - REPL commands and terminal workflows
-- [docs/cli.md](docs/cli.md) - Non-interactive CLI for automation, CI pipelines, and scripted workflows
-- [docs/configuration.md](docs/configuration.md) - Config file reference
-- [docs/tools.md](docs/tools.md) - Supported tools and detection strategies
-- [docs/llm-providers.md](docs/llm-providers.md) - LLM provider setup and configuration for chat, enrichment, reports, embeddings, and triage
-- [docs/antares-shim.md](docs/antares-shim.md) - Antares CWE scanner Ollama completions shim configuration
-- [docs/chat.md](docs/chat.md) - RAG chat configuration and usage
-- [docs/report.md](docs/report.md) - Report generation guide and PDF assembly
-- [docs/burp.md](docs/burp.md) - Burp Suite integration: REST API scans, Organizer polling, and scan configurations
-- [docs/triage.md](docs/triage.md) - AI triage: auto-triage and MCP triage modes, container lifecycle, and security model
-- [docs/claude-code-scanning.md](docs/claude-code-scanning.md) - Claude Code scanning: setup, skills, and MCP server
-- [docs/url-discovery.md](docs/url-discovery.md) - URL discovery pipeline for DAST tools
-- [docs/endpoint-files.md](docs/endpoint-files.md) - Supplying OAS3, Swagger, Postman, or HAR endpoint files
-- [docs/docker.md](docs/docker.md) - Docker containers for npm-audit and composer-audit
-- [docs/integrations/defect-dojo.md](docs/integrations/defect-dojo.md) - DefectDojo integration for finding exports
-- [docs/adding-tool-wrappers.md](docs/adding-tool-wrappers.md) - Developer guide for adding new tool integrations
-- [docs/endpoint-file-adapter-internals.md](docs/endpoint-file-adapter-internals.md) - Developer guide for adding endpoint file format adapters
-- [docs/restrictions.md](docs/restrictions.md) - Legal restrictions
+- [docs/usage.md](docs/usage.md): Choosing an interface: web UI, REPL, or CLI
+- [docs/web-ui.md](docs/web-ui.md): Web UI walkthrough: dashboard, findings, scans, triage, reports, chat, and configuration
+- [docs/repl.md](docs/repl.md): REPL commands and terminal workflows
+- [docs/cli.md](docs/cli.md): Non-interactive CLI for automation, CI pipelines, and scripted workflows
+- [docs/configuration.md](docs/configuration.md): Config file reference
+- [docs/tools.md](docs/tools.md): Supported tools and detection strategies
+- [docs/llm-providers.md](docs/llm-providers.md): LLM provider setup and configuration for chat, enrichment, reports, embeddings, and triage
+- [docs/antares-shim.md](docs/antares-shim.md): Antares CWE scanner Ollama completions shim configuration
+- [docs/chat.md](docs/chat.md): RAG chat configuration and usage
+- [docs/report.md](docs/report.md): Report generation guide and PDF assembly
+- [docs/burp.md](docs/burp.md): Burp Suite integration: REST API scans, Organizer polling, and scan configurations
+- [docs/triage.md](docs/triage.md): AI triage: interactive and background modes, auto-failover, container lifecycle, and security model
+- [docs/claude-code-scanning.md](docs/claude-code-scanning.md): Claude Code scanning: setup, skills, MCP server, and background scan mode
+- [docs/credential-and-billing-model.md](docs/credential-and-billing-model.md): Credential and billing model: four supported configurations, OAuth plan vs API key, auto-failover, and rate-limit resume
+- [docs/url-discovery.md](docs/url-discovery.md): URL discovery pipeline for DAST tools
+- [docs/endpoint-files.md](docs/endpoint-files.md): Supplying OAS3, Swagger, Postman, or HAR endpoint files
+- [docs/docker.md](docs/docker.md): Docker containers for npm-audit and composer-audit
+- [docs/integrations/defect-dojo.md](docs/integrations/defect-dojo.md): DefectDojo integration for finding exports
+- [docs/adding-tool-wrappers.md](docs/adding-tool-wrappers.md): Developer guide for adding new tool integrations
+- [docs/endpoint-file-adapter-internals.md](docs/endpoint-file-adapter-internals.md): Developer guide for adding endpoint file format adapters
+- [docs/restrictions.md](docs/restrictions.md): Legal restrictions
 
 ## Legal Notice (California and Colorado)
 

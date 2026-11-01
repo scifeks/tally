@@ -6,7 +6,7 @@ import dataclasses
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from .factory import build_triage_runner
+from .factory import ResolvedTriageConfig, build_triage_runner
 
 if TYPE_CHECKING:
     from application.locking.cancellation import CancellationToken
@@ -115,6 +115,7 @@ def run_triage_for_project(
     app_root: Path,
     scan_run_id: int | None = None,
     holder_token: str | None = None,
+    resolved_config: ResolvedTriageConfig | None = None,
 ) -> dict[str, int]:
     """Service-path entry: full triage with sink + cancel."""
     runner = build_triage_runner(
@@ -130,6 +131,7 @@ def run_triage_for_project(
         triage_repo=triage_repo,
         audit_repo=audit_repo,
         repo_paths=repo_paths,
+        resolved_config=resolved_config,
     )
     return dataclasses.asdict(runner.run(holder_token=holder_token))
 
@@ -149,6 +151,7 @@ def resume_triage_for_project(
     cancel_token: CancellationToken | None = None,
     app_root: Path,
     holder_token: str | None = None,
+    resolved_config: ResolvedTriageConfig | None = None,
 ) -> dict[str, int]:
     """Service-path entry: resume an existing triage run."""
     runner = build_triage_runner(
@@ -165,5 +168,6 @@ def resume_triage_for_project(
         triage_repo=triage_repo,
         audit_repo=audit_repo,
         repo_paths=repo_paths,
+        resolved_config=resolved_config,
     )
-    return dataclasses.asdict(runner.run(holder_token=holder_token))
+    return dataclasses.asdict(runner.run(holder_token=holder_token, skip_batching=True))

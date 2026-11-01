@@ -4,21 +4,32 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
+
+from rich.table import Table
 
 from application.locking import JobBusy
+from application.mcp.token_minting import mint_bearer_token
 from application.project.repositories_service import ProjectRepositoriesService
 from application.repl.adapters.orchestrator_display import OrchestratorDisplay
 from application.repl.adapters.rich_console_prompt import RichConsolePromptAdapter
 from application.repl.adapters.stdout_progress_reporter import StdoutProgressReporter
 from application.repl.commands.scan_result_presenter import ScanResultPresenter
+from application.repl.exceptions import ReplArgumentError
 from application.tools.dast_prerequisites import DastPrerequisiteService
 from application.tools.executor import DEFAULT_TIMEOUT, ToolExecutor
 from application.tools.orchestrator import ScanCancelled
 from application.url_inventory.url_list_service import (
     ProjectNotFound as UrlProjectNotFound,
 )
+from core.config import ConfigManager
 from core.project_paths import ProjectPaths
+from domain.scans.vuln_scanner_registry import (
+    UnknownScannerSkill,
+    group_by_family,
+    list_scanners,
+    resolve_display_slug,
+)
 from factories.persistence import (
     create_finding_repo,
     create_overrides_repo,
@@ -26,6 +37,7 @@ from factories.persistence import (
     create_scan_repos,
     create_url_finding_repo,
     create_url_list_service,
+    load_active_repos,
 )
 from factories.scanning import (
     create_git_diff,
@@ -39,11 +51,81 @@ if TYPE_CHECKING:
     from core.config.schemas import Repository
 
 
+InteractionMode = Literal["interactive", "background"]
+BillingMethod = Literal["plan", "api"]
+
+
+def _parse_shared_mode_flags(
+    args: list[str],
+) -> tuple[InteractionMode | None, BillingMethod | None, str | None]:
+    """Parse --interactive, --background, --billing, --api-key-override.
+
+    Mutates *args* in-place, removing consumed tokens so callers can parse
+    remaining flags (e.g. --only, --exclude) from the leftovers.
+
+    Returns (interaction_mode, billing_method, api_key_override).
+    Raises ReplArgumentError on validation errors.
+    """
+    interaction_mode: InteractionMode | None = None
+    billing_method: BillingMethod | None = None
+    api_key_override: str | None = None
+
+    consumed: list[int] = []
+    i = 0
+    while i < len(args):
+        arg = args[i]
+        if arg == "--interactive":
+            interaction_mode = "interactive"
+            consumed.append(i)
+            i += 1
+        elif arg == "--background":
+            interaction_mode = "background"
+            consumed.append(i)
+            i += 1
+        elif arg == "--billing":
+            if i + 1 >= len(args) or args[i + 1].startswith("--"):
+                raise ReplArgumentError("--billing requires a value")
+            raw_billing = args[i + 1]
+            if raw_billing == "plan" or raw_billing == "api":
+                billing_method = raw_billing
+            else:
+                raise ReplArgumentError(
+                    f"billing method must be 'plan' or 'api', got {raw_billing!r}"
+                )
+            consumed.extend([i, i + 1])
+            i += 2
+        elif arg == "--api-key-override":
+            if i + 1 >= len(args) or args[i + 1].startswith("--"):
+                raise ReplArgumentError("--api-key-override requires a value")
+            api_key_override = args[i + 1]
+            consumed.extend([i, i + 1])
+            i += 2
+        else:
+            i += 1
+
+    for idx in reversed(consumed):
+        del args[idx]
+
+    return interaction_mode, billing_method, api_key_override
+
+
 class ScanCommands:
     """Handlers for tool scan execution commands."""
 
     def __init__(self, repl: REPL) -> None:
         self.repl = repl
+
+    def cmd_scan_skills(self, _cmd: str, _args: list[str]) -> None:
+        """scan skills - Display available vulnerability scanner skills."""
+        table = Table(title="Available Vulnerability Scanner Skills")
+        table.add_column("Display Slug", style="cyan")
+        table.add_column("Family", style="magenta")
+        table.add_column("Description", style="green")
+
+        for entry in list_scanners():
+            table.add_row(entry.display_slug, entry.family, entry.description)
+
+        self.repl.console.print(table)
 
     def _active_repos(self) -> list[Repository]:
         """Return active repos for the REPL's current project."""
@@ -56,8 +138,20 @@ class ScanCommands:
         )
         return service.list_active(row.id)
 
+    _SCAN_SUB_COMMANDS = {"skills", "start", "resume"}
+
     def cmd_scan(self, _cmd: str, args: list[str]) -> None:
-        """scan [--repo=<repo,...>] [--tool=<tool,...>] [--domain=<domain,...>]"""
+        """scan [skills | start | resume] [options]"""
+        if args and args[0] in self._SCAN_SUB_COMMANDS:
+            sub = args.pop(0)
+            dispatch = {
+                "skills": self.cmd_scan_skills,
+                "start": self.cmd_scan_start,
+                "resume": self.cmd_scan_resume,
+            }
+            dispatch[sub](_cmd, args)
+            return
+
         if not self.repl.active_project:
             self.repl.console.print(
                 "[yellow]No active project. Use 'project add' first.[/yellow]"
@@ -495,3 +589,331 @@ class ScanCommands:
             self.repl.console.print(f"[green]Exported to:[/green] {export_path}")
         except Exception as exc:
             self.repl.console.print(f"[red]Export failed:[/red] {exc}")
+
+    def cmd_scan_start(self, _cmd: str, args: list[str]) -> None:
+        """Start a scan.
+
+        scan start [--only x,y] [--exclude x,y]
+            [--interactive | --background]
+            [--billing plan|api] [--api-key-override <key>]
+        """
+        if not self.repl.active_project:
+            self.repl.console.print(
+                "[yellow]No active project. Use 'project add' first.[/yellow]"
+            )
+            return
+
+        try:
+            interaction_mode, billing_method, api_key_override, only, exclude = (
+                self._parse_mode_flags(args)
+            )
+        except ReplArgumentError as exc:
+            self.repl.console.print(f"[red]Error:[/red] {exc}")
+            return
+
+        if interaction_mode is None:
+            interaction_mode = "interactive"
+
+        project_name = self.repl.active_project
+
+        row = self.repl.project_registry.resolve_by_name(project_name)
+        if row is None or row.archived_at:
+            self.repl.console.print(
+                f"[red]Error:[/red] project {project_name!r} not found"
+            )
+            return
+
+        project_id = row.id
+        base_path = str(self.repl.base_path)
+
+        repos = load_active_repos(base_path, project_name)
+        if not repos:
+            self.repl.console.print(
+                f"[red]Error:[/red] project {project_name!r} has no active repos"
+            )
+            return
+
+        if interaction_mode == "interactive":
+            self._print_interactive_scan_info(base_path, project_name)
+            return
+
+        self._schedule_scan_launch(
+            project_id=project_id,
+            project_name=project_name,
+            base_path=base_path,
+            interaction_mode=interaction_mode,
+            billing_method=billing_method,
+            api_key_override=api_key_override,
+            only=only or None,
+            exclude=exclude or None,
+            adversarial=False,
+        )
+
+    def _print_interactive_scan_info(self, base_path: str, project_name: str) -> None:
+        """Mint an MCP bearer token and print connection info for interactive scan."""
+        token = mint_bearer_token(
+            f"scan-interactive-{project_name}",
+            base_path=Path(base_path),
+        )
+        cfg = ConfigManager(base_path).global_config
+        mcp_url = f"http://{cfg.mcp.host}:{cfg.mcp.port}/mcp"
+
+        self.repl.console.print(
+            "[green]Interactive scan ready.[/green]\n"
+            "Paste the connection info below into your Claude Code session "
+            "and run /tally-scan-external.\n"
+        )
+        self.repl.console.print(f"  mcp_url:          {mcp_url}")
+        self.repl.console.print(f"  mcp_bearer_token: {token}")
+
+    def _schedule_scan_launch(
+        self,
+        *,
+        project_id: int,
+        project_name: str,
+        base_path: str,
+        interaction_mode: InteractionMode,
+        billing_method: BillingMethod | None,
+        api_key_override: str | None,
+        only: list[str] | None,
+        exclude: list[str] | None,
+        adversarial: bool,
+        run_id: int | None = None,
+    ) -> None:
+        """Create or reuse a scan row and launch via ScanBackgroundLauncher.
+
+        Shared by cmd_scan_start and cmd_scan_resume. When ``run_id`` is
+        provided the row already exists (resume path); otherwise a new row
+        is created after all cheap validations pass.
+        """
+        from application.anthropic.mode_availability import (
+            BackgroundModeAvailabilityService,
+        )
+        from application.mcp.ingest_service import McpIngestService
+        from application.scans.background_launcher import ScanBackgroundLauncher
+
+        paths = ProjectPaths.from_canonical(self.repl.base_path, project_name)
+        run_repo = create_scan_repos(paths.findings_db)[0]
+        finding_repo = create_finding_repo(paths.findings_db)
+
+        cfg = ConfigManager(base_path).global_config
+        mcp_service = McpIngestService(
+            finding_repo=finding_repo,
+            run_repo=run_repo,
+        )
+        from application.repl.adapters.console_scan_event_sink import (
+            ConsoleScanEventSink,
+        )
+
+        launcher = ScanBackgroundLauncher(
+            mcp_service=mcp_service,
+            availability=BackgroundModeAvailabilityService(cfg),
+            config=cfg,
+            scan_phase_repo=mcp_service,
+            scan_event_sink=ConsoleScanEventSink(),
+            scan_run_status_repo=run_repo,
+        )
+
+        is_new = run_id is None
+        if is_new:
+            run_id = run_repo.create(
+                project_id=project_id,
+                repo_ids=[],
+                tool_ids=["claudecode"],
+                domains=["llm"],
+                skip_enrichment=True,
+                status="queued",
+            )
+
+        try:
+            launcher.launch(
+                run_id=run_id,
+                project_name=project_name,
+                base_path=base_path,
+                interaction_mode=interaction_mode,
+                billing_method=billing_method,
+                only=only,
+                exclude=exclude,
+                adversarial=adversarial,
+                api_key_source=api_key_override,
+            )
+        except ValueError as exc:
+            run_repo.set_status(run_id, "failed")
+            self.repl.console.print(f"[red]Error:[/red] {exc}")
+            return
+
+        verb = "started" if is_new else "resumed"
+        self.repl.console.print(
+            f"[green]Background scan {verb}:[/green] run_id={run_id}"
+        )
+
+    def cmd_scan_resume(self, _cmd: str, args: list[str]) -> None:
+        """Resume a scan.
+
+        scan resume <run_id>
+            [--interactive | --background]
+            [--billing plan|api] [--api-key-override <key>]
+        """
+        if not self.repl.active_project:
+            self.repl.console.print(
+                "[yellow]No active project. Use 'project add' first.[/yellow]"
+            )
+            return
+
+        if not args:
+            self.repl.console.print("[red]Usage:[/red] scan resume <run_id> [options]")
+            return
+
+        try:
+            run_id = int(args[0])
+        except ValueError:
+            self.repl.console.print("[red]Error:[/red] run_id must be an integer")
+            return
+
+        remaining_args = args[1:]
+
+        try:
+            interaction_mode, billing_method, api_key_override, only, exclude = (
+                self._parse_mode_flags(remaining_args)
+            )
+        except ReplArgumentError as exc:
+            self.repl.console.print(f"[red]Error:[/red] {exc}")
+            return
+
+        if only or exclude:
+            self.repl.console.print(
+                "[red]Error:[/red] --only and --exclude are not supported for resume"
+            )
+            return
+
+        if interaction_mode is None:
+            interaction_mode = "background"
+
+        if interaction_mode != "background":
+            self.repl.console.print(
+                "[red]Error:[/red] scan resume requires --background mode"
+            )
+            return
+
+        project_name = self.repl.active_project
+
+        row = self.repl.project_registry.resolve_by_name(project_name)
+        if row is None or row.archived_at:
+            self.repl.console.print(
+                f"[red]Error:[/red] project {project_name!r} not found"
+            )
+            return
+
+        project_id = row.id
+        base_path = str(self.repl.base_path)
+        paths = ProjectPaths.from_canonical(self.repl.base_path, project_name)
+
+        run_repo = create_scan_repos(paths.findings_db)[0]
+        scan_row = run_repo.get(run_id)
+        if scan_row is None or scan_row.project_id != project_id:
+            self.repl.console.print(f"[red]Error:[/red] scan run {run_id} not found")
+            return
+
+        if scan_row.status not in ("failed", "running", "rate_limited"):
+            self.repl.console.print(
+                f"[red]Error:[/red] run {run_id} status is "
+                f"{scan_row.status!r}; cannot resume"
+            )
+            return
+
+        from application.mcp.ingest_service import McpIngestService
+
+        finding_repo = create_finding_repo(paths.findings_db)
+        mcp_service = McpIngestService(
+            finding_repo=finding_repo,
+            run_repo=run_repo,
+        )
+
+        scan_config = mcp_service.get_scan_config(project=project_name, run_id=run_id)
+        only_stored = scan_config.get("only") or None
+        exclude_stored = scan_config.get("exclude") or None
+        adversarial = scan_config.get("adversarial_verification", False)
+
+        self._schedule_scan_launch(
+            project_id=project_id,
+            project_name=project_name,
+            base_path=base_path,
+            interaction_mode=interaction_mode,
+            billing_method=billing_method,
+            api_key_override=api_key_override,
+            only=only_stored,
+            exclude=exclude_stored,
+            adversarial=adversarial,
+            run_id=run_id,
+        )
+
+    def _parse_mode_flags(
+        self, args: list[str]
+    ) -> tuple[
+        InteractionMode | None,
+        BillingMethod | None,
+        str | None,
+        list[str] | None,
+        list[str] | None,
+    ]:
+        """Parse mode, billing, and filter flags.
+
+        Returns (interaction_mode, billing_method, api_key_override, only, exclude).
+        Raises ReplArgumentError on validation errors.
+        """
+        interaction_mode, billing_method, api_key_override = _parse_shared_mode_flags(
+            args
+        )
+
+        only: list[str] | None = None
+        exclude: list[str] | None = None
+
+        i = 0
+        while i < len(args):
+            flag = args[i]
+            if flag in ("--only", "--exclude"):
+                if i + 1 >= len(args) or args[i + 1].startswith("--"):
+                    raise ReplArgumentError(f"{flag} requires a comma-separated value")
+                values = [v.strip() for v in args[i + 1].split(",") if v.strip()]
+                if not values:
+                    raise ReplArgumentError(f"{flag} requires a comma-separated value")
+                if flag == "--only":
+                    only = values
+                else:
+                    exclude = values
+                i += 2
+            else:
+                i += 1
+
+        if only and exclude:
+            raise ReplArgumentError("--only and --exclude are mutually exclusive")
+
+        if interaction_mode == "interactive" and billing_method is not None:
+            raise ReplArgumentError("--billing requires --background mode")
+
+        if only:
+            try:
+                only = self._resolve_scanner_slugs(only)
+            except UnknownScannerSkill as exc:
+                raise ReplArgumentError(str(exc)) from exc
+
+        if exclude:
+            try:
+                exclude = self._resolve_scanner_slugs(exclude)
+            except UnknownScannerSkill as exc:
+                raise ReplArgumentError(str(exc)) from exc
+
+        return interaction_mode, billing_method, api_key_override, only, exclude
+
+    @staticmethod
+    def _resolve_scanner_slugs(items: list[str]) -> list[str]:
+        """Expand family names to display slugs and validate."""
+        families = group_by_family()
+        result: list[str] = []
+        for item in items:
+            if item in families:
+                result.extend(e.display_slug for e in families[item])
+            else:
+                resolve_display_slug(item)
+                result.append(item)
+        return list(dict.fromkeys(result))

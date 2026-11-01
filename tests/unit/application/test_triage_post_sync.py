@@ -159,3 +159,50 @@ class TestTriagePostSync:
             )
 
         assert future.result() == {"success": 5}
+
+    def test_rate_limited_result_skips_sync(
+        self,
+    ) -> None:
+        svc = _build_service()
+        future: Future[dict[str, int]] = Future()
+
+        with (
+            patch(
+                "application.triage.container.ensure_triage_image",
+            ),
+            patch(
+                "application.triage.container.ensure_triage_containers",
+            ),
+            patch(
+                "application.triage.triage_service.run_triage_for_project",
+                return_value={
+                    "sessions_run": 1,
+                    "success": 0,
+                    "failed": 1,
+                    "incomplete": 0,
+                    "status": "rate_limited",
+                    "last_error_class": "rate_limit_plan",
+                },
+            ),
+            patch("application.triage.triage_service.ConfigManager"),
+            patch(
+                "application.triage.triage_service.run_configured_syncs"
+            ) as mock_sync,
+        ):
+            svc._run_worker(
+                future=future,
+                holder_token="test",
+                base_path="/app",
+                project_id=1,
+                project_name="proj",
+                scan_run_id=42,
+                event_sink=None,
+                tool_registry=MagicMock(),
+                cancel_token=MagicMock(),
+                is_resume=False,
+            )
+
+            mock_sync.assert_not_called()
+
+        result = future.result()
+        assert result["status"] == "rate_limited"
