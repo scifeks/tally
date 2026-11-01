@@ -26,6 +26,7 @@ from application.ports.triage_agent import (  # noqa: E402
     TriageBackendUnavailable,
 )
 from application.triage.factory import ResolvedTriageConfig  # noqa: E402
+from application.triage.prompts.triage_prompt import TriagePrompt  # noqa: E402
 from application.triage.runner import TriageRunner  # noqa: E402
 from application.triage.verdict import Verdict  # noqa: E402
 from infrastructure.anthropic.error_classifier import ErrorClass  # noqa: E402
@@ -107,7 +108,12 @@ class _StubTriageBackend:
         yield PreparedTriageSession(cwd=app_root)
 
     def run_triage(
-        self, prompt: str, *, finding_id: int, timeout_seconds: int, cwd: Path
+        self,
+        prompt: TriagePrompt,
+        *,
+        finding_id: int,
+        timeout_seconds: int,
+        cwd: Path,
     ) -> Verdict:
         return _make_verdict(finding_id)
 
@@ -123,7 +129,12 @@ class _RateLimitingBackend:
         yield PreparedTriageSession(cwd=app_root)
 
     def run_triage(
-        self, prompt: str, *, finding_id: int, timeout_seconds: int, cwd: Path
+        self,
+        prompt: TriagePrompt,
+        *,
+        finding_id: int,
+        timeout_seconds: int,
+        cwd: Path,
     ) -> Verdict:
         raise TriageBackendUnavailable("rate limited", error_class=self._error_class)
 

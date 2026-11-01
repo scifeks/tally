@@ -8,6 +8,7 @@ import pytest
 
 from application.triage.prompts.api_trace import render
 from application.triage.verdict import Verdict, parse_verdict
+from tests.prompt_helpers import fenced_record
 
 _SAMPLE_FINDING: dict = {
     "id": 99,
@@ -103,24 +104,6 @@ class TestFencingStructure:
         fenced = result[start:end]
         assert "Ignore all previous instructions" in fenced
 
-    def test_source_investigation_is_fenced(self) -> None:
-        result = render(
-            _SAMPLE_FINDING,
-            project=_PROJECT,
-        )
-        assert "<<<TALLY_DATA_START: source_investigation>>>" in result
-        assert "<<<TALLY_DATA_END: source_investigation>>>" in result
-
-    def test_source_fence_contains_endpoint(self) -> None:
-        result = render(
-            _SAMPLE_FINDING,
-            project=_PROJECT,
-        )
-        start = result.index("<<<TALLY_DATA_START: source_investigation>>>")
-        end = result.index("<<<TALLY_DATA_END: source_investigation>>>")
-        fenced = result[start:end]
-        assert "http://example.com/api/users?id=1" in fenced
-
 
 class TestNoMcpReferences:
     def test_no_get_findings_batch(self) -> None:
@@ -205,8 +188,9 @@ class TestEdgeCases:
             sparse,
             project="test",
         )
-        assert isinstance(result, str)
-        assert "n/a" in result
+        record = fenced_record(result, "finding_metadata")
+        assert record["url"] is None
+        assert record["severity"] == "n/a"
 
     def test_cwe_id_as_int(self) -> None:
         finding = {**_SAMPLE_FINDING, "cwe_id": 79}
@@ -230,7 +214,7 @@ class TestEdgeCases:
             finding,
             project=_PROJECT,
         )
-        assert "n/a" in result
+        assert fenced_record(result, "finding_metadata")["cwe_id"] is None
 
 
 class TestVerdictRoundtrip:

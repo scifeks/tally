@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
+    from application.triage.prompts.triage_prompt import TriagePrompt
     from application.triage.verdict import Verdict
 
 
@@ -96,7 +97,7 @@ class OneshotTriagePort(Protocol):
 
     def run_triage(
         self,
-        prompt: str,
+        prompt: TriagePrompt,
         *,
         finding_id: int,
         timeout_seconds: int,
@@ -106,4 +107,4 @@ class OneshotTriagePort(Protocol):
 
 @runtime_checkable
 class OneshotTriageBackendPort(OneshotTriagePort, TriageSessionPreparerPort, Protocol):
-    """One-shot backend contract."""
+    """One-shot backend contract used by the runner."""

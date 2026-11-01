@@ -14,6 +14,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from application.triage.prompts.triage_prompt import TriagePrompt
 from application.triage.verdict import (
     Verdict,
     VerdictParseError,
@@ -24,6 +25,12 @@ from infrastructure.agents.opencode_triage_agent import (
 
 _FINDING_ID = 42
 _COMPOSE_PATH = Path("/app/docker/triage-agent/docker-compose.yaml")
+
+_PROMPT = TriagePrompt(
+    preamble="trusted instructions",
+    finding_data="hello finding 42",
+    guidance="more instructions",
+)
 
 
 def _agent(tmp_path: Path) -> OpenCodeTriageAgent:
@@ -162,7 +169,7 @@ def test_happy_path_returns_verdict(tmp_path: Path) -> None:
         with agent.prepare_session(project="p", run_id=1, app_root=tmp_path):
             with patch.object(agent, "_dispatch_prompt", side_effect=fake_dispatch):
                 verdict = agent.run_triage(
-                    "prompt",
+                    _PROMPT,
                     finding_id=_FINDING_ID,
                     timeout_seconds=60,
                     cwd=tmp_path,
@@ -173,7 +180,7 @@ def test_happy_path_returns_verdict(tmp_path: Path) -> None:
     assert verdict.severity == "high"
 
 
-def test_prompt_sent_as_base64(tmp_path: Path) -> None:
+def test_combined_prompt_sent_with_empty_system_line(tmp_path: Path) -> None:
     agent = _agent(tmp_path)
     mock_proc = _mock_relay(_relay_response())
     with patch("subprocess.Popen", return_value=mock_proc):
@@ -190,16 +197,16 @@ def test_prompt_sent_as_base64(tmp_path: Path) -> None:
                 agent, "_dispatch_prompt", side_effect=dispatch_and_write
             ):
                 agent.run_triage(
-                    "hello finding 42",
+                    _PROMPT,
                     finding_id=_FINDING_ID,
                     timeout_seconds=60,
                     cwd=tmp_path,
                 )
     written = mock_proc.stdin.write.call_args[0][0]
-    lines = written.strip().split("\n")
-    assert lines[0] == "60"
-    decoded = base64.b64decode(lines[1]).decode()
-    assert decoded == "hello finding 42"
+    timeout, system, user = written.strip().split("\n")
+    assert timeout == "60"
+    assert system == ""
+    assert base64.b64decode(user).decode() == _PROMPT.combined()
 
 
 def test_clears_stale_verdict_before_dispatch(tmp_path: Path) -> None:
@@ -215,7 +222,7 @@ def test_clears_stale_verdict_before_dispatch(tmp_path: Path) -> None:
         with agent.prepare_session(project="p", run_id=1, app_root=tmp_path):
             with patch.object(agent, "_dispatch_prompt", side_effect=fake_dispatch):
                 verdict = agent.run_triage(
-                    "prompt",
+                    _PROMPT,
                     finding_id=_FINDING_ID,
                     timeout_seconds=60,
                     cwd=tmp_path,
@@ -239,7 +246,7 @@ def test_missing_file_triggers_retry_with_error_context(tmp_path: Path) -> None:
         with agent.prepare_session(project="p", run_id=1, app_root=tmp_path):
             with patch.object(agent, "_dispatch_prompt", side_effect=fake_dispatch):
                 verdict = agent.run_triage(
-                    "original prompt",
+                    _PROMPT,
                     finding_id=_FINDING_ID,
                     timeout_seconds=60,
                     cwd=tmp_path,
@@ -259,7 +266,7 @@ def test_both_attempts_fail_raises(tmp_path: Path) -> None:
             with patch.object(agent, "_dispatch_prompt"):
                 with pytest.raises(VerdictParseError, match="verdict file not found"):
                     agent.run_triage(
-                        "prompt",
+                        _PROMPT,
                         finding_id=_FINDING_ID,
                         timeout_seconds=60,
                         cwd=tmp_path,
@@ -280,7 +287,7 @@ def test_nonzero_exit_raises(tmp_path: Path) -> None:
                 match="exited with code 1",
             ):
                 agent.run_triage(
-                    "prompt",
+                    _PROMPT,
                     finding_id=_FINDING_ID,
                     timeout_seconds=60,
                     cwd=tmp_path,
@@ -295,7 +302,7 @@ def test_timeout_exit_code_raises_timeout(tmp_path: Path) -> None:
         with agent.prepare_session(project="p", run_id=1, app_root=tmp_path):
             with pytest.raises(subprocess.TimeoutExpired):
                 agent.run_triage(
-                    "prompt",
+                    _PROMPT,
                     finding_id=_FINDING_ID,
                     timeout_seconds=60,
                     cwd=tmp_path,
@@ -310,7 +317,7 @@ def test_relay_death_raises(tmp_path: Path) -> None:
             mock_proc.poll.return_value = 1
             with pytest.raises(RuntimeError, match="exited"):
                 agent.run_triage(
-                    "prompt",
+                    _PROMPT,
                     finding_id=_FINDING_ID,
                     timeout_seconds=60,
                     cwd=tmp_path,
@@ -335,7 +342,7 @@ def test_finding_id_mismatch_retries_then_raises(tmp_path: Path) -> None:
                     match="finding_id mismatch",
                 ):
                     agent.run_triage(
-                        "prompt",
+                        _PROMPT,
                         finding_id=_FINDING_ID,
                         timeout_seconds=60,
                         cwd=tmp_path,
@@ -361,7 +368,7 @@ def test_missing_verdict_field_retries_then_raises(tmp_path: Path) -> None:
                     match="missing fields",
                 ):
                     agent.run_triage(
-                        "prompt",
+                        _PROMPT,
                         finding_id=_FINDING_ID,
                         timeout_seconds=60,
                         cwd=tmp_path,

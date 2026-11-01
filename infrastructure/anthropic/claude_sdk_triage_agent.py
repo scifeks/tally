@@ -30,6 +30,8 @@ from infrastructure.anthropic.subprocess_env import build_child_env
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
+    from application.triage.prompts.triage_prompt import TriagePrompt
+
 
 class _SDKRuntimeError(RuntimeError):
     """Carries status_code from SDK ResultMessage errors for the classifier."""
@@ -40,14 +42,20 @@ class _SDKRuntimeError(RuntimeError):
 
 
 def _run_sdk_once(
-    prompt: str,
+    instructions: str,
+    finding_data: str,
     model: str,
     billing_method: Literal["plan", "api"],
     api_key_source: str | None,
     cwd: str,
     timeout_seconds: int,
 ) -> str:
-    """Start one SDK session, send one prompt, return the final text output.
+    """Start one SDK session and return the final text output.
+
+    Instructions go in as the system prompt; only the fenced finding
+    data goes in as the user message. The provider's role hierarchy
+    keeps the two apart so prompt injection in finding content cannot
+    override the triage instructions.
 
     Separated from the class so tests can monkeypatch it without caring
     about the SDK's async internals.
@@ -71,11 +79,12 @@ def _run_sdk_once(
         cwd=cwd,
         permission_mode="bypassPermissions",
         env=env,
+        system_prompt=instructions,
     )
 
     async def _go() -> str:
         final_text = ""
-        async for msg in query(prompt=prompt, options=options):
+        async for msg in query(prompt=finding_data, options=options):
             if isinstance(msg, AssistantMessage):
                 for block in msg.content:
                     if isinstance(block, TextBlock):
@@ -122,7 +131,7 @@ class AgentSDKTriageAgent:
 
     def run_triage(
         self,
-        prompt: str,
+        prompt: TriagePrompt,
         *,
         finding_id: int,
         timeout_seconds: int,
@@ -130,7 +139,8 @@ class AgentSDKTriageAgent:
     ) -> Verdict:
         try:
             raw = _run_sdk_once(
-                prompt=prompt,
+                instructions=prompt.instructions,
+                finding_data=prompt.finding_data,
                 model=self._model,
                 billing_method=self._billing_method,
                 api_key_source=self._api_key_source,

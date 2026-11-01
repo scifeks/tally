@@ -16,6 +16,7 @@ import pytest
 
 from application.locking.cancellation import CancellationToken
 from application.ports.triage_agent import PreparedTriageSession
+from application.triage.prompts.triage_prompt import TriagePrompt
 from application.triage.runner import (
     TriageCancelled,
     TriageRunner,
@@ -53,7 +54,7 @@ class _PerFindingBackend:
 
     def __init__(self, *, prepared_cwd: Path | None = None) -> None:
         self._prepared_cwd = prepared_cwd
-        self.calls: list[tuple[str, int, int, Path]] = []
+        self.calls: list[tuple[TriagePrompt, int, int, Path]] = []
 
     @contextmanager
     def prepare_session(self, *, project: str, run_id: int, app_root: Path):
@@ -62,7 +63,7 @@ class _PerFindingBackend:
 
     def run_triage(
         self,
-        prompt: str,
+        prompt: TriagePrompt,
         *,
         finding_id: int,
         timeout_seconds: int,
@@ -86,7 +87,7 @@ class _FailingBackend(_PerFindingBackend):
 
     def run_triage(
         self,
-        prompt: str,
+        prompt: TriagePrompt,
         *,
         finding_id: int,
         timeout_seconds: int,
@@ -113,7 +114,7 @@ class _CancellingAfterFirstBackend(_PerFindingBackend):
 
     def run_triage(
         self,
-        prompt: str,
+        prompt: TriagePrompt,
         *,
         finding_id: int,
         timeout_seconds: int,

@@ -41,7 +41,8 @@ class FakeSdkController:
         original = adapter._run_sdk_once
 
         def fake(
-            prompt: str,
+            instructions: str,
+            finding_data: str,
             model: str,
             billing_method: str,
             api_key_source: str | None,
@@ -50,7 +51,8 @@ class FakeSdkController:
         ) -> str:
             self.calls.append(
                 {
-                    "prompt": prompt,
+                    "instructions": instructions,
+                    "finding_data": finding_data,
                     "model": model,
                     "billing_method": billing_method,
                     "api_key_source": api_key_source,

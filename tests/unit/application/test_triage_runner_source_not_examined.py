@@ -7,6 +7,7 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 from application.ports.triage_agent import PreparedTriageSession
+from application.triage.prompts.triage_prompt import TriagePrompt
 from application.triage.runner import TriageRunner
 from application.triage.verdict import (
     SourceNotExaminedError,
@@ -26,7 +27,7 @@ class _SourceNotExaminedBackend:
         self._finding_id = finding_id
         self._reason = reason
         self._prepared_cwd = prepared_cwd
-        self.calls: list[tuple[str, int, int, Path]] = []
+        self.calls: list[tuple[TriagePrompt, int, int, Path]] = []
 
     @contextmanager
     def prepare_session(
@@ -40,7 +41,7 @@ class _SourceNotExaminedBackend:
 
     def run_triage(
         self,
-        prompt: str,
+        prompt: TriagePrompt,
         *,
         finding_id: int,
         timeout_seconds: int,

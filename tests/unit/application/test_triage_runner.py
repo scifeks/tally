@@ -5,9 +5,13 @@ from __future__ import annotations
 import sys
 from contextlib import contextmanager
 from pathlib import Path
+from typing import TYPE_CHECKING
 from unittest.mock import MagicMock
 
 import pytest
+
+if TYPE_CHECKING:
+    from application.triage.prompts.triage_prompt import TriagePrompt
 
 _TALLY_ROOT = Path(__file__).resolve().parents[3]
 if str(_TALLY_ROOT) not in sys.path:
@@ -58,7 +62,7 @@ class _StubTriageBackend:
         self._verdict = verdict
         self._side_effect = side_effect
         self._prepared_cwd = prepared_cwd
-        self.calls: list[tuple[str, int, int, Path]] = []
+        self.calls: list[tuple[TriagePrompt, int, int, Path]] = []
         self.prepare_calls: list[tuple[str, int, Path]] = []
         self.last_raw_output: str = ""
 
@@ -75,7 +79,7 @@ class _StubTriageBackend:
 
     def run_triage(
         self,
-        prompt: str,
+        prompt: TriagePrompt,
         *,
         finding_id: int,
         timeout_seconds: int,

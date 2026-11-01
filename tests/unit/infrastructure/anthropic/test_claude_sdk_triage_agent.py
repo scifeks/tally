@@ -6,12 +6,21 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from application.ports.triage_agent import TriageBackendUnavailable
+from application.triage.prompts.triage_prompt import TriagePrompt
 from domain.triage.verdict import Verdict
 from infrastructure.anthropic.claude_sdk_triage_agent import (
     AgentSDKTriageAgent,
     _SDKRuntimeError,
 )
 from infrastructure.anthropic.error_classifier import ErrorClass
+
+
+def _fake_prompt(label: str = "p") -> TriagePrompt:
+    return TriagePrompt(
+        preamble=f"preamble for {label}",
+        finding_data=f"finding data for {label}",
+        guidance=f"guidance for {label}",
+    )
 
 
 def _make_valid_verdict_json(finding_id: int = 1) -> str:
@@ -39,7 +48,7 @@ def test_run_triage_returns_parsed_verdict(mock_run: MagicMock) -> None:
         model="claude-opus-4-6[1m]",
     )
     verdict = agent.run_triage(
-        prompt="some triage prompt",
+        prompt=_fake_prompt("some triage prompt"),
         finding_id=1,
         timeout_seconds=300,
         cwd=Path("/tmp/repo"),
@@ -61,7 +70,7 @@ def test_run_triage_classifies_rate_limit(mock_run: MagicMock) -> None:
 
     with pytest.raises(TriageBackendUnavailable) as info:
         agent.run_triage(
-            prompt="p",
+            prompt=_fake_prompt(),
             finding_id=1,
             timeout_seconds=300,
             cwd=Path("/tmp/repo"),
@@ -126,7 +135,8 @@ class TestBuildChildEnvDelegation:
 
         with patch.dict("sys.modules", {"claude_agent_sdk": sdk}):
             _run_sdk_once(
-                prompt="p",
+                instructions="trusted instructions",
+                finding_data="untrusted finding",
                 model="x",
                 billing_method="plan",
                 api_key_source=None,
@@ -151,7 +161,8 @@ class TestBuildChildEnvDelegation:
 
         with patch.dict("sys.modules", {"claude_agent_sdk": sdk}):
             _run_sdk_once(
-                prompt="p",
+                instructions="trusted instructions",
+                finding_data="untrusted finding",
                 model="x",
                 billing_method="api",
                 api_key_source="sk-test",
@@ -177,7 +188,7 @@ def test_sdk_runtime_error_with_status_classifies_as_rate_limit(
 
     with pytest.raises(TriageBackendUnavailable) as info:
         agent.run_triage(
-            prompt="p",
+            prompt=_fake_prompt(),
             finding_id=1,
             timeout_seconds=300,
             cwd=Path("/tmp"),
@@ -195,7 +206,7 @@ def test_timeout_raises_timeout_expired_not_unavailable(
 
     with pytest.raises(subprocess.TimeoutExpired) as info:
         agent.run_triage(
-            prompt="p",
+            prompt=_fake_prompt(),
             finding_id=1,
             timeout_seconds=120,
             cwd=Path("/tmp"),
