@@ -8,6 +8,7 @@ import pytest
 
 from application.triage.prompts.sast_trace import render
 from application.triage.verdict import Verdict, parse_verdict
+from tests.prompt_helpers import fenced_record
 
 _SAMPLE_FINDING: dict = {
     "id": 42,
@@ -75,14 +76,6 @@ class TestFencingStructure:
         assert "<<<TALLY_DATA_START: finding_metadata>>>" in result
         assert "<<<TALLY_DATA_END: finding_metadata>>>" in result
 
-    def test_source_file_is_fenced(self) -> None:
-        result = render(
-            _SAMPLE_FINDING,
-            project=_PROJECT,
-        )
-        assert "<<<TALLY_DATA_START: source_file>>>" in result
-        assert "<<<TALLY_DATA_END: source_file>>>" in result
-
     def test_metadata_fence_contains_finding_fields(self) -> None:
         result = render(
             _SAMPLE_FINDING,
@@ -96,15 +89,37 @@ class TestFencingStructure:
         assert "medium" in fenced
         assert "CWE-22" in fenced
 
-    def test_source_fence_contains_container_path(self) -> None:
+    @pytest.mark.parametrize(
+        ("repo", "file", "expected"),
+        [
+            pytest.param(
+                "dvpa",
+                "src/controllers/FileController.php",
+                "/workspace/repos/dvpa/src/controllers/FileController.php",
+                id="inside-repo",
+            ),
+            pytest.param(
+                "dvpa",
+                "src/../lib/a.php",
+                "/workspace/repos/dvpa/lib/a.php",
+                id="normalized",
+            ),
+            pytest.param(
+                "dvpa", "../../../root/.claude/creds", None, id="traversal-escapes-repo"
+            ),
+            pytest.param("dvpa", "../dvpa-other/a.php", None, id="sibling-repo-prefix"),
+            pytest.param("", "src/a.php", None, id="missing-repo"),
+            pytest.param("dvpa", None, None, id="missing-file"),
+        ],
+    )
+    def test_source_path_resolves_inside_repo_mount(
+        self, repo: str, file: str | None, expected: str | None
+    ) -> None:
         result = render(
-            _SAMPLE_FINDING,
-            project=_PROJECT,
+            {**_SAMPLE_FINDING, "repo": repo, "file": file}, project=_PROJECT
         )
-        start = result.index("<<<TALLY_DATA_START: source_file>>>")
-        end = result.index("<<<TALLY_DATA_END: source_file>>>")
-        fenced = result[start:end]
-        assert "/workspace/repos/dvpa/src/controllers/FileController.php" in fenced
+        assert fenced_record(result, "finding_metadata")["source_path"] == expected
+        assert ("could not be resolved" in result) is (expected is None)
 
     def test_injection_in_description_stays_fenced(self) -> None:
         injected = {
@@ -193,17 +208,9 @@ class TestEdgeCases:
             sparse,
             project="test",
         )
-        assert isinstance(result, str)
-        assert "n/a" in result
-
-    def test_missing_repo_shows_fallback(self) -> None:
-        finding = {**_SAMPLE_FINDING, "repo": ""}
-        result = render(
-            finding,
-            project=_PROJECT,
-        )
-        assert "could not be resolved" in result
-        assert "<<<TALLY_DATA_START: source_file>>>" in result
+        record = fenced_record(result, "finding_metadata")
+        assert record["description"] is None
+        assert record["cwe"] is None
 
     def test_cwe_as_list(self) -> None:
         finding = {**_SAMPLE_FINDING, "cwe": ["CWE-89", "CWE-22"]}

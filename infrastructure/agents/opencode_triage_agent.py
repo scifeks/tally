@@ -15,6 +15,7 @@ from application.ports.triage_agent import (
     TriageBackendUnavailable,
     TriageSessionResult,
 )
+from application.triage.prompts.triage_prompt import TriagePrompt
 from domain.triage.verdict import (
     Verdict,
     VerdictParseError,
@@ -160,21 +161,22 @@ class OpenCodeTriageAgent:
 
     def run_triage(
         self,
-        prompt: str,
+        prompt: TriagePrompt,
         *,
         finding_id: int,
         timeout_seconds: int,
         cwd: Path,
     ) -> Verdict:
+        single_message = prompt.combined()
         self._clear_verdict_file()
         self._dispatch_prompt(
-            prompt, finding_id=finding_id, timeout_seconds=timeout_seconds
+            single_message, finding_id=finding_id, timeout_seconds=timeout_seconds
         )
         try:
             return self._load_verdict(finding_id)
         except VerdictParseError as first_err:
             retry_prompt = (
-                f"{prompt}\n\nPrevious attempt failed: {first_err}. "
+                f"{single_message}\n\nPrevious attempt failed: {first_err}. "
                 f"Write the corrected JSON to /workspace/out/verdict.json."
             )
             self._clear_verdict_file()
@@ -203,7 +205,8 @@ class OpenCodeTriageAgent:
         assert self._relay_proc.stdin is not None
         b64_prompt = base64.b64encode(prompt.encode()).decode()
         try:
-            self._relay_proc.stdin.write(f"{timeout_seconds}\n{b64_prompt}\n")
+            # Empty system-prompt line: opencode gets one combined message.
+            self._relay_proc.stdin.write(f"{timeout_seconds}\n\n{b64_prompt}\n")
             self._relay_proc.stdin.flush()
         except BrokenPipeError:
             self._drain_dead_proc_stderr(self._relay_proc)

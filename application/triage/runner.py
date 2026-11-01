@@ -20,6 +20,7 @@ from application.ports.triage_event_sink import (
 from application.tools.registry import ToolRegistry
 from application.triage.batch_creator import create_triage_batches
 from application.triage.prompts import dast_trace, sast_trace
+from application.triage.prompts.triage_prompt import TriagePrompt
 from application.triage.verdict import (
     SourceNotExaminedError,
     Verdict,
@@ -47,9 +48,9 @@ if TYPE_CHECKING:
     from application.ports.triage_batch_repository import TriageBatchRepositoryPort
 
 
-_PROMPT_RENDERERS: dict[str, Callable[..., str]] = {
-    "sast": sast_trace.render,
-    "web": dast_trace.render,
+_PROMPT_COMPOSERS: dict[str, Callable[..., TriagePrompt]] = {
+    "sast": sast_trace.compose,
+    "web": dast_trace.compose,
 }
 
 _log = logging.getLogger(__name__)
@@ -207,13 +208,13 @@ class TriageRunner:
             batch_data: list[dict[str, Any]],
             segment: str,
         ) -> str:
-            render_fn = _PROMPT_RENDERERS[segment]
+            compose_fn = _PROMPT_COMPOSERS[segment]
             for finding in batch_data:
                 fid = finding.get("id", "?")
-                prompt = render_fn(
+                prompt = compose_fn(
                     finding,
                     project=self._project,
-                )
+                ).combined()
                 _log.debug(
                     "========== FINDING %s (batch %d)"
                     " ==========\n%s\n"
@@ -400,7 +401,7 @@ class TriageRunner:
         Returns 'success' (all ok), 'failed' (all failed), or
         'incomplete' (mixed).
         """
-        render_fn = _PROMPT_RENDERERS[segment]
+        compose_fn = _PROMPT_COMPOSERS[segment]
         succeeded = 0
         total = len(batch_data)
         max_attempts = self._retry_count + 1
@@ -408,7 +409,7 @@ class TriageRunner:
         for finding in batch_data:
             self._check_canceled()
             fid = finding.get("id", -1)
-            prompt = render_fn(finding, project=self._project)
+            prompt = compose_fn(finding, project=self._project)
             ok = False
             for attempt in range(max_attempts):
                 try:

@@ -16,6 +16,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from application.triage.prompts.triage_prompt import TriagePrompt
 from application.triage.verdict import VerdictParseError
 from infrastructure.agents.claude_triage_agent import (
     ClaudeTriageAgent,
@@ -25,6 +26,12 @@ pytestmark = pytest.mark.integration
 
 _COMPOSE = Path("/tmp/docker-compose.yml")
 _MODEL = "claude-opus-4-5"
+
+_PROMPT = TriagePrompt(
+    preamble="trusted instructions",
+    finding_data="hello finding 42",
+    guidance="more instructions",
+)
 
 
 def _make_agent() -> ClaudeTriageAgent:
@@ -159,15 +166,15 @@ def test_prompt_sent_as_base64_via_relay(
             app_root=tmp_path,
         ):
             agent.run_triage(
-                "hello finding 42",
+                _PROMPT,
                 finding_id=1,
                 timeout_seconds=60,
                 cwd=tmp_path,
             )
     written = mock_proc.stdin.write.call_args[0][0]
-    lines = written.strip().split("\n")
-    decoded = base64.b64decode(lines[1]).decode()
-    assert decoded == "hello finding 42"
+    _timeout, system, user = written.strip().split("\n")
+    assert base64.b64decode(system).decode() == _PROMPT.instructions
+    assert base64.b64decode(user).decode() == _PROMPT.finding_data
 
 
 def test_success_returns_verdict(
@@ -183,7 +190,7 @@ def test_success_returns_verdict(
             app_root=tmp_path,
         ):
             result = agent.run_triage(
-                "prompt",
+                _PROMPT,
                 finding_id=1,
                 timeout_seconds=60,
                 cwd=tmp_path,
@@ -209,7 +216,7 @@ def test_failure_when_returncode_nonzero(
                 match="exited with code 2",
             ):
                 agent.run_triage(
-                    "prompt",
+                    _PROMPT,
                     finding_id=1,
                     timeout_seconds=60,
                     cwd=tmp_path,
@@ -230,7 +237,7 @@ def test_timeout_raises_timeout_expired(
         ):
             with pytest.raises(subprocess.TimeoutExpired):
                 agent.run_triage(
-                    "prompt",
+                    _PROMPT,
                     finding_id=1,
                     timeout_seconds=60,
                     cwd=tmp_path,

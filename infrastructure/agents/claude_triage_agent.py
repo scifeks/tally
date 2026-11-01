@@ -13,6 +13,7 @@ from application.ports.triage_agent import (
     PreparedTriageSession,
     TriageSessionResult,
 )
+from application.triage.prompts.triage_prompt import TriagePrompt
 from domain.triage.verdict import (
     Verdict,
     VerdictParseError,
@@ -49,6 +50,9 @@ class ClaudeTriageAgent:
                 "-T",
                 "triage-agent",
                 "triage-relay",
+                # Appending keeps Claude Code's own tool-use instructions intact.
+                "--system-prompt-flag",
+                "--append-system-prompt",
                 "claude",
                 "--print",
                 "--output-format",
@@ -85,7 +89,7 @@ class ClaudeTriageAgent:
 
     def run_triage(
         self,
-        prompt: str,
+        prompt: TriagePrompt,
         *,
         finding_id: int,
         timeout_seconds: int,
@@ -96,10 +100,13 @@ class ClaudeTriageAgent:
         if self._relay_proc.poll() is not None:
             raise RuntimeError("Relay process exited")
 
-        b64_prompt = base64.b64encode(prompt.encode()).decode()
+        b64_system = base64.b64encode(prompt.instructions.encode()).decode()
+        b64_prompt = base64.b64encode(prompt.finding_data.encode()).decode()
         try:
             assert self._relay_proc.stdin is not None
-            self._relay_proc.stdin.write(f"{timeout_seconds}\n{b64_prompt}\n")
+            self._relay_proc.stdin.write(
+                f"{timeout_seconds}\n{b64_system}\n{b64_prompt}\n"
+            )
             self._relay_proc.stdin.flush()
         except BrokenPipeError:
             raise RuntimeError("Relay process died") from None

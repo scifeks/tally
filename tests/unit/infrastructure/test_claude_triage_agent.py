@@ -14,6 +14,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from application.triage.prompts.triage_prompt import TriagePrompt
 from application.triage.verdict import (
     Verdict,
     VerdictParseError,
@@ -25,6 +26,12 @@ from infrastructure.agents.claude_triage_agent import (
 _MODEL = "sonnet"
 _FINDING_ID = 42
 _COMPOSE_PATH = Path("/app/docker/triage-agent/docker-compose.yaml")
+
+_PROMPT = TriagePrompt(
+    preamble="trusted instructions",
+    finding_data="hello finding 42",
+    guidance="more instructions",
+)
 
 
 def _agent() -> ClaudeTriageAgent:
@@ -96,8 +103,12 @@ def test_relay_command_includes_claude_flags(
         ):
             pass
     cmd = popen_mock.call_args[0][0]
-    assert "triage-relay" in cmd
-    assert "claude" in cmd
+    relay = cmd.index("triage-relay")
+    assert cmd[relay + 1 : relay + 4] == [
+        "--system-prompt-flag",
+        "--append-system-prompt",
+        "claude",
+    ]
     assert "--print" in cmd
     assert "--output-format" in cmd
     assert "text" in cmd
@@ -172,7 +183,7 @@ def test_happy_path_returns_verdict(
     with patch("subprocess.Popen", return_value=mock_proc):
         with agent.prepare_session(project="p", run_id=1, app_root=tmp_path):
             verdict = agent.run_triage(
-                "prompt",
+                _PROMPT,
                 finding_id=_FINDING_ID,
                 timeout_seconds=60,
                 cwd=tmp_path,
@@ -183,7 +194,7 @@ def test_happy_path_returns_verdict(
     assert verdict.severity == "high"
 
 
-def test_prompt_sent_as_base64(
+def test_instructions_sent_as_system_prompt_and_data_as_user_message(
     tmp_path: Path,
 ) -> None:
     agent = _agent()
@@ -193,16 +204,16 @@ def test_prompt_sent_as_base64(
     with patch("subprocess.Popen", return_value=mock_proc):
         with agent.prepare_session(project="p", run_id=1, app_root=tmp_path):
             agent.run_triage(
-                "hello finding 42",
+                _PROMPT,
                 finding_id=_FINDING_ID,
                 timeout_seconds=60,
                 cwd=tmp_path,
             )
     written = mock_proc.stdin.write.call_args[0][0]
-    lines = written.strip().split("\n")
-    assert lines[0] == "60"
-    decoded = base64.b64decode(lines[1]).decode()
-    assert decoded == "hello finding 42"
+    timeout, system, user = written.strip().split("\n")
+    assert timeout == "60"
+    assert base64.b64decode(system).decode() == _PROMPT.instructions
+    assert base64.b64decode(user).decode() == _PROMPT.finding_data
 
 
 def test_multi_json_in_result_succeeds(
@@ -217,7 +228,7 @@ def test_multi_json_in_result_succeeds(
     with patch("subprocess.Popen", return_value=mock_proc):
         with agent.prepare_session(project="p", run_id=1, app_root=tmp_path):
             verdict = agent.run_triage(
-                "prompt",
+                _PROMPT,
                 finding_id=_FINDING_ID,
                 timeout_seconds=60,
                 cwd=tmp_path,
@@ -240,7 +251,7 @@ def test_nonzero_exit_raises(tmp_path: Path) -> None:
                 match="exited with code 1",
             ):
                 agent.run_triage(
-                    "prompt",
+                    _PROMPT,
                     finding_id=_FINDING_ID,
                     timeout_seconds=60,
                     cwd=tmp_path,
@@ -257,7 +268,7 @@ def test_timeout_exit_code_raises(
         with agent.prepare_session(project="p", run_id=1, app_root=tmp_path):
             with pytest.raises(subprocess.TimeoutExpired):
                 agent.run_triage(
-                    "prompt",
+                    _PROMPT,
                     finding_id=_FINDING_ID,
                     timeout_seconds=60,
                     cwd=tmp_path,
@@ -272,7 +283,7 @@ def test_relay_death_raises(tmp_path: Path) -> None:
             mock_proc.poll.return_value = 1
             with pytest.raises(RuntimeError, match="exited"):
                 agent.run_triage(
-                    "prompt",
+                    _PROMPT,
                     finding_id=_FINDING_ID,
                     timeout_seconds=60,
                     cwd=tmp_path,
@@ -292,7 +303,7 @@ def test_empty_stdout_raises(
                 match="empty stdout",
             ):
                 agent.run_triage(
-                    "prompt",
+                    _PROMPT,
                     finding_id=_FINDING_ID,
                     timeout_seconds=60,
                     cwd=tmp_path,
@@ -313,7 +324,7 @@ def test_finding_id_mismatch_raises(
                 match="finding_id mismatch",
             ):
                 agent.run_triage(
-                    "prompt",
+                    _PROMPT,
                     finding_id=_FINDING_ID,
                     timeout_seconds=60,
                     cwd=tmp_path,
@@ -338,7 +349,7 @@ def test_missing_verdict_field_raises(
                 match="missing fields",
             ):
                 agent.run_triage(
-                    "prompt",
+                    _PROMPT,
                     finding_id=_FINDING_ID,
                     timeout_seconds=60,
                     cwd=tmp_path,
