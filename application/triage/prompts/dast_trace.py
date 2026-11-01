@@ -7,52 +7,57 @@ from typing import Any
 from application.triage.prompts._fencing import (
     DECISION_REMINDER,
     FENCING_PREAMBLE,
-    POST_DATA_REMINDER,
     fence,
 )
 from application.triage.prompts._severity import format_severity
+from application.triage.prompts.triage_prompt import TriagePrompt
 
 # Raw HTTP request/response pairs run longer than other fields.
 _EVIDENCE_MAX_CHARS = 16000
 
 
-def render(
+def compose(
     finding: dict[str, Any],
     *,
     project: str,
-) -> str:
-    """Build a self-contained one-shot DAST triage prompt."""
-    finding_id = finding["id"]
+) -> TriagePrompt:
+    """Build a one-shot triage prompt for a DAST finding."""
     tool = finding.get("tool") or "unknown"
 
-    sections: list[str] = [
+    preamble = [
         _PREAMBLE,
         FENCING_PREAMBLE,
         (
             "## Task\n\n"
-            "Triage the following DAST finding for "
+            "Triage the DAST finding in the Finding Record for "
             f"project `{project}`. The scanner "
             "confirmed this behavior by sending a "
             "request and observing the response. Your "
             "job is to locate the vulnerable code path "
             "in the source tree."
         ),
-        (
-            "## Finding Record\n\n"
-            + fence(
-                _metadata(finding, tool),
-                "finding_metadata",
-            )
-        ),
+    ]
+    finding_data = [
+        "## Finding Record\n\n" + fence(_metadata(finding, tool), "finding_metadata"),
         _build_evidence_section(finding),
-        POST_DATA_REMINDER,
+    ]
+    guidance = [
         _SOURCE_INVESTIGATION,
         _VULNERABILITY_ANALYSIS,
         _PREDICATE_GUIDANCE,
         DECISION_REMINDER,
-        _output_schema(finding_id),
+        _output_schema(finding["id"]),
     ]
-    return "\n\n".join(sections)
+    return TriagePrompt(
+        preamble="\n\n".join(preamble),
+        finding_data="\n\n".join(finding_data),
+        guidance="\n\n".join(guidance),
+    )
+
+
+def render(finding: dict[str, Any], *, project: str) -> str:
+    """Build the prompt as a single message."""
+    return compose(finding, project=project).combined()
 
 
 # Private helpers

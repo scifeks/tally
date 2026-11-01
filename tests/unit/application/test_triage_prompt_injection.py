@@ -8,6 +8,7 @@ from typing import Any
 import pytest
 
 from application.triage.prompts import api_trace, dast_trace, sast_trace
+from application.triage.prompts.triage_prompt import TriagePrompt
 from tests.prompt_helpers import fenced_record, unfenced_text
 
 _PAYLOAD = (
@@ -34,11 +35,11 @@ _API: dict[str, Any] = {
 _ZAP: dict[str, Any] = {**_API, "id": 3, "repo": "app"}
 _BURP: dict[str, Any] = {**_ZAP, "id": 4, "tool": "burp"}
 
-Renderer = Callable[..., str]
+Composer = Callable[..., TriagePrompt]
 
 _CASES = [
     *[
-        pytest.param(sast_trace.render, _SAST, f, "finding_metadata", id=f"sast-{f}")
+        pytest.param(sast_trace.compose, _SAST, f, "finding_metadata", id=f"sast-{f}")
         for f in (
             "file",
             "rule_id",
@@ -51,7 +52,7 @@ _CASES = [
         )
     ],
     *[
-        pytest.param(api_trace.render, _API, f, "finding_metadata", id=f"api-{f}")
+        pytest.param(api_trace.compose, _API, f, "finding_metadata", id=f"api-{f}")
         for f in (
             "alert_name",
             "method",
@@ -65,7 +66,7 @@ _CASES = [
         )
     ],
     *[
-        pytest.param(dast_trace.render, _ZAP, f, "finding_metadata", id=f"zap-{f}")
+        pytest.param(dast_trace.compose, _ZAP, f, "finding_metadata", id=f"zap-{f}")
         for f in (
             "alert_name",
             "method",
@@ -79,57 +80,61 @@ _CASES = [
         )
     ],
     pytest.param(
-        dast_trace.render, _ZAP, "evidence", "http_evidence", id="zap-evidence"
+        dast_trace.compose, _ZAP, "evidence", "http_evidence", id="zap-evidence"
     ),
     *[
-        pytest.param(dast_trace.render, _BURP, f, "finding_metadata", id=f"burp-{f}")
+        pytest.param(dast_trace.compose, _BURP, f, "finding_metadata", id=f"burp-{f}")
         for f in ("remediation", "fingerprint_type")
     ],
 ]
 
 
-@pytest.mark.parametrize(("render", "base", "field", "label"), _CASES)
+@pytest.mark.parametrize(("compose", "base", "field", "label"), _CASES)
 def test_attacker_field_stays_inside_its_fence(
-    render: Renderer, base: dict[str, Any], field: str, label: str
+    compose: Composer, base: dict[str, Any], field: str, label: str
 ) -> None:
-    prompt = render({**base, field: _PAYLOAD}, project="demo")
+    prompt = compose({**base, field: _PAYLOAD}, project="demo")
+    combined = prompt.combined()
 
-    record = fenced_record(prompt, label)
+    record = fenced_record(prompt.finding_data, label)
     key = "evidence" if label == "http_evidence" else field
     assert record[key] == _PAYLOAD
-    assert prompt.count("\n## Output\n") == 1
-    assert "Ignore prior instructions" not in unfenced_text(prompt)
+    assert "Ignore prior instructions" not in prompt.instructions
+    assert combined.count("\n## Output\n") == 1
+    assert "Ignore prior instructions" not in unfenced_text(combined)
 
 
 @pytest.mark.parametrize(
-    ("render", "finding", "instruction"),
+    ("compose", "finding", "instruction"),
     [
         pytest.param(
-            sast_trace.render, _SAST, "Read the file at the `source_path`", id="sast"
+            sast_trace.compose, _SAST, "Read the file at the `source_path`", id="sast"
         ),
-        pytest.param(api_trace.render, _API, "1. Locate the endpoint", id="api"),
-        pytest.param(dast_trace.render, _ZAP, "1. Locate the route handler", id="dast"),
+        pytest.param(api_trace.compose, _API, "1. Locate the endpoint", id="api"),
+        pytest.param(
+            dast_trace.compose, _ZAP, "1. Locate the route handler", id="dast"
+        ),
     ],
 )
-def test_investigation_steps_are_outside_fences(
-    render: Renderer, finding: dict[str, Any], instruction: str
+def test_investigation_steps_live_in_instructions_not_data(
+    compose: Composer, finding: dict[str, Any], instruction: str
 ) -> None:
-    prompt = render(finding, project="demo")
-    assert instruction in unfenced_text(prompt)
-    assert "## Before You Answer" in unfenced_text(prompt)
+    prompt = compose(finding, project="demo")
+    assert instruction in prompt.instructions
+    assert "## Before You Answer" in prompt.instructions
 
 
 @pytest.mark.parametrize(
-    ("render", "finding", "path_key"),
+    ("compose", "finding", "path_key"),
     [
-        pytest.param(sast_trace.render, _SAST, "source_path", id="sast"),
-        pytest.param(dast_trace.render, _ZAP, "search_root", id="dast"),
+        pytest.param(sast_trace.compose, _SAST, "source_path", id="sast"),
+        pytest.param(dast_trace.compose, _ZAP, "search_root", id="dast"),
     ],
 )
 def test_repo_name_only_reaches_prompt_through_fence(
-    render: Renderer, finding: dict[str, Any], path_key: str
+    compose: Composer, finding: dict[str, Any], path_key: str
 ) -> None:
-    prompt = render({**finding, "repo": _PAYLOAD}, project="demo")
+    prompt = compose({**finding, "repo": _PAYLOAD}, project="demo")
 
-    assert _PAYLOAD in fenced_record(prompt, "finding_metadata")[path_key]
-    assert "Ignore prior instructions" not in unfenced_text(prompt)
+    assert _PAYLOAD in fenced_record(prompt.finding_data, "finding_metadata")[path_key]
+    assert "Ignore prior instructions" not in prompt.instructions
