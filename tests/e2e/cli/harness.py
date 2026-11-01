@@ -38,7 +38,7 @@ from typing import cast
 
 import pexpect
 
-TALLY_ROOT = Path(__file__).resolve().parents[2]
+TALLY_ROOT = Path(__file__).resolve().parents[3]
 _VENV_PYTHON = TALLY_ROOT / ".venv" / "bin" / "python3"
 _TALLY_SCRIPT = TALLY_ROOT / "tally.py"
 
@@ -77,25 +77,28 @@ class TallyHarness:
     def setup(self) -> None:
         """Prepare an isolated environment under self.base_path.
 
-        Copies config/global.json from the real repo and ensures
-        location_attestation_confirmed is True so the REPL starts
-        without an interactive prompt.  No-op when base_path is the
+        Seeds config/global.json from the real repo's config, falling
+        back to global-example.json on a fresh checkout. Flips
+        location_attestation_confirmed to True so the REPL starts
+        without the interactive prompt. No-op when base_path is the
         real repo root (attestation is already stored there).
         """
         if self.base_path == TALLY_ROOT:
             return
 
         real_cfg = TALLY_ROOT / "config" / "global.json"
-        if not real_cfg.exists():
+        example_cfg = TALLY_ROOT / "config" / "global-example.json"
+        source_cfg = real_cfg if real_cfg.exists() else example_cfg
+        if not source_cfg.exists():
             raise FileNotFoundError(
-                f"Real config not found at {real_cfg}. "
+                f"No config source found at {real_cfg} or {example_cfg}. "
                 "Cannot set up isolated harness environment."
             )
 
         config_dir = self.base_path / "config"
         config_dir.mkdir(parents=True, exist_ok=True)
         dest_cfg = config_dir / "global.json"
-        shutil.copy(real_cfg, dest_cfg)
+        shutil.copy(source_cfg, dest_cfg)
 
         with open(dest_cfg) as fh:
             data = json.load(fh)

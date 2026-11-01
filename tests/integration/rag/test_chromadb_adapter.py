@@ -23,8 +23,10 @@ _DIM = 8
 class _DeterministicEmbedding(EmbeddingProvider):
     """Hash-based embedding so the same text always maps to the same vector.
 
-    Avoids any network or model dependency while still letting ChromaDB's
-    cosine-distance index operate on stable points.
+    Decodes the digest as unsigned 32-bit integers and normalizes to
+    [-1, 1] so every component is a finite IEEE 754 float. Decoding the
+    raw bytes as float32 directly would let NaN and Infinity bit patterns
+    through, which ChromaDB rejects at upsert.
     """
 
     def is_available(self) -> bool:
@@ -32,8 +34,9 @@ class _DeterministicEmbedding(EmbeddingProvider):
 
     def embed(self, text: str, **kwargs: Any) -> list[float]:
         digest = hashlib.sha256(text.encode("utf-8")).digest()
-        floats = struct.unpack(f"<{_DIM}f", digest[: _DIM * 4])
-        return list(floats)
+        ints = struct.unpack(f"<{_DIM}I", digest[: _DIM * 4])
+        scale = float(2**32 - 1)
+        return [(2.0 * i / scale) - 1.0 for i in ints]
 
 
 @pytest.fixture()
