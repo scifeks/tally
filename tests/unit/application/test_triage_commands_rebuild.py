@@ -6,14 +6,14 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from application.repl.commands.triage_commands import TriageCommands
-from application.triage.container import (
+from application.agent_sandbox.image import (
+    AgentImageBuildError,
     DockerNotAvailableError,
-    TriageImageBuildError,
 )
+from application.repl.commands.triage_commands import TriageCommands
 
-_REBUILD_PATCH = "application.repl.commands.triage_commands.rebuild_triage_image"
-_TEARDOWN_PATCH = "application.repl.commands.triage_commands.teardown_triage_containers"
+_REBUILD_PATCH = "application.repl.commands.triage_commands.rebuild_image"
+_TEARDOWN_PATCH = "application.repl.commands.triage_commands.teardown_containers"
 
 
 def _printed(repl: MagicMock) -> str:
@@ -62,7 +62,7 @@ class TestRebuildContainer:
             patch(_TEARDOWN_PATCH),
             patch(
                 _REBUILD_PATCH,
-                side_effect=TriageImageBuildError("build broke"),
+                side_effect=AgentImageBuildError("build broke"),
             ),
         ):
             cmds.cmd_triage("triage", ["--rebuild-container"])

@@ -257,6 +257,62 @@ detection patterns.
 
 ---
 
+## Background scan mode
+
+The scan flow above describes **interactive** mode: a user drives their own Claude Code session, which calls Tally's MCP tools. The same scan skill can also run in **background** mode, where Tally spawns a managed Agent SDK process that runs the orchestration skill unattended.
+
+Background runs require a billing method. See [Credential and Billing Model](credential-and-billing-model.md) for the four supported credential configurations.
+
+### Prerequisites
+
+Background scans run the Agent SDK inside the Docker-sandboxed `sdk-sidecar` service. The compose file must have been generated with the `claude_sdk` provider so that service is defined, and the service must be running before the scan starts:
+
+```
+docker compose -f .tally/triage/docker-compose.yaml up -d sdk-sidecar
+```
+
+If the compose file was generated for the CLI provider instead, the launcher's `docker compose exec sdk-sidecar` fails with "service not defined". Regenerate by setting `triage_inference.provider = "claude_sdk"` in the project config and rerunning the triage setup. See [Credential and Billing Model](credential-and-billing-model.md#docker-sandboxed-agent-sdk-runs-tal-266) for the full container posture.
+
+### Starting a background scan
+
+CLI:
+
+```
+tally --project NAME --command scan --interaction-mode background --billing-method plan
+tally --project NAME --command scan --interaction-mode background --billing-method api --only scan-xss-stored,scan-injection-sql
+```
+
+REPL: `scan start --background --billing plan`.
+
+Scanner selection flags (`--only`, `--exclude`, `--list-skills`) accept display slugs (`scan-xss-stored`) or family names (`xss`); they are mutually exclusive with each other. See [cli.md](cli.md) for the full flag reference.
+
+### Phase lifecycle
+
+Each phase (`recon`, `domain:<family>`, `dead_code_sweep`, `verification:<finding_id>`) writes two attempt rows in `scan_phase_executions`:
+
+1. The skill calls `start_scan_phase` before entering the phase. Tally writes `status = "in_progress"` and emits `PhaseStarted`.
+2. On completion, the skill calls `mark_scan_phase_complete` with status `completed`, `failed`, or `rate_limited`. Tally updates the row in place (same `attempt_number`) and emits `PhaseCompleted`, `PhaseFailed`, or `PhaseRateLimited`.
+
+If the SDK session crashes mid-phase, Tally flips any still-`in_progress` rows to `failed` and emits `PhaseFailed` for each.
+
+### Rate limit and resume
+
+Scans do not auto-fail-over. On `RATE_LIMIT_PLAN` or `RATE_LIMIT_API`, Tally writes `scan_runs.status = "rate_limited"`, emits `RunRateLimited`, and the SDK session exits.
+
+Resume on a different billing method:
+
+```
+tally --project NAME --command scan --resume RUN_ID --interaction-mode background --billing-method api
+```
+
+The resume path reads `scan_phase_executions`, constructs a resume preamble listing already-completed phases, and sends it to the skill. The skill skips those phases and continues from the next incomplete one. The rate-limited phase runs again with a new attempt number.
+
+### Observable events
+
+Background scan SSE events: `PhaseStarted`, `PhaseCompleted`, `PhaseFailed`, `PhaseRateLimited`, `RunRateLimited`, plus the existing scan lifecycle events (`RunStarted`, `RunCompleted`, `RunFailed`, `RunCancelled`).
+
+---
+
 ## MCP Tools Reference
 
 | Tool | Parameters | Returns | Purpose |
@@ -270,6 +326,11 @@ detection patterns.
 | `fetch_batch` | `project` | `{batch_id, findings, ...}` | Fetch next triage batch |
 | `submit_verdicts` | `project, batch_id, verdicts` | `{accepted, rejected}` | Submit triage verdicts |
 | `skip_batch` | `project, batch_id` | `{status}` | Skip a triage batch |
+| `set_scan_config` | `project, run_id, only, exclude, adversarial_verification` | `{ok}` | Configure scanner family filter and adversarial opt-in for a run |
+| `get_scan_config` | `project, run_id` | `{is_configured, only, exclude, adversarial_verification}` | Read scan configuration |
+| `start_scan_phase` | `project, run_id, phase, usage_pool` | `{ok, execution_id, attempt_number}` | Mark a phase as started (writes `in_progress`) |
+| `mark_scan_phase_complete` | `project, run_id, phase, status, usage_pool, metadata` | `{ok, execution_id, attempt_number}` | Record phase outcome (`completed`, `failed`, or `rate_limited`) |
+| `get_scan_phase_status` | `project, run_id` | `{completed_phases, latest_execution_per_phase}` | Read phase execution status for a run |
 
 ---
 

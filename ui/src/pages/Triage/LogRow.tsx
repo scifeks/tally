@@ -6,11 +6,16 @@ const TYPE_STYLE: Record<TriageLogEventType, { color: string; prefix: string }> 
   batch_created: { color: 'text-muted-foreground', prefix: '[+]' },
   batch_started: { color: 'text-high', prefix: '[*]' },
   batch_progress: { color: 'text-muted-foreground', prefix: '   ' },
-  batch_completed: { color: 'text-low', prefix: '[✓]' },
+  batch_completed: { color: 'text-low', prefix: '[v]' },
   batch_failed: { color: 'text-crit', prefix: '[!]' },
-  batch_retry: { color: 'text-high', prefix: '[↻]' },
+  batch_retry: { color: 'text-high', prefix: '[~]' },
+  batch_attempt_started: { color: 'text-high', prefix: '[*]' },
+  batch_attempt_completed: { color: 'text-low', prefix: '[v]' },
+  batch_attempt_failed: { color: 'text-crit', prefix: '[!]' },
+  batch_attempt_rate_limited: { color: 'text-high', prefix: '[!]' },
   run_completed: { color: 'text-accent', prefix: '>>>' },
   run_cancelled: { color: 'text-high', prefix: 'XXX' },
+  run_rate_limited: { color: 'text-high', prefix: '[!]' },
   triage_failed: { color: 'text-crit', prefix: '[X]' },
 }
 

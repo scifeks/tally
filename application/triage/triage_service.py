@@ -4,33 +4,38 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
 import threading
 import uuid
 from concurrent.futures import Future
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
+from application.anthropic.mode_availability import (
+    BackgroundModeAvailability,
+    BackgroundModeAvailabilityService,
+)
 from application.events.ids import new_event_id
 from application.events.types import BusEvent
 from application.locking import HolderMismatch, LockRegistry, get_registry
 from application.locking.cancellation import CancellationToken
 from application.sync.integration_sync import run_configured_syncs
-from application.triage.factory import ensure_triage_backend_configured
+from application.triage.factory import (
+    ResolvedTriageConfig,
+    ensure_triage_backend_configured,
+    resolve_triage_config,
+)
 from application.triage.orchestrator import (
     resume_triage_for_project,
     run_triage_for_project,
 )
-from application.triage.readiness import _FRONTIER_PROVIDERS
 from application.triage.run_registry import (
     TriageRunRegistry,
     get_triage_run_registry,
 )
 from application.triage.runner import NoScanRunError, TriageCancelled
 from core.config.manager import ConfigManager
-from domain.triage.errors import TriageModeError
 
 if TYPE_CHECKING:
     from application.ports.audit_repository import AuditRepositoryPort
@@ -46,7 +51,7 @@ logger = logging.getLogger("application.triage_service")
 
 TRIAGE_LOCK_KIND = "triage"
 
-_RESUMABLE_STATUSES = ("failed", "running")
+_RESUMABLE_STATUSES = ("failed", "running", "rate_limited")
 
 
 class ProjectNotFound(LookupError):
@@ -65,6 +70,27 @@ class TriageNotResumableError(RuntimeError):
         )
         self.scan_run_id = scan_run_id
         self.status = status
+
+
+class TriageConfigurationError(ValueError):
+    """Raised for invalid triage configuration combinations."""
+
+
+class TriageCredentialsError(ValueError):
+    """Raised when background-mode credentials are missing or invalid."""
+
+
+@dataclass(frozen=True)
+class ResolvedBilling:
+    """Billing resolution result with auto-failover signal.
+
+    ``auto_failover_permitted`` is True only when neither an explicit arg
+    nor a config default was present, so callers can distinguish
+    "defaulted to plan" from "explicitly chose plan".
+    """
+
+    method: Literal["plan", "api"]
+    auto_failover_permitted: bool
 
 
 @dataclass(frozen=True)
@@ -122,34 +148,56 @@ class TriageService:
         event_sink: TriageEventSink | None = None,
         finding_ids: tuple[int, ...] | None = None,
         scan_run_id: int | None = None,
+        interaction_mode: Literal["interactive", "background"] | None = None,
+        billing_method: Literal["plan", "api"] | None = None,
+        api_key: str | None = None,
     ) -> TriageStartHandle:
         """Start a triage run against the latest scan_run for a project.
 
+        When ``interaction_mode`` is ``"interactive"``, dispatches via the
+        existing Docker/MCP code path; ``billing_method`` and ``api_key``
+        must be None.
+
+        When ``interaction_mode`` is ``"background"``, validates credentials
+        and routes to the ``claude_sdk`` adapter.  Billing is resolved from
+        the explicit arg, then ``claude.default_billing_method`` in config,
+        then defaults to ``"plan"``.  The resolved provider override and
+        billing flow through to the runner and factory.
+
+        When ``interaction_mode`` is None (legacy callers), uses the
+        config-driven provider without mode-specific validation.
+        ``billing_method`` must also be None in this case.
+
         Raises NoScanRunError if no scan_runs exist, JobBusy if another
-        triage holds the lock, TriageModeError if a frontier provider
-        has no API key configured for auto-triage.
+        triage holds the lock, TriageConfigurationError for invalid
+        mode/billing combinations, ValueError for missing credentials.
         """
         del finding_ids  # finding-scoped triage is reserved for later
-        provider = ensure_triage_backend_configured(app_root=Path(base_path))
-        if provider in _FRONTIER_PROVIDERS:
-            cfg = ConfigManager(base_path).global_config
-            api_key = ""
-            if provider in ("claude", "claude_code") and cfg.claude:
-                api_key = cfg.claude.api_key
-            elif provider == "openai" and cfg.openai:
-                api_key = cfg.openai.api_key
-            if not api_key:
-                env_map = {
-                    "claude": "ANTHROPIC_API_KEY",
-                    "claude_code": "ANTHROPIC_API_KEY",
-                    "openai": "OPENAI_API_KEY",
-                }
-                env_var = env_map.get(provider, "")
-                if not os.environ.get(env_var):
-                    raise TriageModeError(
-                        f"Auto-triage requires an API key for {provider}. "
-                        "Use MCP triage instead."
-                    )
+
+        if interaction_mode is None and billing_method is not None:
+            raise TriageConfigurationError(
+                "billing_method requires interaction_mode='background'"
+            )
+
+        if interaction_mode == "interactive" and billing_method is not None:
+            raise TriageConfigurationError(
+                "billing_method must be None for interactive mode."
+            )
+
+        resolved_config: ResolvedTriageConfig | None = None
+
+        if interaction_mode == "background":
+            resolved_config = self._resolve_background_config(
+                base_path, billing_method, api_key
+            )
+            logger.info(
+                "background triage: provider=claude_sdk billing=%s auto_failover=%s",
+                resolved_config.billing_method,
+                resolved_config.auto_failover,
+            )
+        else:
+            ensure_triage_backend_configured(app_root=Path(base_path))
+
         if scan_run_id is None:
             scan_run_id = self._run_repo.latest_run_id()
         if scan_run_id is None:
@@ -165,7 +213,72 @@ class TriageService:
             tool_registry=tool_registry,
             event_sink=event_sink,
             is_resume=False,
+            resolved_config=resolved_config,
         )
+
+    def _resolve_background_config(
+        self,
+        base_path: str,
+        billing_method: Literal["plan", "api"] | None,
+        api_key: str | None,
+    ) -> ResolvedTriageConfig:
+        """Build a ResolvedTriageConfig for background mode.
+
+        Shared by ``start_triage`` and ``resume_triage``.
+        """
+        cfg = ConfigManager(base_path).global_config
+        availability = BackgroundModeAvailabilityService(cfg).evaluate()
+        resolved_billing = self._resolve_billing_method(cfg, billing_method)
+        self._validate_background_credentials(resolved_billing.method, availability)
+        api_key_source = api_key or (cfg.claude.api_key if cfg.claude else None)
+        base_resolved = resolve_triage_config(app_root=Path(base_path))
+        return ResolvedTriageConfig(
+            provider_name="claude_sdk",
+            base_url=base_resolved.base_url,
+            model=base_resolved.model,
+            timeout_seconds=base_resolved.timeout_seconds,
+            retry_count=base_resolved.retry_count,
+            debug=base_resolved.debug,
+            billing_method=resolved_billing.method,
+            api_key_source=api_key_source,
+            auto_failover=resolved_billing.auto_failover_permitted,
+        )
+
+    @staticmethod
+    def _resolve_billing_method(
+        cfg: Any,
+        explicit: Literal["plan", "api"] | None,
+    ) -> ResolvedBilling:
+        """Resolve the billing method for background triage.
+
+        Priority: explicit arg > config default > fallback to "plan".
+        Auto-failover is only permitted when both the explicit arg and
+        the config default were absent.
+        """
+        if explicit is not None:
+            return ResolvedBilling(method=explicit, auto_failover_permitted=False)
+        default = cfg.claude.default_billing_method if cfg.claude else None
+        if default is not None:
+            return ResolvedBilling(
+                method=default.lower(), auto_failover_permitted=False
+            )
+        return ResolvedBilling(method="plan", auto_failover_permitted=True)
+
+    @staticmethod
+    def _validate_background_credentials(
+        billing: Literal["plan", "api"],
+        availability: BackgroundModeAvailability,
+    ) -> None:
+        if billing == "plan" and not availability.oauth_available:
+            raise TriageCredentialsError(
+                "Cannot start plan-billed background triage: "
+                f"{availability.oauth_reason}"
+            )
+        if billing == "api" and not availability.api_key_available:
+            raise TriageCredentialsError(
+                "Cannot start api-billed background triage: "
+                f"{availability.api_key_reason}"
+            )
 
     def resume_triage(
         self,
@@ -176,13 +289,42 @@ class TriageService:
         scan_run_id: int,
         tool_registry: ToolRegistry,
         event_sink: TriageEventSink | None = None,
+        interaction_mode: Literal["interactive", "background"] | None = None,
+        billing_method: Literal["plan", "api"] | None = None,
+        api_key: str | None = None,
     ) -> TriageStartHandle:
         """Resume an existing triage run for a project.
+
+        Accepts the same ``interaction_mode`` / ``billing_method`` /
+        ``api_key`` parameters as ``start_triage`` so callers can switch
+        billing pool on resume (e.g. plan -> api after a rate limit).
 
         Raises TriageNotResumableError if the run does not exist or is in
         a terminal state, JobBusy if another triage holds the lock.
         """
-        ensure_triage_backend_configured(app_root=Path(base_path))
+        if interaction_mode is None and billing_method is not None:
+            raise TriageConfigurationError(
+                "billing_method requires interaction_mode='background'"
+            )
+
+        if interaction_mode == "interactive" and billing_method is not None:
+            raise TriageConfigurationError(
+                "billing_method must be None for interactive mode."
+            )
+
+        resolved_config: ResolvedTriageConfig | None = None
+
+        if interaction_mode == "background":
+            resolved_config = self._resolve_background_config(
+                base_path, billing_method, api_key
+            )
+            logger.info(
+                "background resume: provider=claude_sdk billing=%s",
+                resolved_config.billing_method,
+            )
+        else:
+            ensure_triage_backend_configured(app_root=Path(base_path))
+
         summary = self._triage_repo.summarize_for_run(scan_run_id)
         if summary is None:
             raise TriageNotResumableError(scan_run_id, status=None)
@@ -196,6 +338,7 @@ class TriageService:
             tool_registry=tool_registry,
             event_sink=event_sink,
             is_resume=True,
+            resolved_config=resolved_config,
         )
 
     def _dispatch(
@@ -208,6 +351,7 @@ class TriageService:
         tool_registry: ToolRegistry,
         event_sink: TriageEventSink | None,
         is_resume: bool,
+        resolved_config: ResolvedTriageConfig | None = None,
     ) -> TriageStartHandle:
         holder_token = f"triage-run:{uuid.uuid4().hex[:8]}"
         self._lock_registry.acquire_job(TRIAGE_LOCK_KIND, holder_token)
@@ -237,6 +381,7 @@ class TriageService:
                 "tool_registry": tool_registry,
                 "cancel_token": cancel_token,
                 "is_resume": is_resume,
+                "resolved_config": resolved_config,
             },
             name=f"triage-run-{scan_run_id}",
             daemon=True,
@@ -261,19 +406,28 @@ class TriageService:
         tool_registry: ToolRegistry,
         cancel_token: CancellationToken,
         is_resume: bool,
+        resolved_config: ResolvedTriageConfig | None = None,
     ) -> None:
         sink = event_sink
+        uses_sdk = (
+            resolved_config is not None
+            and resolved_config.provider_name == "claude_sdk"
+        )
         try:
             try:
-                from application.triage.container import (
-                    ensure_triage_containers,
-                    ensure_triage_image,
-                )
+                from application.agent_sandbox.container import ensure_containers
+                from application.agent_sandbox.image import ensure_image
+                from application.triage.factory import resolve_triage_config
 
-                ensure_triage_image(Path(base_path))
-                ensure_triage_containers(
+                resolved = resolved_config or resolve_triage_config(
+                    app_root=Path(base_path)
+                )
+                ensure_image(Path(base_path))
+                ensure_containers(
                     Path(base_path),
-                    project_name,
+                    provider=resolved.provider_name,
+                    base_url=resolved.base_url,
+                    model=resolved.model,
                     repo_paths=self._repo_paths,
                 )
 
@@ -292,6 +446,7 @@ class TriageService:
                         cancel_token=cancel_token,
                         app_root=Path(base_path),
                         holder_token=holder_token,
+                        resolved_config=resolved_config,
                     )
                 else:
                     result = run_triage_for_project(
@@ -308,21 +463,29 @@ class TriageService:
                         app_root=Path(base_path),
                         scan_run_id=scan_run_id,
                         holder_token=holder_token,
+                        resolved_config=resolved_config,
                     )
                 future.set_result(result)
-                try:
-                    gc = ConfigManager(base_path).load_global_config()
-                    run_configured_syncs(
-                        base_path=base_path,
-                        project_name=project_name,
-                        run_id=scan_run_id,
-                        sync_list=gc.post_triage_sync,
-                    )
-                except Exception:
-                    logger.exception(
-                        "post-triage sync failed for scan_run_id=%d",
+                if result.get("status") == "rate_limited":
+                    logger.info(
+                        "triage scan_run_id=%d ended with rate_limited; "
+                        "skipping post-triage sync",
                         scan_run_id,
                     )
+                else:
+                    try:
+                        gc = ConfigManager(base_path).load_global_config()
+                        run_configured_syncs(
+                            base_path=base_path,
+                            project_name=project_name,
+                            run_id=scan_run_id,
+                            sync_list=gc.post_triage_sync,
+                        )
+                    except Exception:
+                        logger.exception(
+                            "post-triage sync failed for scan_run_id=%d",
+                            scan_run_id,
+                        )
             except TriageCancelled as exc:
                 logger.info("triage scan_run_id=%d cancelled", scan_run_id)
                 future.set_exception(exc)
@@ -350,17 +513,18 @@ class TriageService:
                     "triage lock already released for scan_run_id=%d",
                     scan_run_id,
                 )
-            try:
-                from application.triage.container import (
-                    teardown_triage_containers,
-                )
+            if not uses_sdk:
+                try:
+                    from application.agent_sandbox.container import (
+                        teardown_containers,
+                    )
 
-                teardown_triage_containers(Path(base_path))
-            except Exception:
-                logger.debug(
-                    "post-triage container teardown failed",
-                    exc_info=True,
-                )
+                    teardown_containers(Path(base_path))
+                except Exception:
+                    logger.debug(
+                        "post-triage container teardown failed",
+                        exc_info=True,
+                    )
 
     # Snapshot queries
 

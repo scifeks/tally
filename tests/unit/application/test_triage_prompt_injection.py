@@ -8,6 +8,7 @@ from typing import Any
 import pytest
 
 from application.triage.prompts import api_trace, dast_trace, sast_trace
+from application.triage.prompts.output_instructions import STDOUT_OUTPUT_INSTRUCTION
 from application.triage.prompts.triage_prompt import TriagePrompt
 from tests.prompt_helpers import fenced_record, unfenced_text
 
@@ -93,7 +94,11 @@ _CASES = [
 def test_attacker_field_stays_inside_its_fence(
     compose: Composer, base: dict[str, Any], field: str, label: str
 ) -> None:
-    prompt = compose({**base, field: _PAYLOAD}, project="demo")
+    prompt = compose(
+        {**base, field: _PAYLOAD},
+        project="demo",
+        output_instruction=STDOUT_OUTPUT_INSTRUCTION,
+    )
     combined = prompt.combined()
 
     record = fenced_record(prompt.finding_data, label)
@@ -119,7 +124,9 @@ def test_attacker_field_stays_inside_its_fence(
 def test_investigation_steps_live_in_instructions_not_data(
     compose: Composer, finding: dict[str, Any], instruction: str
 ) -> None:
-    prompt = compose(finding, project="demo")
+    prompt = compose(
+        finding, project="demo", output_instruction=STDOUT_OUTPUT_INSTRUCTION
+    )
     assert instruction in prompt.instructions
     assert "## Before You Answer" in prompt.instructions
 
@@ -134,7 +141,11 @@ def test_investigation_steps_live_in_instructions_not_data(
 def test_repo_name_only_reaches_prompt_through_fence(
     compose: Composer, finding: dict[str, Any], path_key: str
 ) -> None:
-    prompt = compose({**finding, "repo": _PAYLOAD}, project="demo")
+    prompt = compose(
+        {**finding, "repo": _PAYLOAD},
+        project="demo",
+        output_instruction=STDOUT_OUTPUT_INSTRUCTION,
+    )
 
     assert _PAYLOAD in fenced_record(prompt.finding_data, "finding_metadata")[path_key]
     assert "Ignore prior instructions" not in prompt.instructions

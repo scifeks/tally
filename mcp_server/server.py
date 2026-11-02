@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 from mcp.server import MCPServer
 
@@ -67,7 +67,9 @@ def create_mcp_server(
             " skip_batch, get_triage_status, list_projects,"
             " create_scan_run, submit_finding,"
             " get_duplicate_candidates, resolve_duplicates,"
-            " end_scan."
+            " set_scan_config, get_scan_config, end_scan,"
+            " start_scan_phase, mark_scan_phase_complete,"
+            " get_scan_phase_status."
         ),
     )
 
@@ -120,11 +122,17 @@ def create_mcp_server(
         run_repo = RunRepository(conn_factory)
         indexer = FindingIndexer(finding_repo=finding_repo)
         kb = get_or_build_knowledge_base(kb_cache, project_name, str(base_path_obj))
+        scan_event_sink = None
+        if event_publisher is not None:
+            from web.adapters.event_bus_scan_sink import EventBusScanSink
+
+            scan_event_sink = EventBusScanSink(event_publisher)
         return McpIngestService(
             finding_repo=finding_repo,
             run_repo=run_repo,
             indexer=indexer,
             knowledge_base=kb,
+            scan_event_sink=scan_event_sink,
         )
 
     @server.tool()
@@ -264,6 +272,72 @@ def create_mcp_server(
         """Mark a scan run as finished."""
         service = _get_ingest_service(project)
         return service.end_scan(project_id, run_id)
+
+    @server.tool()
+    def set_scan_config(
+        project: str,
+        run_id: int,
+        only: list[str] | None = None,
+        exclude: list[str] | None = None,
+        adversarial_verification: bool = False,
+    ) -> dict[str, Any]:
+        """Configure vuln scanner family filter and adversarial opt-in."""
+        service = _get_ingest_service(project)
+        return service.set_scan_config(
+            project, run_id, only, exclude, adversarial_verification
+        )
+
+    @server.tool()
+    def get_scan_config(
+        project: str,
+        run_id: int,
+    ) -> dict[str, Any]:
+        """Read scan configuration for a run."""
+        service = _get_ingest_service(project)
+        return service.get_scan_config(project, run_id)
+
+    @server.tool()
+    def start_scan_phase(
+        project: str,
+        run_id: int,
+        phase: str,
+        usage_pool: str | None = None,
+    ) -> dict[str, Any]:
+        """Mark a scan phase as in_progress before execution begins."""
+        service = _get_ingest_service(project)
+        return service.start_scan_phase(project, run_id, phase, usage_pool)
+
+    @server.tool()
+    def mark_scan_phase_complete(
+        project: str,
+        run_id: int,
+        phase: str,
+        status: str = "completed",
+        usage_pool: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Mark a scan phase as completed for checkpointing."""
+        service = _get_ingest_service(project)
+        return service.mark_scan_phase_complete(
+            project,
+            run_id,
+            phase,
+            cast(
+                Literal["completed", "failed", "rate_limited"],
+                status,
+            ),
+            cast(Literal["plan", "api"] | None, usage_pool),
+            metadata,
+        )
+
+    @server.tool()
+    def get_scan_phase_status(
+        project: str,
+        run_id: int,
+    ) -> dict[str, Any]:
+        """Return the latest attempt for every recorded phase."""
+        service = _get_ingest_service(project)
+        return service.get_scan_phase_status(project, run_id)
 
     return server
 

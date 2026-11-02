@@ -758,6 +758,35 @@ Stopping triage agent containers...
 Triage agent image rebuilt.
 ```
 
+### Background triage and scan sub-commands
+
+Triage and scan support sub-commands for picking interaction mode, billing method, and resume. See [credential-and-billing-model.md](credential-and-billing-model.md) for the model behind these flags.
+
+**Triage sub-commands:**
+
+```
+[acme-security-audit]> triage start --background --billing plan
+[acme-security-audit]> triage start --background --billing api --api-key-override sk-...
+[acme-security-audit]> triage resume RUN_ID --background --billing api
+```
+
+**Scan sub-commands:**
+
+```
+[acme-security-audit]> scan skills                       # list available vuln scanner skills
+[acme-security-audit]> scan start --interactive          # drive from your own Claude Code session
+[acme-security-audit]> scan start --background --billing plan --only xss,injection
+[acme-security-audit]> scan start --background --billing api --exclude access-control
+[acme-security-audit]> scan resume RUN_ID --background --billing api
+```
+
+Flag notes for both commands:
+
+- `--interactive` and `--background` are mutually exclusive; omit both to use the default (`--interactive` on start; mode inferred from the latest attempt on resume).
+- `--billing`, `--api-key-override`, `--only`, and `--exclude` are only accepted with `--background`.
+- `--only` and `--exclude` are mutually exclusive. Values are comma-separated display slugs (`scan-xss-stored`) or family names (`xss`).
+- Interactive mode prints the MCP server URL and a short-lived bearer token for you to paste into your Claude Code session.
+
 ---
 
 ## Switching Between Projects

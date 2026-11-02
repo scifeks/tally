@@ -7,6 +7,7 @@ from dataclasses import dataclass
 
 _TRIAGE_BACKEND_LABELS = {
     "claude": "Claude Code",
+    "claude_sdk": "Claude SDK",
     "ollama": "OpenCode (Ollama)",
     "llama_cpp": "OpenCode (llama.cpp)",
     "claude_code": "Claude Code",
@@ -15,7 +16,9 @@ _TRIAGE_BACKEND_LABELS = {
     "openai": "OpenAI",
 }
 
-_FRONTIER_PROVIDERS: frozenset[str] = frozenset({"claude", "claude_code", "openai"})
+_FRONTIER_PROVIDERS: frozenset[str] = frozenset(
+    {"claude", "claude_code", "claude_sdk", "openai"}
+)
 
 
 @dataclass(frozen=True)

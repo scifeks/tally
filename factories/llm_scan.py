@@ -15,11 +15,11 @@ def create_llm_scan_backend(
     repo_paths: dict[str, Path],
 ) -> tuple[LlmScanBackendPort, int]:
     """Create an LLM scan backend and return (backend, timeout)."""
-    from application.triage.compose import generate_triage_compose
+    from application.agent_sandbox.compose import generate_compose
     from application.triage.factory import resolve_triage_config
 
     resolved = resolve_triage_config(app_root=app_root)
-    compose_path = generate_triage_compose(
+    compose_path = generate_compose(
         app_root,
         repo_paths,
         provider=resolved.provider_name,

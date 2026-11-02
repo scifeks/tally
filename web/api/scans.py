@@ -1,5 +1,5 @@
 """Scan lifecycle endpoints: config, start, history, detail,
-cancel, and SSE event stream."""
+cancel, resume, and SSE event stream."""
 
 from __future__ import annotations
 
@@ -12,8 +12,11 @@ from typing import Any
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import StreamingResponse
 
+from application.anthropic.mode_availability import BackgroundModeAvailabilityService
 from application.locking import JobBusy
+from application.mcp.ingest_service import McpIngestService
 from application.project.repositories_service import ProjectRepositoriesService
+from application.scans.background_launcher import ScanBackgroundLauncher
 from application.scans.scans_service import (
     ScanNotCancellable,
     ScanNotFound,
@@ -21,9 +24,16 @@ from application.scans.scans_service import (
     ScanValidationError,
 )
 from application.tools.registry import discover_tools
+from core.config import ConfigManager
 from core.project_paths import ProjectPaths
 from domain.pipeline.bus_event import EOS, BusEvent, new_event_id
 from domain.scans.entry import ScanRunRow, ToolRunRow
+from domain.scans.vuln_scanner_registry import (
+    UnknownScannerSkill,
+    group_by_family,
+    list_scanners,
+    resolve_display_slug,
+)
 from domain.tools.scan_types import SEGMENT_ORDER
 from factories.persistence import (
     ProjectNotFound,
@@ -34,11 +44,13 @@ from factories.persistence import (
     create_scan_repos,
     create_scans_service,
     create_url_finding_repo,
+    load_active_repos,
 )
 from factories.scanning import create_git_diff, get_scan_service
 from web.adapters.event_bus_scan_sink import EventBusScanSink
 from web.adapters.no_approval_prompt import NoApprovalPromptAdapter
 from web.api._errors import (
+    BadRequest,
     Conflict,
     JobBusyError,
     NotFound,
@@ -49,12 +61,15 @@ from web.api._errors import (
 from web.api._project_resolver import _resolve_project
 from web.api._scan_run_summary import scan_run_to_summary
 from web.api.schemas import (
+    BackgroundScanResumeRequest,
+    BackgroundScanStartResponse,
     ScanCancelAllResponse,
     ScanCancelResponse,
     ScanConfigRepo,
     ScanConfigResponse,
     ScanConfigTool,
     ScanDetailResponse,
+    ScannerSkillItem,
     ScanProgressResponse,
     ScanRunSummary,
     ScansListResponse,
@@ -108,6 +123,134 @@ def _tool_run_to_item(row: ToolRunRow) -> ToolRunItem:
 
 def _validation_error_to_envelope(exc: ScanValidationError) -> dict:
     return {"fields": [{"field": fe.field, "issue": fe.issue} for fe in exc.fields]}
+
+
+def _resolve_scanner_slugs(
+    only: list[str],
+    exclude: list[str],
+) -> tuple[list[str], list[str]]:
+    """Expand family names to display slugs and validate all entries.
+
+    Accepts a mix of display slugs and family names. Family names are
+    expanded to per-scanner display slugs via ``group_by_family()``.
+    Returns deduplicated (only, exclude) display slug lists.
+    """
+    families = group_by_family()
+
+    def _expand(items: list[str]) -> list[str]:
+        result: list[str] = []
+        for item in items:
+            if item in families:
+                result.extend(e.display_slug for e in families[item])
+            else:
+                resolve_display_slug(item)
+                result.append(item)
+        return list(dict.fromkeys(result))
+
+    return _expand(only), _expand(exclude)
+
+
+_RESUMABLE_STATUSES = frozenset({"failed", "running", "rate_limited"})
+
+_BACKGROUND_ONLY_FIELDS = (
+    "billing_method",
+    "only_scanner_skills",
+    "exclude_scanner_skills",
+    "adversarial_verification",
+)
+
+
+def _build_background_launcher(
+    request: Request,
+    paths: ProjectPaths,
+) -> ScanBackgroundLauncher:
+    """Construct a ScanBackgroundLauncher for the given project."""
+    base_path: str = request.app.state.base_path
+    cfg = ConfigManager(base_path).global_config
+
+    run_repo = create_scan_repos(paths.findings_db)[0]
+    finding_repo = create_finding_repo(paths.findings_db)
+    sink = EventBusScanSink(request.app.state.event_bus)
+    mcp_service = McpIngestService(
+        finding_repo=finding_repo,
+        run_repo=run_repo,
+        scan_event_sink=sink,
+    )
+
+    return ScanBackgroundLauncher(
+        mcp_service=mcp_service,
+        availability=BackgroundModeAvailabilityService(cfg),
+        config=cfg,
+        scan_phase_repo=mcp_service,
+        scan_event_sink=sink,
+        scan_run_status_repo=run_repo,
+    )
+
+
+def _validate_start_semantics(body: ScanStartRequest) -> None:
+    """Raise BadRequest for semantic violations that Pydantic Literal
+    types cannot express (mutual exclusion, interactive + background
+    fields)."""
+    if body.only_scanner_skills and body.exclude_scanner_skills:
+        raise BadRequest(
+            "only_scanner_skills and exclude_scanner_skills are mutually exclusive"
+        )
+
+    if body.interaction_mode == "interactive":
+        present = [f for f in _BACKGROUND_ONLY_FIELDS if _field_is_set(body, f)]
+        if present:
+            raise BadRequest(
+                f"{', '.join(present)} require interaction_mode='background'"
+            )
+
+
+def _field_is_set(body: ScanStartRequest, name: str) -> bool:
+    """True when the field carries a non-default value."""
+    val = getattr(body, name, None)
+    if val is None:
+        return False
+    if isinstance(val, (list, str)) and not val:
+        return False
+    if isinstance(val, bool) and not val:
+        return False
+    return True
+
+
+def _resolve_api_key_source(
+    base_path: str,
+    override: str | None,
+) -> str | None:
+    """Explicit override > config > None. Mirrors triage's pattern."""
+    if override:
+        return override
+    cfg = ConfigManager(base_path).global_config
+    return (cfg.claude.api_key if cfg.claude else None) or None
+
+
+async def _schedule_launch(
+    launcher: ScanBackgroundLauncher,
+    run_repo: Any,
+    run_id: int,
+    **launch_kwargs: Any,
+) -> None:
+    """Transition the run to running and launch the worker.
+
+    Marks the run ``running`` before the thread fires so the UI's
+    active-scans filter picks it up immediately. On ValueError (caller
+    validation failures surfaced by the launcher) the run is marked
+    ``failed`` and a 400 is raised. Any other exception also marks the
+    run ``failed`` so the row never stays stuck in ``queued`` /
+    ``running`` without a worker; the error propagates as a 500.
+    """
+    await asyncio.to_thread(run_repo.set_status, run_id, "running")
+    try:
+        await asyncio.to_thread(launcher.launch, run_id=run_id, **launch_kwargs)
+    except ValueError as exc:
+        await asyncio.to_thread(run_repo.set_status, run_id, "failed")
+        raise BadRequest(str(exc)) from exc
+    except Exception:
+        await asyncio.to_thread(run_repo.set_status, run_id, "failed")
+        raise
 
 
 def _build_progress(
@@ -189,10 +332,21 @@ async def get_scans_config(
             )
         )
 
+    scanner_skills: list[ScannerSkillItem] = []
+    for entry in list_scanners():
+        scanner_skills.append(
+            ScannerSkillItem(
+                slug=entry.display_slug,
+                family=entry.family,
+                description=entry.description,
+            )
+        )
+
     return ScanConfigResponse(
         repos=repos,
         tools=tools,
         domains=list(SEGMENT_ORDER),
+        available_scanner_skills=scanner_skills,
     )
 
 
@@ -291,18 +445,32 @@ async def list_scans(
 
 @v1_router.post(
     "/{project_id}/scans",
-    response_model=ScanRunSummary,
+    response_model=ScanRunSummary | BackgroundScanStartResponse,
     status_code=202,
 )
 async def start_scan(
     project_id: int,
     request: Request,
     body: ScanStartRequest,
-) -> ScanRunSummary:
+) -> ScanRunSummary | BackgroundScanStartResponse:
     """Queue a new scan in a worker thread.
 
-    Returns 409 ``JOB_ALREADY_RUNNING`` if another scan is in progress.
+    Returns 409 ``JOB_ALREADY_RUNNING`` if another scan is in progress
+    (interactive mode only). Background mode dispatches via the Agent SDK.
     """
+    _validate_start_semantics(body)
+
+    if body.interaction_mode == "background":
+        return await _start_background_scan(project_id, request, body)
+    return await _start_interactive_scan(project_id, request, body)
+
+
+async def _start_interactive_scan(
+    project_id: int,
+    request: Request,
+    body: ScanStartRequest,
+) -> ScanRunSummary:
+    """Interactive scan path: existing tool-runner pipeline."""
     row = _resolve_project(request, project_id)
     project_name: str = row.name
     base_path: str = request.app.state.base_path
@@ -381,6 +549,72 @@ async def start_scan(
     return scan_run_to_summary(fresh)
 
 
+async def _start_background_scan(
+    project_id: int,
+    request: Request,
+    body: ScanStartRequest,
+) -> BackgroundScanStartResponse:
+    """Background scan path: Agent SDK dispatch.
+
+    Pre-checks (slug resolution, active-repo lookup) run before
+    creating the run row so a validation failure cannot leave an
+    orphaned "queued" row.
+    """
+    row = _resolve_project(request, project_id)
+    project_name: str = row.name
+    base_path: str = request.app.state.base_path
+    paths = ProjectPaths.from_registry_row(row)
+
+    # Pre-check: scanner slug resolution
+    try:
+        only, exclude = _resolve_scanner_slugs(
+            body.only_scanner_skills, body.exclude_scanner_skills
+        )
+    except UnknownScannerSkill as exc:
+        raise BadRequest(str(exc)) from exc
+
+    # Pre-check: project has active repos
+    repos = await asyncio.to_thread(load_active_repos, base_path, project_name)
+    if not repos:
+        raise BadRequest(f"project {project_name!r} has no active repos")
+
+    api_key = _resolve_api_key_source(base_path, body.api_key_override)
+
+    # All cheap checks passed; create the run row
+    run_repo = create_scan_repos(paths.findings_db)[0]
+    run_id = await asyncio.to_thread(
+        run_repo.create,
+        project_id=project_id,
+        repo_ids=[],
+        tool_ids=["claudecode"],
+        domains=["llm"],
+        skip_enrichment=True,
+        status="queued",
+    )
+
+    launcher = _build_background_launcher(request, paths)
+    await _schedule_launch(
+        launcher,
+        run_repo,
+        run_id,
+        project_name=project_name,
+        base_path=base_path,
+        interaction_mode="background",
+        billing_method=body.billing_method,
+        only=only or None,
+        exclude=exclude or None,
+        adversarial=body.adversarial_verification,
+        api_key_source=api_key,
+    )
+
+    return BackgroundScanStartResponse(
+        id=run_id,
+        project_id=project_id,
+        status="queued",
+        interaction_mode="background",
+    )
+
+
 @v1_router.post(
     "/{project_id}/scans/{run_id}/cancel",
     response_model=ScanCancelResponse,
@@ -404,6 +638,73 @@ async def cancel_scan(
             details={"status": exc.status},
         ) from exc
     return ScanCancelResponse(id=run_id, status="cancelling")
+
+
+@v1_router.post(
+    "/{project_id}/scans/{run_id}/resume",
+    response_model=BackgroundScanStartResponse,
+    status_code=202,
+)
+async def resume_scan(
+    project_id: int,
+    run_id: int,
+    request: Request,
+    body: BackgroundScanResumeRequest,
+) -> BackgroundScanStartResponse:
+    """Resume a background scan that was interrupted or rate-limited.
+
+    Re-launches the Agent SDK session for the same run_id. The launcher
+    inspects phase status to build a resume preamble that skips already
+    completed phases.
+    """
+    row = _resolve_project(request, project_id)
+    project_name: str = row.name
+    base_path: str = request.app.state.base_path
+    paths = ProjectPaths.from_registry_row(row)
+
+    # Verify the run exists, belongs to this project, and is resumable
+    run_repo = create_scan_repos(paths.findings_db)[0]
+    scan_row = await asyncio.to_thread(run_repo.get, run_id)
+    if scan_row is None or scan_row.project_id != project_id:
+        raise NotFound(f"scan run {run_id} not found")
+
+    if scan_row.status not in _RESUMABLE_STATUSES:
+        raise BadRequest(f"run {run_id} status is {scan_row.status!r}; cannot resume")
+
+    # Read the existing scan config to get only/exclude/adversarial
+    finding_repo = create_finding_repo(paths.findings_db)
+    mcp_service = McpIngestService(
+        finding_repo=finding_repo,
+        run_repo=run_repo,
+    )
+    scan_config = mcp_service.get_scan_config(project=project_name, run_id=run_id)
+    only = scan_config.get("only") or None
+    exclude = scan_config.get("exclude") or None
+    adversarial = scan_config.get("adversarial_verification", False)
+
+    api_key = _resolve_api_key_source(base_path, body.api_key_override)
+
+    launcher = _build_background_launcher(request, paths)
+    await _schedule_launch(
+        launcher,
+        run_repo,
+        run_id,
+        project_name=project_name,
+        base_path=base_path,
+        interaction_mode="background",
+        billing_method=body.billing_method,
+        only=only,
+        exclude=exclude,
+        adversarial=adversarial,
+        api_key_source=api_key,
+    )
+
+    return BackgroundScanStartResponse(
+        id=run_id,
+        project_id=project_id,
+        status="running",
+        interaction_mode="background",
+    )
 
 
 @v1_router.get(

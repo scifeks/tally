@@ -36,6 +36,23 @@ RUN apt-get update \
 COPY opencode-permissions.json /etc/opencode/permissions.json
 COPY triage-relay.sh /usr/local/bin/triage-relay
 RUN chmod +x /usr/local/bin/triage-relay
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+       python3 \
+       python3-pip \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY sdk-requirements.txt /tmp/sdk-requirements.txt
+# Debian 12 marks system Python as externally managed; the image is single-purpose
+RUN pip3 install --break-system-packages --no-cache-dir \
+       -r /tmp/sdk-requirements.txt \
+    && rm /tmp/sdk-requirements.txt
+
+COPY sdk-runner.py /usr/local/bin/sdk-runner.py
+RUN printf '#!/bin/sh\nexec python3 /usr/local/bin/sdk-runner.py "$@"\n' \
+       > /usr/local/bin/sdk-runner \
+    && chmod +x /usr/local/bin/sdk-runner
 USER agent
 
 WORKDIR /workspace

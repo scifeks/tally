@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import logging
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -20,6 +20,9 @@ from application.ports.triage_event_sink import (
 from application.tools.registry import ToolRegistry
 from application.triage.batch_creator import create_triage_batches
 from application.triage.prompts import dast_trace, sast_trace
+from application.triage.prompts.output_instructions import (
+    STDOUT_OUTPUT_INSTRUCTION,
+)
 from application.triage.prompts.triage_prompt import TriagePrompt
 from application.triage.verdict import (
     SourceNotExaminedError,
@@ -32,20 +35,31 @@ from domain.findings.normalization import (
     severity_to_rank,
 )
 from domain.pipeline.triage_events import (
+    BatchAttemptCompleted,
+    BatchAttemptFailed,
+    BatchAttemptRateLimited,
+    BatchAttemptStarted,
     BatchCompleted,
     BatchFailed,
     BatchStarted,
     RunCancelled,
     RunCompleted,
     RunFailed,
+    RunRateLimited,
     RunStarted,
+    TriageEvent,
 )
+from infrastructure.anthropic.error_classifier import ErrorClass
 
 if TYPE_CHECKING:
     from application.ports.finding_repository import FindingRepositoryPort
     from application.ports.run_repository import RunRepositoryPort
     from application.ports.triage_agent import OneshotTriageBackendPort
     from application.ports.triage_batch_repository import TriageBatchRepositoryPort
+    from application.triage.factory import (
+        ResolvedTriageConfig,
+        TriageAgentFactory,
+    )
 
 
 _PROMPT_COMPOSERS: dict[str, Callable[..., TriagePrompt]] = {
@@ -65,7 +79,15 @@ class TriageAborted(Exception):
 
     Propagates out of the batch loop so remaining pending batches stay
     ``pending`` (resumable) instead of every one being marked ``failed``.
+
+    Carries ``error_class`` from the originating
+    ``TriageBackendUnavailable`` so the batch loop can persist it on the
+    execution row before re-raising.
     """
+
+    def __init__(self, *args: object, error_class: str | None = None) -> None:
+        super().__init__(*args)
+        self.error_class = error_class
 
 
 class NoScanRunError(RuntimeError):
@@ -78,6 +100,8 @@ class TriageResult:
     success: int
     failed: int
     incomplete: int
+    status: str = "completed"
+    last_error_class: str | None = None
 
 
 class TriageRunner:
@@ -104,6 +128,11 @@ class TriageRunner:
         triaged_by: str = "auto_triage",
         debug: bool = False,
         max_findings_per_batch: int = 4,
+        billing_method: str | None = None,
+        agent_factory: TriageAgentFactory | None = None,
+        resolved_config: ResolvedTriageConfig | None = None,
+        enable_auto_failover: bool = False,
+        api_key_available: bool = False,
     ) -> None:
         self._project = project
         self._run_repo = run_repo
@@ -125,6 +154,16 @@ class TriageRunner:
         self._triaged_by = triaged_by
         self._debug = debug
         self._max_findings_per_batch = max_findings_per_batch
+        self._billing_method = billing_method
+        self._agent_factory = agent_factory
+        self._resolved_config = resolved_config
+        self._enable_auto_failover = enable_auto_failover
+        self._api_key_available = api_key_available
+
+        self._current_run_id: int = 0
+        self._current_attempt_number: int = 1
+
+        self.result: TriageResult | None = None
 
     # Public API
 
@@ -144,9 +183,23 @@ class TriageRunner:
         )
         return run_id, len(created)
 
-    def run(self, *, holder_token: str | None = None) -> TriageResult:
-        """Runs one triage pass for a scan run."""
-        run_id, _total = self.batch()
+    def run(
+        self,
+        *,
+        holder_token: str | None = None,
+        skip_batching: bool = False,
+    ) -> TriageResult:
+        """Runs one triage pass for a scan run.
+
+        When ``skip_batching`` is True the batching phase is skipped and
+        the claim loop processes whatever pending batches already exist.
+        Used by the resume path where ``reset_for_resume`` has already
+        flipped retryable batches back to pending.
+        """
+        if skip_batching:
+            run_id = self._resolve_scan_run_id()
+        else:
+            run_id, _total = self.batch()
         self._emit(
             RunStarted(
                 scan_run_id=run_id,
@@ -176,7 +229,12 @@ class TriageRunner:
         except Exception as exc:
             self._emit_run_failed(run_id, exc)
             raise
-        if result.failed > 0 and result.success == 0:
+
+        self.result = result
+
+        if result.status == "rate_limited":
+            pass  # RunRateLimited already emitted in _run_batch_loop
+        elif result.failed > 0 and result.success == 0:
             self._emit(
                 RunFailed(
                     scan_run_id=run_id,
@@ -209,11 +267,13 @@ class TriageRunner:
             segment: str,
         ) -> str:
             compose_fn = _PROMPT_COMPOSERS[segment]
+            output_instruction = self._output_instruction()
             for finding in batch_data:
                 fid = finding.get("id", "?")
                 prompt = compose_fn(
                     finding,
                     project=self._project,
+                    output_instruction=output_instruction,
                 ).combined()
                 _log.debug(
                     "========== FINDING %s (batch %d)"
@@ -231,6 +291,11 @@ class TriageRunner:
 
     # Private helpers
 
+    def _output_instruction(self) -> str:
+        return getattr(
+            self._triage_backend, "OUTPUT_INSTRUCTION", STDOUT_OUTPUT_INSTRUCTION
+        )
+
     def _resolve_scan_run_id(self) -> int:
         """Return the scan_run_id triage will operate on."""
         if self._scan_run_id is not None:
@@ -243,10 +308,10 @@ class TriageRunner:
             )
         return latest
 
-    def _emit(self, event: object) -> None:
+    def _emit(self, event: TriageEvent) -> None:
         """Emit *event* through the configured sink, swallowing failures."""
         try:
-            self._event_sink.emit(event)  # type: ignore[arg-type]
+            self._event_sink.emit(event)
         except Exception as exc:  # pragma: no cover - defensive
             _log.debug("Triage event sink raised; swallowing: %s", exc)
 
@@ -304,16 +369,22 @@ class TriageRunner:
         writes are blocked during agent processing.
         """
         sessions_run = success = failed = incomplete = 0
+        abort_status: str | None = None
+        abort_error_class: str | None = None
+
         while True:
             self._check_canceled()
 
-            batch = self._triage_repo.claim_batch(run_id)
+            batch = self._triage_repo.claim_batch(
+                run_id, usage_pool=self._billing_method
+            )
             if batch is None:
                 break
 
             batch_id = batch.id
             finding_ids = batch.finding_ids
             batch_data = batch.batch_data
+            attempt_number = batch.attempt_number or 1
 
             tool_name = batch_data[0]["tool"] if batch_data else None
             tool_obj = (
@@ -321,12 +392,50 @@ class TriageRunner:
             )
 
             if tool_obj is None or tool_obj.skip:
+                self._emit(
+                    BatchAttemptStarted(
+                        scan_run_id=run_id,
+                        project_id=self._project_id,
+                        batch_id=batch_id,
+                        attempt_number=attempt_number,
+                        usage_pool=self._billing_method or "plan",
+                        message=(
+                            f"Batch {batch_id} attempt "
+                            f"{attempt_number} started (skipped)"
+                        ),
+                    )
+                )
+                self._emit(
+                    BatchAttemptCompleted(
+                        scan_run_id=run_id,
+                        project_id=self._project_id,
+                        batch_id=batch_id,
+                        attempt_number=attempt_number,
+                        usage_pool=self._billing_method or "plan",
+                        message=(
+                            f"Batch {batch_id} attempt "
+                            f"{attempt_number} completed (skipped)"
+                        ),
+                    )
+                )
                 self._triage_repo.complete_batch(batch_id, "completed")
                 continue
 
             segment = tool_obj.scan_segment
 
             sessions_run += 1
+            self._current_run_id = run_id
+            self._current_attempt_number = attempt_number
+            self._emit(
+                BatchAttemptStarted(
+                    scan_run_id=run_id,
+                    project_id=self._project_id,
+                    batch_id=batch_id,
+                    attempt_number=attempt_number,
+                    usage_pool=self._billing_method or "",
+                    message=f"Batch {batch_id} attempt {attempt_number} started",
+                )
+            )
             self._emit(
                 BatchStarted(
                     scan_run_id=run_id,
@@ -336,16 +445,80 @@ class TriageRunner:
                     message=(f"Batch {batch_id} started ({len(finding_ids)} findings)"),
                 )
             )
-            if holder_token:
-                with self._registry.findings(finding_ids, holder_token):
+            try:
+                if holder_token:
+                    with self._registry.findings(finding_ids, holder_token):
+                        outcome = handler(batch_id, batch_data, segment)
+                else:
                     outcome = handler(batch_id, batch_data, segment)
-            else:
-                outcome = handler(batch_id, batch_data, segment)
+            except TriageAborted as exc:
+                ec_str = exc.error_class
+                is_rate_limit = ec_str in (
+                    ErrorClass.RATE_LIMIT_PLAN.value,
+                    ErrorClass.RATE_LIMIT_API.value,
+                )
+                if is_rate_limit:
+                    self._emit(
+                        BatchAttemptRateLimited(
+                            scan_run_id=run_id,
+                            project_id=self._project_id,
+                            batch_id=batch_id,
+                            attempt_number=attempt_number,
+                            usage_pool=self._billing_method or "",
+                            message=(
+                                f"Batch {batch_id} attempt "
+                                f"{attempt_number} rate limited"
+                            ),
+                        )
+                    )
+                else:
+                    self._emit(
+                        BatchAttemptFailed(
+                            scan_run_id=run_id,
+                            project_id=self._project_id,
+                            batch_id=batch_id,
+                            attempt_number=attempt_number,
+                            usage_pool=self._billing_method or "",
+                            message=f"Batch {batch_id} attempt {attempt_number} failed",
+                            error=ec_str or "",
+                        )
+                    )
+                self._triage_repo.complete_batch(
+                    batch_id,
+                    "rate_limited" if is_rate_limit else "failed",
+                    error_class=ec_str,
+                )
+                failed += 1
+                abort_status = "rate_limited" if is_rate_limit else "failed"
+                abort_error_class = ec_str
+                if is_rate_limit:
+                    self._emit(
+                        RunRateLimited(
+                            scan_run_id=run_id,
+                            project_id=self._project_id,
+                            usage_pool=self._billing_method or "",
+                            message=f"Rate limited ({ec_str})",
+                        )
+                    )
+                break
+
+            attempt_number = self._current_attempt_number
+
             db_status = "failed" if outcome == "failed" else "completed"
             self._triage_repo.complete_batch(batch_id, db_status)
 
             if outcome == "success":
                 success += 1
+                self._emit(
+                    BatchAttemptCompleted(
+                        scan_run_id=run_id,
+                        project_id=self._project_id,
+                        batch_id=batch_id,
+                        attempt_number=attempt_number,
+                        usage_pool=self._billing_method or "",
+                        message=f"Batch {batch_id} attempt {attempt_number} completed",
+                    )
+                )
                 self._emit(
                     BatchCompleted(
                         scan_run_id=run_id,
@@ -359,6 +532,17 @@ class TriageRunner:
             elif outcome == "failed":
                 failed += 1
                 self._emit(
+                    BatchAttemptFailed(
+                        scan_run_id=run_id,
+                        project_id=self._project_id,
+                        batch_id=batch_id,
+                        attempt_number=attempt_number,
+                        usage_pool=self._billing_method or "",
+                        message=f"Batch {batch_id} attempt {attempt_number} failed",
+                        error="see logs",
+                    )
+                )
+                self._emit(
                     BatchFailed(
                         scan_run_id=run_id,
                         project_id=self._project_id,
@@ -371,6 +555,16 @@ class TriageRunner:
             else:
                 incomplete += 1
                 self._emit(
+                    BatchAttemptCompleted(
+                        scan_run_id=run_id,
+                        project_id=self._project_id,
+                        batch_id=batch_id,
+                        attempt_number=attempt_number,
+                        usage_pool=self._billing_method or "",
+                        message=f"Batch {batch_id} attempt {attempt_number} {outcome}",
+                    )
+                )
+                self._emit(
                     BatchCompleted(
                         scan_run_id=run_id,
                         project_id=self._project_id,
@@ -381,12 +575,69 @@ class TriageRunner:
                     )
                 )
 
-        return TriageResult(
+        result = TriageResult(
             sessions_run=sessions_run,
             success=success,
             failed=failed,
             incomplete=incomplete,
         )
+        if abort_status is not None:
+            result.status = abort_status
+            result.last_error_class = abort_error_class
+        return result
+
+    def _can_failover(self, error_class: object) -> bool:
+        """True when plan-to-api failover is allowed for this error."""
+        return (
+            error_class == ErrorClass.RATE_LIMIT_PLAN
+            and self._enable_auto_failover
+            and self._api_key_available
+            and self._billing_method != "api"
+            and self._agent_factory is not None
+            and self._resolved_config is not None
+        )
+
+    def _execute_failover(self, batch_id: int) -> int:
+        """Swap the triage backend from plan to api billing.
+
+        Updates ``self._current_attempt_number`` so the batch loop reports
+        the new attempt on its ``BatchAttemptCompleted``. Returns the new
+        execution id.
+        """
+        _log.info("Rate limited on plan billing; failing over to api")
+        self._emit(
+            BatchAttemptRateLimited(
+                scan_run_id=self._current_run_id,
+                project_id=self._project_id,
+                batch_id=batch_id,
+                attempt_number=self._current_attempt_number,
+                usage_pool=self._billing_method or "",
+                message=(
+                    f"Batch {batch_id} attempt "
+                    f"{self._current_attempt_number} rate limited"
+                ),
+            )
+        )
+        new_exec_id, new_attempt = self._triage_repo.start_failover_execution(
+            batch_id, "api"
+        )
+        self._billing_method = "api"
+        assert self._resolved_config is not None
+        assert self._agent_factory is not None
+        api_config = replace(self._resolved_config, billing_method="api")
+        self._triage_backend = self._agent_factory.create(api_config)
+        self._emit(
+            BatchAttemptStarted(
+                scan_run_id=self._current_run_id,
+                project_id=self._project_id,
+                batch_id=batch_id,
+                attempt_number=new_attempt,
+                usage_pool=self._billing_method,
+                message=f"Batch {batch_id} attempt {new_attempt} started",
+            )
+        )
+        self._current_attempt_number = new_attempt
+        return new_exec_id
 
     def _run_batch_findings(
         self,
@@ -402,6 +653,7 @@ class TriageRunner:
         'incomplete' (mixed).
         """
         compose_fn = _PROMPT_COMPOSERS[segment]
+        output_instruction = self._output_instruction()
         succeeded = 0
         total = len(batch_data)
         max_attempts = self._retry_count + 1
@@ -409,7 +661,11 @@ class TriageRunner:
         for finding in batch_data:
             self._check_canceled()
             fid = finding.get("id", -1)
-            prompt = compose_fn(finding, project=self._project)
+            prompt = compose_fn(
+                finding,
+                project=self._project,
+                output_instruction=output_instruction,
+            )
             ok = False
             for attempt in range(max_attempts):
                 try:
@@ -464,7 +720,15 @@ class TriageRunner:
                         exc_message=str(exc),
                         stderr_tail=stderr_tail,
                     )
-                    raise TriageAborted(str(exc)) from exc
+                    ec = exc.error_class
+                    if self._can_failover(ec):
+                        self._execute_failover(batch_id)
+                        ok = self._retry_finding_after_failover(
+                            prompt, fid, batch_id, segment, cwd=cwd
+                        )
+                        break
+                    ec_str = getattr(ec, "value", None) or (str(ec) if ec else None)
+                    raise TriageAborted(str(exc), error_class=ec_str) from exc
                 except Exception as exc:
                     _log.error(
                         "Triage failed for finding %d in batch %d: %s: %s",
@@ -490,6 +754,42 @@ class TriageRunner:
         if succeeded == 0:
             return "failed"
         return "incomplete"
+
+    def _retry_finding_after_failover(
+        self,
+        prompt: TriagePrompt,
+        finding_id: int,
+        batch_id: int,
+        segment: str,
+        *,
+        cwd: Path,
+    ) -> bool:
+        """Retry a single finding on the newly-swapped API backend.
+
+        Returns True if the finding was triaged successfully. Raises
+        TriageAborted if the API backend also fails.
+        """
+        try:
+            verdict = self._triage_backend.run_triage(
+                prompt,
+                finding_id=finding_id,
+                timeout_seconds=self._session_timeout_seconds,
+                cwd=cwd,
+            )
+            self._write_verdict(verdict, segment)
+            return True
+        except TriageBackendUnavailable as retry_exc:
+            _log.error(
+                "API backend also unavailable at finding %d in batch %d: %s",
+                finding_id,
+                batch_id,
+                retry_exc,
+            )
+            retry_ec = retry_exc.error_class
+            ec_str = getattr(retry_ec, "value", None) or (
+                str(retry_ec) if retry_ec else None
+            )
+            raise TriageAborted(str(retry_exc), error_class=ec_str) from retry_exc
 
     def _log_verdict_failure(
         self,

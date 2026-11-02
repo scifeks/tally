@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import json
+from typing import Any
 
 import pytest
 
+from application.triage.prompts.output_instructions import STDOUT_OUTPUT_INSTRUCTION
 from application.triage.prompts.sast_trace import render
 from application.triage.verdict import Verdict, parse_verdict
 from tests.prompt_helpers import fenced_record
@@ -34,6 +36,7 @@ class TestRenderBasicContract:
         result = render(
             _SAMPLE_FINDING,
             project=_PROJECT,
+            output_instruction=STDOUT_OUTPUT_INSTRUCTION,
         )
         assert isinstance(result, str)
         assert len(result) > 0
@@ -42,6 +45,7 @@ class TestRenderBasicContract:
         result = render(
             _SAMPLE_FINDING,
             project=_PROJECT,
+            output_instruction=STDOUT_OUTPUT_INSTRUCTION,
         )
         assert _PROJECT in result
 
@@ -49,6 +53,7 @@ class TestRenderBasicContract:
         result = render(
             _SAMPLE_FINDING,
             project=_PROJECT,
+            output_instruction=STDOUT_OUTPUT_INSTRUCTION,
         )
         assert "42" in result
 
@@ -56,6 +61,7 @@ class TestRenderBasicContract:
         result = render(
             _SAMPLE_FINDING,
             project=_PROJECT,
+            output_instruction=STDOUT_OUTPUT_INSTRUCTION,
         )
         assert "/workspace/repos/dvpa/src/controllers/FileController.php" in result
 
@@ -63,6 +69,7 @@ class TestRenderBasicContract:
         result = render(
             _SAMPLE_FINDING,
             project=_PROJECT,
+            output_instruction=STDOUT_OUTPUT_INSTRUCTION,
         )
         assert "php.lang.security.tainted-filename" in result
 
@@ -72,6 +79,7 @@ class TestFencingStructure:
         result = render(
             _SAMPLE_FINDING,
             project=_PROJECT,
+            output_instruction=STDOUT_OUTPUT_INSTRUCTION,
         )
         assert "<<<TALLY_DATA_START: finding_metadata>>>" in result
         assert "<<<TALLY_DATA_END: finding_metadata>>>" in result
@@ -80,6 +88,7 @@ class TestFencingStructure:
         result = render(
             _SAMPLE_FINDING,
             project=_PROJECT,
+            output_instruction=STDOUT_OUTPUT_INSTRUCTION,
         )
         start = result.index("<<<TALLY_DATA_START: finding_metadata>>>")
         end = result.index("<<<TALLY_DATA_END: finding_metadata>>>")
@@ -116,7 +125,9 @@ class TestFencingStructure:
         self, repo: str, file: str | None, expected: str | None
     ) -> None:
         result = render(
-            {**_SAMPLE_FINDING, "repo": repo, "file": file}, project=_PROJECT
+            {**_SAMPLE_FINDING, "repo": repo, "file": file},
+            project=_PROJECT,
+            output_instruction=STDOUT_OUTPUT_INSTRUCTION,
         )
         assert fenced_record(result, "finding_metadata")["source_path"] == expected
         assert ("could not be resolved" in result) is (expected is None)
@@ -131,6 +142,7 @@ class TestFencingStructure:
         result = render(
             injected,
             project=_PROJECT,
+            output_instruction=STDOUT_OUTPUT_INSTRUCTION,
         )
         start = result.index("<<<TALLY_DATA_START: finding_metadata>>>")
         end = result.index("<<<TALLY_DATA_END: finding_metadata>>>")
@@ -143,6 +155,7 @@ class TestNoMcpReferences:
         result = render(
             _SAMPLE_FINDING,
             project=_PROJECT,
+            output_instruction=STDOUT_OUTPUT_INSTRUCTION,
         )
         assert "get_findings_batch" not in result
 
@@ -150,6 +163,7 @@ class TestNoMcpReferences:
         result = render(
             _SAMPLE_FINDING,
             project=_PROJECT,
+            output_instruction=STDOUT_OUTPUT_INSTRUCTION,
         )
         assert "update_findings_batch" not in result
 
@@ -159,6 +173,7 @@ class TestPromptSections:
         result = render(
             _SAMPLE_FINDING,
             project=_PROJECT,
+            output_instruction=STDOUT_OUTPUT_INSTRUCTION,
         )
         assert "Epistemic Conservatism" in result
 
@@ -166,6 +181,7 @@ class TestPromptSections:
         result = render(
             _SAMPLE_FINDING,
             project=_PROJECT,
+            output_instruction=STDOUT_OUTPUT_INSTRUCTION,
         )
         assert "finding_id" in result
         assert "confidence" in result
@@ -180,6 +196,7 @@ class TestPromptSections:
         result = render(
             _SAMPLE_FINDING,
             project=_PROJECT,
+            output_instruction=STDOUT_OUTPUT_INSTRUCTION,
         )
         assert "confirmed" in result
         assert "probable" in result
@@ -207,6 +224,7 @@ class TestEdgeCases:
         result = render(
             sparse,
             project="test",
+            output_instruction=STDOUT_OUTPUT_INSTRUCTION,
         )
         record = fenced_record(result, "finding_metadata")
         assert record["description"] is None
@@ -217,6 +235,7 @@ class TestEdgeCases:
         result = render(
             finding,
             project=_PROJECT,
+            output_instruction=STDOUT_OUTPUT_INSTRUCTION,
         )
         assert "CWE-89" in result
         assert "CWE-22" in result
@@ -229,6 +248,7 @@ class TestEdgeCases:
         result = render(
             finding,
             project=_PROJECT,
+            output_instruction=STDOUT_OUTPUT_INSTRUCTION,
         )
         assert "CWE-79" in result
 
@@ -238,6 +258,7 @@ class TestVerdictRoundtrip:
         render(
             _SAMPLE_FINDING,
             project=_PROJECT,
+            output_instruction=STDOUT_OUTPUT_INSTRUCTION,
         )
         verdict_json = json.dumps(
             {
@@ -282,3 +303,26 @@ class TestVerdictRoundtrip:
         )
         with pytest.raises(Exception, match="mismatch"):
             parse_verdict(verdict_json, expected_finding_id=42)
+
+
+class TestOutputInstruction:
+    def test_render_includes_output_instruction_verbatim(self) -> None:
+        out = render(
+            {"id": 42, "tool": "semgrep"},
+            project="demo",
+            output_instruction="SENTINEL_INSTRUCTION_123",
+        )
+        assert "SENTINEL_INSTRUCTION_123" in out
+
+    def test_render_omits_default_file_path_when_caller_overrides(self) -> None:
+        out = render(
+            {"id": 42, "tool": "semgrep"},
+            project="demo",
+            output_instruction="emit JSON to stdout",
+        )
+        assert "/workspace/out/verdict.json" not in out
+
+    def test_render_requires_output_instruction(self) -> None:
+        kwargs: dict[str, Any] = {"project": "demo"}
+        with pytest.raises(TypeError):
+            render({"id": 42, "tool": "semgrep"}, **kwargs)

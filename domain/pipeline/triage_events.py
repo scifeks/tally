@@ -103,6 +103,45 @@ class RunFailed(_TriageEventBase):
     message: str = ""
 
 
+@dataclass(frozen=True)
+class RunRateLimited(_TriageEventBase):
+    usage_pool: str = ""
+    message: str = ""
+
+
+@dataclass(frozen=True)
+class BatchAttemptStarted(_TriageEventBase):
+    batch_id: int = 0
+    attempt_number: int = 0
+    usage_pool: str = ""
+    message: str = ""
+
+
+@dataclass(frozen=True)
+class BatchAttemptCompleted(_TriageEventBase):
+    batch_id: int = 0
+    attempt_number: int = 0
+    usage_pool: str = ""
+    message: str = ""
+
+
+@dataclass(frozen=True)
+class BatchAttemptFailed(_TriageEventBase):
+    batch_id: int = 0
+    attempt_number: int = 0
+    usage_pool: str = ""
+    message: str = ""
+    error: str = ""
+
+
+@dataclass(frozen=True)
+class BatchAttemptRateLimited(_TriageEventBase):
+    batch_id: int = 0
+    attempt_number: int = 0
+    usage_pool: str = ""
+    message: str = ""
+
+
 type TriageEvent = (
     RunStarted
     | BatchCreated
@@ -114,6 +153,11 @@ type TriageEvent = (
     | RunCompleted
     | RunCancelled
     | RunFailed
+    | RunRateLimited
+    | BatchAttemptStarted
+    | BatchAttemptCompleted
+    | BatchAttemptFailed
+    | BatchAttemptRateLimited
 )
 
 
@@ -128,6 +172,11 @@ _EVENT_TYPE_NAMES: dict[type, str] = {
     RunCompleted: "run_completed",
     RunCancelled: "run_cancelled",
     RunFailed: "triage_failed",
+    RunRateLimited: "run_rate_limited",
+    BatchAttemptStarted: "batch_attempt_started",
+    BatchAttemptCompleted: "batch_attempt_completed",
+    BatchAttemptFailed: "batch_attempt_failed",
+    BatchAttemptRateLimited: "batch_attempt_rate_limited",
 }
 
 

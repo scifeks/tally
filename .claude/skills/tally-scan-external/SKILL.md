@@ -40,8 +40,9 @@ findings to the MCP tools, and drives the lifecycle.
 
 ## MCP tools this skill calls
 
-Every tool takes the auth_token as a named parameter and returns a
-JSON dict.
+Every tool returns a JSON dict. Tools are scoped by `project` (the
+project name), which is always passed. Exact signatures live in
+`mcp_server/server.py`.
 
 | Tool | Purpose |
 |---|---|
@@ -52,12 +53,102 @@ JSON dict.
 | `resolve_duplicates` | Mark losers as duplicates of a picked survivor. |
 | `end_scan` | Close the scan_run and set finished_at. |
 | `ingest_attack_surface` | Populate URL inventory from a merged attack-surface spec. Takes `project`, `repo_name`, `spec_path`. Returns `{"status": "ok", "endpoints_ingested": int}`. |
+| `get_scan_config` | `get_scan_config(project, run_id)`. Returns `{"is_configured": bool, "only": [str], "exclude": [str], "adversarial_verification": bool}`. |
+| `set_scan_config` | `set_scan_config(project, run_id, only, exclude, adversarial_verification)`. `only` and `exclude` are optional lists and mutually exclusive. `adversarial_verification` is a bool. Returns `{"ok": true, "resolved_only_full_slugs": [str], "resolved_exclude_full_slugs": [str]}`. |
+| `get_scan_phase_status` | `get_scan_phase_status(project, run_id)`. Returns the latest attempt per phase: `{"completed_phases": [str], "latest_execution_per_phase": {<phase>: {"status": str, "usage_pool": str or null, "started_at": str}}}`. |
+| `start_scan_phase` | `start_scan_phase(project, run_id, phase, usage_pool)`. Inserts an `in_progress` row and returns `{"ok": true, "execution_id": int, "attempt_number": int}`. Call BEFORE the phase runs. |
+| `mark_scan_phase_complete` | `mark_scan_phase_complete(project, run_id, phase, status, usage_pool, metadata)`. Closes the open `in_progress` attempt for `phase` (or inserts a new row if none exists). Returns `{"ok": true, "execution_id": int, "attempt_number": int}`. |
 
-The exact per-tool argument list is documented at
-`mcp_server/server.py`. Every tool takes `auth_token` as a named
-parameter.
+### Phase lifecycle markers
+
+Every phase must call `start_scan_phase` before execution and
+`mark_scan_phase_complete` after. The complete marker closes the
+open attempt row. Any attempt row still `in_progress` when the run
+crashes is flipped to `failed` by the launcher's crash cleanup.
+
+`start_scan_phase` arguments:
+
+- `phase`: the phase identifier (same value passed to
+  `mark_scan_phase_complete`).
+- `usage_pool`: `"plan"`, `"api"`, or `null`.
+
+`mark_scan_phase_complete` arguments:
+
+- `status`: `"completed"`, `"failed"`, or `"rate_limited"`. Any other
+  value is rejected.
+  - `completed`: the phase finished successfully. This includes
+    phases skipped by a shortcut (empty dead code list, legacy mode).
+  - `failed`: the phase hit an error that was not a usage limit.
+  - `rate_limited`: the phase hit a usage limit. The launcher may
+    fail over or require a manual resume.
+- `usage_pool`: `"plan"`, `"api"`, or `null`. Pass the value the
+  subagent reported; otherwise omit it.
+- `metadata`: optional dict of counts for the phase (for example
+  `{"findings_count": 4}`).
+
+Every phase emits a marker, including phases skipped by a shortcut.
+Resume re-runs any phase with no `completed` marker.
 
 ## Steps
+
+### Step 0: Mode detection and resume check
+
+Runs first, before any batching or dispatch decisions.
+
+**Headless vs interactive.** The launcher prompt always carries
+`Run id: <N>`.
+
+- `Run id:` present: headless. Never call `AskUserQuestion`. Take
+  `Project:`, `Run id:`, and the filters from the prompt, skip steps
+  2 and 3, and use the defaults named in each later step.
+- `Run id:` absent: interactive (a human ran the slash command).
+  `AskUserQuestion` is allowed, and step 0 has nothing more to do
+  unless step 3 later picks continue (see below).
+
+**Prompt filters.** The launcher writes `only=a,b`,
+`exclude=a,b`, and `adversarial=true|false` into the prompt. Use them
+literally. They win over `get_scan_config`.
+
+**Resume preamble.** On resume the launcher prepends this line
+(`<phases>` is a comma-separated list of completed phase names):
+
+```
+Resume: phases already completed: [<phases>]. Skip those and continue from the next incomplete phase.
+```
+
+Example:
+
+```
+Resume: phases already completed: [recon, injection, xss]. Skip those and continue from the next incomplete phase.
+
+Run /tally-scan-external with these filters: only=scan-injection-sql, adversarial=false. Project: acme. Run id: 42.
+```
+
+If the prompt begins with `Resume: ...`, call
+`get_scan_phase_status(project=<name>, run_id=<N>)` immediately and
+apply the skip rule below. The status call is the source of truth;
+the preamble list only signals that a resume is happening.
+
+**Skip rule.** For each phase in `latest_execution_per_phase`, read
+the latest attempt's `status`:
+
+- `completed`: skip the phase.
+- `failed` or `rate_limited`: re-run it. A resume may bring new
+  billing.
+- No phases recorded: run everything from step 1.
+
+Skipped phases map to steps as follows:
+
+- `recon`: skip step 5 and use the existing merged spec at
+  `projects/<name>/agentic/recon/attack-surface.yaml`.
+- `domain:<family>` (for example `domain:injection`): skip that
+  family's dispatch in step 6.
+- `dead_code_sweep`: skip step 7.
+- `verification:<finding_id>`: skip adversarial verification for
+  that finding in step 8.
+
+Interactive runs that pick continue in step 3 run this status call
+and skip rule with the chosen run id before step 5.
 
 ### Step 1: Scoping
 
@@ -65,8 +156,9 @@ Check for an existing `SCOPING.md` at
 `projects/<name>/agentic/SCOPING.md` (the path under
 `ProjectPaths.agentic_dir`).
 
-- **If present:** ask the developer via `AskUserQuestion` whether
-  to reuse the existing scope or redo it.
+- **If present:** headless reuses it. Interactive asks the developer
+  via `AskUserQuestion` whether to reuse the existing scope or redo
+  it.
 - **If absent or redoing:** if the project is already known (from
   step 2 of a previous run or the user's invocation), use it. If
   not, call `list_projects` and ask the developer to pick. Read
@@ -87,7 +179,10 @@ from `ProjectPaths.agentic_dir` before writing.
 
 ### Step 2: Pick the project and repos
 
-Call `list_projects(auth_token=<token>)`. The response is a list
+Interactive only; headless takes the project from the prompt and
+defaults to every repo.
+
+Call `list_projects()`. The response is a list
 of `{project_id, project_name, path, latest_run_id}` entries.
 Present the project names to the developer and ask which one to
 scan. Use `AskUserQuestion`. Then ask which repos to include;
@@ -96,10 +191,43 @@ default to every repo the project has.
 Record `project_name`, `project_id`, `repo_ids`, `repo_paths`,
 and `latest_run_id` for later steps.
 
+#### Step 2a: Family filter configuration
+
+Once the `run_id` is known (from the prompt, or from step 3), resolve
+the effective filter in this order:
+
+1. Explicit `only=` / `exclude=` in the prompt. Use them literally and
+   do not call `get_scan_config`.
+2. Otherwise call `get_scan_config(project=<name>, run_id=<N>)`. The
+   response is `{"is_configured": bool, "only": [str], "exclude":
+   [str], "adversarial_verification": bool}`. If `is_configured` is
+   true, apply `only` and `exclude` in step 6. A non-empty `only`
+   skips every other scanner; `exclude` skips the listed scanners.
+3. If `is_configured` is false and the mode is interactive: ask with
+   a multi-select `AskUserQuestion` listing the 10 families in
+   `references/family-map.md`, then persist the choice with:
+
+   ```
+   set_scan_config(project=<name>, run_id=<N>, only=[...], exclude=[...], adversarial_verification=<bool>)
+   ```
+
+4. If `is_configured` is false and the mode is headless: all
+   families are enabled. Do not call `set_scan_config`.
+
+`only` and `exclude` take scanner display slugs: the skill directory
+name from `family-map.md` without the `tally-` prefix (for example
+`scan-injection-sql`). To filter a whole family, pass every skill
+directory listed for it. `only` and `exclude` cannot both be
+non-empty.
+
+Record the effective filter for step 6.
+
 ### Step 3: Continue-mode or new-mode
 
-Ask the developer whether to continue an existing run or start a
-new one. Use `AskUserQuestion` with two options:
+Headless: skip; the run exists and its id is in the prompt.
+
+Interactive: ask the developer whether to continue an existing run
+or start a new one. Use `AskUserQuestion` with two options:
 
 - Continue previous run (uses `latest_run_id` from step 2).
 - Start a new scan.
@@ -114,7 +242,6 @@ create_scan_run(
   project=<project_name>,
   project_id=<project_id>,
   repo_ids=<repo_ids>,
-  auth_token=<token>,
 )
 ```
 
@@ -123,15 +250,17 @@ every submit, dedup, and end_scan call in this invocation.
 
 ### Step 4: Adversarial verification opt-in
 
-Ask the developer: `Run adversarial verification pass?
+Headless: take the answer from `adversarial=true|false` in the
+prompt.
+
+Interactive: ask the developer `Run adversarial verification pass?
 (default: no)`. Use `AskUserQuestion` with two options:
 
 - No, submit findings directly.
 - Yes, run adversarial verification first.
 
 Record the answer for step 8. Adversarial verification is off by
-default; the developer opts in per invocation when they want extra
-rigor.
+default.
 
 ### Step 5: Reconnaissance
 
@@ -139,8 +268,8 @@ rigor.
 
 Check for an existing merged spec at
 `projects/<name>/agentic/recon/attack-surface.yaml`. If present,
-ask the developer via `AskUserQuestion` whether to reuse it or
-redo recon. If reusing, skip 5b through 5h and proceed to 5i
+headless reuses it; interactive asks the developer via
+`AskUserQuestion` whether to reuse it or redo recon. If reusing, skip 5b through 5h and proceed to 5i
 (ingest), then step 6.
 
 #### 5b: Source tree survey
@@ -183,10 +312,21 @@ Build a text table of planned agents:
 
 | Agent name | Repo | Directories | Estimated size | Tracing paths | Output description |
 
-Present to the developer via `AskUserQuestion`. Wait for approval
-before dispatching.
+Interactive: present to the developer via `AskUserQuestion` and wait
+for approval before dispatching. Headless: dispatch without asking.
 
 #### 5e: Dispatch recon mapper agents
+
+Before dispatching agents, mark the recon phase as in-progress:
+
+```
+start_scan_phase(
+  project=<project_name>,
+  run_id=<run_id>,
+  phase="recon",
+  usage_pool=<"plan" | "api" | null>,
+)
+```
 
 Dispatch `tally-scan-recon-mapper` agents in parallel (agent
 definition at `.claude/agents/tally-scan-recon-mapper.md`, model
@@ -250,8 +390,8 @@ Run the five completeness checks against the merged spec:
    endpoint's `x-audit-auth-discovered`. Unreferenced auth
    checks suggest missed endpoints behind that auth.
 
-Present results to the developer. Ask whether to proceed or
-re-run specific components.
+Interactive: present results and ask whether to proceed or re-run
+specific components. Headless: log the results and proceed.
 
 #### 5i: Ingest attack surface
 
@@ -270,6 +410,21 @@ The tool returns `{"status": "ok", "endpoints_ingested": <int>}`.
 Call once per repo if multiple repos produced separate merged
 specs. Log the ingested endpoint count.
 
+After successful ingest, mark the recon phase complete:
+
+```
+mark_scan_phase_complete(
+  project=<project_name>,
+  run_id=<run_id>,
+  phase="recon",
+  status="completed",
+  metadata={"endpoints_ingested": <int>, "partitions": <count>},
+)
+```
+
+Pass `status="failed"` instead if recon errored, or
+`"rate_limited"` if it hit a usage limit.
+
 #### 5-fallback: Legacy mode
 
 If all mapper agents fail (empty or malformed output from every
@@ -282,10 +437,21 @@ dispatch (no partitions, no dead code sweep). The `tally-scan-*`
 skills produce findings directly. Proceed to step 8
 (adversarial) with those findings.
 
+Legacy mode still writes markers so resume does not re-run it.
+For each phase, call `start_scan_phase` then
+`mark_scan_phase_complete` for `recon`, for each
+`domain:<family_slug>` dispatched, and for `dead_code_sweep`.
+
 ### Step 6: Dispatch domain agents per partition
 
 Read `references/family-map.md` for the 10 domain family
 definitions and their component skills.
+
+Apply the filter from step 2a: if `only` is non-empty, skip
+scanner skills not in the `only` list. Skip scanner skills in the
+`exclude` list. A family with no remaining skills is skipped. Also
+skip any families already completed per step 0 (phases named
+`"domain:<family>"`).
 
 Extract partition data from the merged YAML specs as structured
 text, following the extraction format in
@@ -321,12 +487,43 @@ For each partition in the merged spec:
       `authenticated`, `admin` to `admin`.
    e. Dispatch the subagent using agent type `tally-scan-domain`.
 
+Before dispatching agents for a family, mark the family phase
+as in-progress:
+
+```
+start_scan_phase(
+  project=<project_name>,
+  run_id=<run_id>,
+  phase="domain:<family_slug>",
+  usage_pool=<"plan" | "api" | null>,
+)
+```
+
 Dispatch agents in parallel. Each agent returns a JSON list of
 findings.
 
 For partitions from repos that exceeded the 5c split thresholds,
 dispatch families sequentially (one at a time) to avoid context
 overload. Still dispatch all relevant families.
+
+After each family completes across all partitions, mark the family
+phase complete:
+
+```
+mark_scan_phase_complete(
+  project=<project_name>,
+  run_id=<run_id>,
+  phase="domain:<family_slug>",
+  status="completed",
+  usage_pool=<"plan" | "api" from subagent response, else omit>,
+  metadata={"findings_count": <int>, "partitions_scanned": <int>},
+)
+```
+
+`<family_slug>` is the family name in the first column of
+`references/family-map.md` (for example `injection`, `xss`,
+`access-control`). Pass `status="failed"` if the family's agents all
+errored, or `"rate_limited"` if they hit a usage limit.
 
 #### Subagent failure handling
 
@@ -344,10 +541,13 @@ abort the whole run.
 
 ### Step 7: Dead code sweep
 
+If step 0 marked `"dead_code_sweep"` as completed, skip this step.
+
 Build the dead code list from the file coverage check in step 5h:
 source files that appear in the 5b survey but not in any
 partition's file list in the merged spec. If the list is empty,
-skip to step 8.
+write the marker below with `metadata={"findings_count": 0,
+"dead_code_files": 0}` and go to step 8.
 
 For each domain family in `family-map.md`:
 
@@ -362,6 +562,17 @@ For each domain family in `family-map.md`:
    - `${LANGUAGE_REF_LIST}`: same as step 6, filtered to
      languages present in the dead code files
 
+Before dispatching sweep agents, mark the phase as in-progress:
+
+```
+start_scan_phase(
+  project=<project_name>,
+  run_id=<run_id>,
+  phase="dead_code_sweep",
+  usage_pool=<"plan" | "api" | null>,
+)
+```
+
 Dispatch sweep agents in parallel using agent type
 `tally-scan-domain` (same agent type as step 6; the dispatch
 prompt differentiates the behavior). Each returns a JSON list
@@ -370,6 +581,18 @@ of findings (all with `confidence: potential` and
 
 Collect sweep findings and merge them with the domain agent
 findings from step 6.
+
+After all sweep agents complete, mark the phase:
+
+```
+mark_scan_phase_complete(
+  project=<project_name>,
+  run_id=<run_id>,
+  phase="dead_code_sweep",
+  status="completed",
+  metadata={"findings_count": <int>, "dead_code_files": <count>},
+)
+```
 
 ### Step 8: Optional adversarial pass
 
@@ -386,6 +609,34 @@ If step 4 was `yes`:
   batch. Its output is `{verified: [...], dropped: [...]}`.
   Proceed to step 9 with the `verified` list.
 
+Verification is per finding. Skip any finding whose
+`verification:<finding_id>` phase step 0 marked completed. Before
+verifying each finding, mark its phase as in-progress:
+
+```
+start_scan_phase(
+  project=<project_name>,
+  run_id=<run_id>,
+  phase="verification:<finding_id>",
+  usage_pool=<"plan" | "api" | null>,
+)
+```
+
+After each finding is verified, mark its phase:
+
+```
+mark_scan_phase_complete(
+  project=<project_name>,
+  run_id=<run_id>,
+  phase="verification:<finding_id>",
+  status="completed",
+  metadata={"verdict": "verified" | "dropped"},
+)
+```
+
+When step 4 was `no` or the adversarial skill is absent, no
+verification markers are written.
+
 ### Step 9: Submit each finding
 
 For each finding in the (possibly filtered) batch, call:
@@ -397,7 +648,6 @@ submit_finding(
   repo_id=<repo_id_for_this_finding>,
   run_id=<run_id>,
   finding=<finding_payload>,
-  auth_token=<token>,
 )
 ```
 
@@ -420,7 +670,7 @@ Never log:
 ### Step 10: Required dedup pass
 
 Call `get_duplicate_candidates(project=<project_name>,
-run_id=<run_id>, auth_token=<token>)`. The response is
+run_id=<run_id>)`. The response is
 `{"groups": [[<finding_id>, ...], ...]}`.
 
 If the groups list is empty, proceed to step 11.
@@ -444,7 +694,6 @@ For each group:
     run_id=<run_id>,
     survivor_id=<picked_id>,
     removed_ids=[<the other IDs in the group>],
-    auth_token=<token>,
   )
   ```
 
@@ -465,7 +714,6 @@ end_scan(
   project=<project_name>,
   project_id=<project_id>,
   run_id=<run_id>,
-  auth_token=<token>,
 )
 ```
 

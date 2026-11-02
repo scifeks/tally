@@ -121,6 +121,28 @@ class RunRepository(RunRepositoryPort):
                 (status, run_id),
             )
 
+    def set_status_if_in(
+        self, run_id: int, status: str, allowed_current: tuple[str, ...]
+    ) -> bool:
+        """Compare-and-set: only write when current status is in the allow-list.
+
+        Protects a run from a late worker overwriting a status another
+        actor (a user cancel, a resume) already set. Returns True when
+        the write actually happened.
+        """
+        if status not in SCAN_RUN_STATUSES:
+            raise ValueError(f"unknown scan_run status: {status!r}")
+        if not allowed_current:
+            return False
+        placeholders = ", ".join("?" * len(allowed_current))
+        with self._factory.connect() as conn:
+            cur = conn.execute(
+                f"UPDATE scan_runs SET status = ?"
+                f" WHERE id = ? AND status IN ({placeholders})",
+                (status, run_id, *allowed_current),
+            )
+            return cur.rowcount > 0
+
     def set_started_at(self, run_id: int, when: str | None = None) -> None:
         ts = when or datetime.now(UTC).isoformat()
         with self._factory.connect() as conn:
@@ -145,18 +167,21 @@ class RunRepository(RunRepositoryPort):
             )
 
     def mark_stale_runs_failed(self) -> int:
-        """Mark every ``running``/``cancelling`` row as ``failed``.
+        """Mark every ``queued``/``running``/``cancelling`` row as ``failed``.
 
         Used at server start to clean up rows whose owning process is
         gone. Tier-1 lock guarantees only one scan is live at a time,
         so any persisted-as-running row from a prior process is stale.
-        Returns the row count updated.
+        A ``queued`` row survives when a background scan's `_schedule_launch`
+        was killed before transitioning the row to ``running``, and the
+        worker thread is also gone, so the row would otherwise sit
+        indefinitely. Returns the row count updated.
         """
         ts = datetime.now(UTC).isoformat()
         with self._factory.connect() as conn:
             cur = conn.execute(
                 "UPDATE scan_runs SET status = 'failed', finished_at = ?"
-                " WHERE status IN ('running', 'cancelling')"
+                " WHERE status IN ('queued', 'running', 'cancelling')"
                 "   AND finished_at IS NULL",
                 (ts,),
             )
@@ -245,6 +270,65 @@ class RunRepository(RunRepositoryPort):
             )
             assert cur.lastrowid is not None
             return cur.lastrowid
+
+    def get_latest_usage_pool(self, run_id: int) -> str | None:
+        """Return the usage_pool from the most recent scan_phase_execution."""
+        with self._factory.connect() as conn:
+            row = conn.execute(
+                "SELECT usage_pool FROM scan_phase_executions"
+                " WHERE run_id = ? AND usage_pool IS NOT NULL"
+                " ORDER BY id DESC LIMIT 1",
+                (run_id,),
+            ).fetchone()
+        return row["usage_pool"] if row else None
+
+    def upsert_scan_config(
+        self,
+        *,
+        run_id: int,
+        only_full_slugs: list[str] | None = None,
+        exclude_full_slugs: list[str] | None = None,
+        adversarial_verification: bool = False,
+    ) -> None:
+        """Insert or replace scan_configs row for a run."""
+        created_at = datetime.now(UTC).isoformat()
+        only_json = json.dumps(only_full_slugs or [])
+        exclude_json = json.dumps(exclude_full_slugs or [])
+        with self._factory.connect() as conn:
+            conn.execute(
+                "INSERT OR REPLACE INTO scan_configs"
+                " (run_id, only_full_slugs_json, exclude_full_slugs_json,"
+                "  adversarial_verification, created_at)"
+                " VALUES (?, ?, ?, ?, ?)",
+                (
+                    run_id,
+                    only_json,
+                    exclude_json,
+                    1 if adversarial_verification else 0,
+                    created_at,
+                ),
+            )
+
+    def get_scan_config(self, run_id: int) -> tuple[list[str], list[str], bool] | None:
+        """Retrieve scan_configs for a run.
+
+        Returns (only_full_slugs, exclude_full_slugs, adversarial_verification)
+        or None if no config exists.
+        """
+        with self._factory.connect() as conn:
+            row = conn.execute(
+                "SELECT only_full_slugs_json, exclude_full_slugs_json,"
+                " adversarial_verification FROM scan_configs WHERE run_id = ?",
+                (run_id,),
+            ).fetchone()
+
+        if row is None:
+            return None
+
+        only_slugs = json.loads(row["only_full_slugs_json"])
+        exclude_slugs = json.loads(row["exclude_full_slugs_json"])
+        adversarial = bool(row["adversarial_verification"])
+        return (only_slugs, exclude_slugs, adversarial)
 
     def update_tool_run(
         self,

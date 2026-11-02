@@ -19,6 +19,7 @@ if str(_TALLY_ROOT) not in sys.path:
 
 from application.ports.triage_agent import (  # noqa: E402
     PreparedTriageSession,
+    TriageBackendUnavailable,
 )
 from application.triage.runner import (  # noqa: E402
     TriageResult,
@@ -29,6 +30,7 @@ from application.triage.verdict import (  # noqa: E402
     VerdictParseError,
 )
 from domain.triage.entry import TriageBatchRow  # noqa: E402
+from infrastructure.anthropic.error_classifier import ErrorClass  # noqa: E402
 
 
 def _make_verdict(finding_id: int = 1) -> Verdict:
@@ -682,3 +684,39 @@ def test_run_batch_loop_exhausts_all_batches(
 
     assert store.claim_batch.call_count == 4
     assert handler.call_count == 3
+
+
+# error_class propagation through TriageAborted
+
+
+def test_backend_unavailable_propagates_error_class_to_complete_batch(
+    tmp_path: Path,
+) -> None:
+    """TriageBackendUnavailable.error_class reaches complete_batch as a string.
+
+    The batch loop catches rate-limit errors and completes the batch with
+    status 'rate_limited'.
+    """
+    exc = TriageBackendUnavailable(
+        "rate limited", error_class=ErrorClass.RATE_LIMIT_PLAN
+    )
+    agent = _StubTriageBackend(side_effect=exc, prepared_cwd=tmp_path)
+    finding_repo = MagicMock()
+    finding_repo.update_finding.return_value = True
+    runner, store, _ = _make_runner(tmp_path, agent=agent, finding_repo=finding_repo)
+    store.claim_batch.side_effect = [
+        _make_semgrep_batch(1, [1]),
+        None,
+    ]
+    mock_semgrep = _make_mock_tool("semgrep", skip=False, scan_segment="sast")
+    mock_reg = _mock_reg(runner)
+    mock_reg.get_all_tools.return_value = []
+    mock_reg.get_tool.return_value = mock_semgrep
+
+    result = runner.run()
+
+    assert result.status == "rate_limited"
+    assert result.last_error_class == "rate_limit_plan"
+    store.complete_batch.assert_called_once_with(
+        1, "rate_limited", error_class="rate_limit_plan"
+    )

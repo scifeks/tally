@@ -356,6 +356,55 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     parser.add_argument(
+        "--interaction-mode",
+        choices=["interactive", "background"],
+        default=None,
+        help="Triage/scan interaction mode: interactive or background",
+    )
+    parser.add_argument(
+        "--billing-method",
+        choices=["plan", "api"],
+        default=None,
+        help="Billing method for background mode: plan or api",
+    )
+    parser.add_argument(
+        "--api-key-override",
+        type=str,
+        metavar="KEY",
+        default=None,
+        help="Override API key for triage/scan (background mode)",
+    )
+    parser.add_argument(
+        "--only",
+        type=str,
+        metavar="SLUGS",
+        default=None,
+        help="Comma-separated scanner display slugs or family names (scan only)",
+    )
+    parser.add_argument(
+        "--exclude",
+        type=str,
+        metavar="SLUGS",
+        default=None,
+        help=(
+            "Comma-separated scanner display slugs or family names "
+            "to exclude (scan only)"
+        ),
+    )
+    parser.add_argument(
+        "--list-skills",
+        action="store_true",
+        help="List available vulnerability scanner skills (scan only)",
+    )
+    parser.add_argument(
+        "--resume",
+        type=int,
+        metavar="RUN_ID",
+        default=None,
+        help="Resume a paused scan or triage run",
+    )
+
+    parser.add_argument(
         "args",
         nargs=argparse.REMAINDER,
         help="Pass-through arguments for the tool (run only)",
