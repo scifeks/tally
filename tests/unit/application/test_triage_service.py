@@ -135,19 +135,25 @@ class TestTriageService:
 
         with (
             patch(
-                "application.triage.container.ensure_triage_image",
+                "application.agent_sandbox.image.ensure_image",
                 side_effect=_track("image"),
             ),
             patch(
-                "application.triage.container.ensure_triage_containers",
+                "application.agent_sandbox.container.ensure_containers",
                 side_effect=_track("containers"),
+            ),
+            patch(
+                "application.triage.factory.resolve_triage_config",
+                return_value=MagicMock(
+                    provider_name="claude", base_url="", model="sonnet"
+                ),
             ),
             patch(
                 "application.triage.triage_service.run_triage_for_project",
                 side_effect=_track("orchestrator"),
             ),
             patch(
-                "application.triage.container.teardown_triage_containers",
+                "application.agent_sandbox.container.teardown_containers",
             ),
             patch(
                 "application.triage.triage_service.run_configured_syncs",

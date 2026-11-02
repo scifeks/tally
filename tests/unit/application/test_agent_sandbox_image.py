@@ -1,4 +1,4 @@
-"""Unit tests for application.triage.container."""
+"""Unit tests for application.agent_sandbox.image."""
 
 from __future__ import annotations
 
@@ -7,15 +7,15 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from application.triage.container import (
-    TRIAGE_IMAGE_TAG,
-    build_triage_image,
-    ensure_triage_image,
-    rebuild_triage_image,
-    triage_image_ready,
+from application.agent_sandbox.image import (
+    AGENT_IMAGE_TAG,
+    build_image,
+    ensure_image,
+    image_ready,
+    rebuild_image,
 )
 
-_PORT_PATCH = "application.triage.container._resolve_image_port"
+_PORT_PATCH = "application.agent_sandbox.image._resolve_image_port"
 
 
 @pytest.fixture()
@@ -23,19 +23,19 @@ def mock_port() -> MagicMock:
     return MagicMock()
 
 
-class TestTriageImageReady:
+class TestImageReady:
     def test_delegates_to_port(self, mock_port: MagicMock) -> None:
         mock_port.image_exists.return_value = True
         with patch(_PORT_PATCH, return_value=mock_port):
-            assert triage_image_ready() is True
+            assert image_ready() is True
 
     def test_returns_false_when_missing(self, mock_port: MagicMock) -> None:
         mock_port.image_exists.return_value = False
         with patch(_PORT_PATCH, return_value=mock_port):
-            assert triage_image_ready() is False
+            assert image_ready() is False
 
 
-class TestBuildTriageImage:
+class TestBuildImage:
     def test_calls_port_with_context_dir(
         self, mock_port: MagicMock, tmp_path: Path
     ) -> None:
@@ -44,7 +44,7 @@ class TestBuildTriageImage:
         (dockerfile_dir / "Dockerfile").write_text("FROM debian:12-slim")
 
         with patch(_PORT_PATCH, return_value=mock_port):
-            build_triage_image(tmp_path)
+            build_image(tmp_path)
 
         mock_port.build_image.assert_called_once()
 
@@ -55,18 +55,18 @@ class TestBuildTriageImage:
             patch(_PORT_PATCH, return_value=mock_port),
             pytest.raises(FileNotFoundError, match="Dockerfile not found"),
         ):
-            build_triage_image(tmp_path)
+            build_image(tmp_path)
 
         mock_port.build_image.assert_not_called()
 
 
-class TestEnsureTriageImage:
+class TestEnsureImage:
     def test_returns_false_when_image_exists(
         self, mock_port: MagicMock, tmp_path: Path
     ) -> None:
         mock_port.image_exists.return_value = True
         with patch(_PORT_PATCH, return_value=mock_port):
-            assert ensure_triage_image(tmp_path) is False
+            assert ensure_image(tmp_path) is False
         mock_port.build_image.assert_not_called()
 
     def test_builds_and_returns_true_when_missing(
@@ -78,11 +78,11 @@ class TestEnsureTriageImage:
         (dockerfile_dir / "Dockerfile").write_text("FROM debian:12-slim")
 
         with patch(_PORT_PATCH, return_value=mock_port):
-            assert ensure_triage_image(tmp_path) is True
+            assert ensure_image(tmp_path) is True
         mock_port.build_image.assert_called_once()
 
 
-class TestRebuildTriageImage:
+class TestRebuildImage:
     def test_removes_containers_then_builds(
         self, mock_port: MagicMock, tmp_path: Path
     ) -> None:
@@ -95,8 +95,8 @@ class TestRebuildTriageImage:
         mock_port.build_image.side_effect = lambda *_: call_order.append("build")
 
         with patch(_PORT_PATCH, return_value=mock_port):
-            rebuild_triage_image(tmp_path)
+            rebuild_image(tmp_path)
 
         assert call_order == ["remove", "build"]
-        mock_port.remove_containers.assert_called_once_with(TRIAGE_IMAGE_TAG)
-        mock_port.build_image.assert_called_once_with(TRIAGE_IMAGE_TAG, dockerfile_dir)
+        mock_port.remove_containers.assert_called_once_with(AGENT_IMAGE_TAG)
+        mock_port.build_image.assert_called_once_with(AGENT_IMAGE_TAG, dockerfile_dir)

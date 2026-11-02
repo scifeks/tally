@@ -415,18 +415,21 @@ class TriageService:
         )
         try:
             try:
-                if not uses_sdk:
-                    from application.triage.container import (
-                        ensure_triage_containers,
-                        ensure_triage_image,
-                    )
+                from application.agent_sandbox.container import ensure_containers
+                from application.agent_sandbox.image import ensure_image
+                from application.triage.factory import resolve_triage_config
 
-                    ensure_triage_image(Path(base_path))
-                    ensure_triage_containers(
-                        Path(base_path),
-                        project_name,
-                        repo_paths=self._repo_paths,
-                    )
+                resolved = resolved_config or resolve_triage_config(
+                    app_root=Path(base_path)
+                )
+                ensure_image(Path(base_path))
+                ensure_containers(
+                    Path(base_path),
+                    provider=resolved.provider_name,
+                    base_url=resolved.base_url,
+                    model=resolved.model,
+                    repo_paths=self._repo_paths,
+                )
 
                 if is_resume:
                     result = resume_triage_for_project(
@@ -512,11 +515,11 @@ class TriageService:
                 )
             if not uses_sdk:
                 try:
-                    from application.triage.container import (
-                        teardown_triage_containers,
+                    from application.agent_sandbox.container import (
+                        teardown_containers,
                     )
 
-                    teardown_triage_containers(Path(base_path))
+                    teardown_containers(Path(base_path))
                 except Exception:
                     logger.debug(
                         "post-triage container teardown failed",

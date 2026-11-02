@@ -10,6 +10,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from application.agent_sandbox.compose import COMPOSE_RELATIVE_PATH
 from application.anthropic.mode_availability import BackgroundModeAvailability
 from application.scans.background_launcher import (
     ScanBackgroundLauncher,
@@ -18,7 +19,6 @@ from application.scans.background_launcher import (
     _run_scan_via_relay,
     _SDKRuntimeError,
 )
-from application.triage.compose import COMPOSE_RELATIVE_PATH
 from infrastructure.anthropic.error_classifier import ErrorClass, classify
 from infrastructure.anthropic.sdk_relay.events import (
     EndEvent,
@@ -73,6 +73,16 @@ def _mk_repo(name: str = "my-app", path: str = "/repos/my-app") -> MagicMock:
     repo.name = name
     repo.path = path
     return repo
+
+
+@pytest.fixture(autouse=True)
+def _stub_sandbox_lifecycle() -> Iterator[None]:
+    """Keep the sandbox calls off the real Docker daemon in unit tests."""
+    with (
+        patch("application.scans.background_launcher.ensure_image"),
+        patch("application.scans.background_launcher.ensure_containers"),
+    ):
+        yield
 
 
 def _default_launch_kwargs(

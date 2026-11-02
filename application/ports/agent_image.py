@@ -1,4 +1,4 @@
-"""Port for triage agent Docker image operations."""
+"""Port for agent sandbox Docker image operations."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from typing import Protocol, runtime_checkable
 
 
 @runtime_checkable
-class TriageImagePort(Protocol):
+class AgentImagePort(Protocol):
     def image_exists(self, tag: str) -> bool: ...
 
     def build_image(self, tag: str, context_dir: Path) -> None: ...

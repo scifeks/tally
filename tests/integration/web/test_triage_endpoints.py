@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from typing import Any
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -361,10 +362,19 @@ async def test_start_triage_runs_worker_end_to_end(app_client, monkeypatch) -> N
 
     monkeypatch.setattr(triage_service, "run_triage_for_project", fake_run_triage)
 
-    from application.triage import container as _ctr
+    from application.agent_sandbox import container as _ctr
+    from application.agent_sandbox import image as _img
+    from application.triage import factory as _factory
 
-    monkeypatch.setattr(_ctr, "ensure_triage_image", lambda *a, **kw: None)
-    monkeypatch.setattr(_ctr, "ensure_triage_containers", lambda *a, **kw: None)
+    monkeypatch.setattr(_img, "ensure_image", lambda *a, **kw: None)
+    monkeypatch.setattr(_ctr, "ensure_containers", lambda *a, **kw: None)
+    monkeypatch.setattr(
+        _factory,
+        "resolve_triage_config",
+        lambda *, app_root: MagicMock(
+            provider_name="claude", base_url="", model="sonnet"
+        ),
+    )
     monkeypatch.setattr(
         "application.mcp.token_minting.mint_bearer_token",
         lambda tag, base_path: "tok-e2e",

@@ -36,10 +36,16 @@ class TestTriagePostSync:
 
         with (
             patch(
-                "application.triage.container.ensure_triage_image",
+                "application.agent_sandbox.image.ensure_image",
             ),
             patch(
-                "application.triage.container.ensure_triage_containers",
+                "application.agent_sandbox.container.ensure_containers",
+            ),
+            patch(
+                "application.triage.factory.resolve_triage_config",
+                return_value=MagicMock(
+                    provider_name="claude", base_url="", model="sonnet"
+                ),
             ),
             patch(
                 "application.triage.triage_service.run_triage_for_project",
@@ -82,10 +88,16 @@ class TestTriagePostSync:
 
         with (
             patch(
-                "application.triage.container.ensure_triage_image",
+                "application.agent_sandbox.image.ensure_image",
             ),
             patch(
-                "application.triage.container.ensure_triage_containers",
+                "application.agent_sandbox.container.ensure_containers",
+            ),
+            patch(
+                "application.triage.factory.resolve_triage_config",
+                return_value=MagicMock(
+                    provider_name="claude", base_url="", model="sonnet"
+                ),
             ),
             patch(
                 "application.triage.triage_service.run_triage_for_project",
@@ -128,10 +140,16 @@ class TestTriagePostSync:
 
         with (
             patch(
-                "application.triage.container.ensure_triage_image",
+                "application.agent_sandbox.image.ensure_image",
             ),
             patch(
-                "application.triage.container.ensure_triage_containers",
+                "application.agent_sandbox.container.ensure_containers",
+            ),
+            patch(
+                "application.triage.factory.resolve_triage_config",
+                return_value=MagicMock(
+                    provider_name="claude", base_url="", model="sonnet"
+                ),
             ),
             patch(
                 "application.triage.triage_service.run_triage_for_project",
@@ -168,10 +186,16 @@ class TestTriagePostSync:
 
         with (
             patch(
-                "application.triage.container.ensure_triage_image",
+                "application.agent_sandbox.image.ensure_image",
             ),
             patch(
-                "application.triage.container.ensure_triage_containers",
+                "application.agent_sandbox.container.ensure_containers",
+            ),
+            patch(
+                "application.triage.factory.resolve_triage_config",
+                return_value=MagicMock(
+                    provider_name="claude", base_url="", model="sonnet"
+                ),
             ),
             patch(
                 "application.triage.triage_service.run_triage_for_project",

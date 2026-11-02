@@ -1,4 +1,4 @@
-"""Port for triage agent Docker Compose service lifecycle."""
+"""Port for agent sandbox Docker Compose service lifecycle."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from typing import Protocol, runtime_checkable
 
 
 @runtime_checkable
-class TriageContainerPort(Protocol):
+class AgentContainerPort(Protocol):
     def is_running(self, compose_path: Path) -> bool: ...
 
     def up(self, compose_path: Path) -> None: ...

@@ -150,8 +150,14 @@ class TestInteractiveTriagePrintsBearerToken:
                 "application.cli.commands.triage.compute_triage_readiness",
                 return_value=MagicMock(enabled=True),
             ),
-            patch("application.cli.commands.triage.ensure_triage_image"),
-            patch("application.cli.commands.triage.ensure_triage_containers"),
+            patch("application.cli.commands.triage.ensure_image"),
+            patch("application.cli.commands.triage.ensure_containers"),
+            patch(
+                "application.cli.commands.triage.resolve_triage_config",
+                return_value=MagicMock(
+                    provider_name="claude", base_url="", model="sonnet"
+                ),
+            ),
             patch(
                 "application.cli.commands.triage.create_triage_service",
                 return_value=service,

@@ -1,4 +1,4 @@
-"""Unit tests for application.triage.compose."""
+"""Unit tests for application.agent_sandbox.compose."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from application.triage.compose import (
+from application.agent_sandbox.compose import (
     COMPOSE_RELATIVE_PATH,
     PROXY_PORT,
     ComposeGenerationError,
@@ -18,7 +18,7 @@ from application.triage.compose import (
     build_opencode_config,
     build_proxy_config,
     build_proxy_filter,
-    generate_triage_compose,
+    generate_compose,
     resolve_egress_target,
 )
 from application.triage.credentials import (
@@ -27,9 +27,9 @@ from application.triage.credentials import (
     OpenCodeCredentials,
 )
 
-_PORT_PATCH = "application.triage.compose._resolve_compose_port"
-_CM_PATCH = "application.triage.compose.ConfigManager"
-_HOME_PATCH = "application.triage.compose.Path.home"
+_PORT_PATCH = "application.agent_sandbox.compose._resolve_compose_port"
+_CM_PATCH = "application.agent_sandbox.compose.ConfigManager"
+_HOME_PATCH = "application.agent_sandbox.compose.Path.home"
 
 
 def _claude_api_key(key: str = "sk-ant-test") -> ClaudeCredentials:
@@ -520,7 +520,7 @@ class TestBuildComposeDict:
         assert "triage-external" in result["networks"]
 
 
-# -- generate_triage_compose -----------------------------------------
+# -- generate_compose -----------------------------------------
 
 
 class TestGenerateTriageCompose:
@@ -537,7 +537,7 @@ class TestGenerateTriageCompose:
             patch(_PORT_PATCH, return_value=mock_port),
             patch(_CM_PATCH, self._mock_config(api_key="sk-x")),
         ):
-            result = generate_triage_compose(tmp_path, {}, provider="claude")
+            result = generate_compose(tmp_path, {}, provider="claude")
         assert result == tmp_path / COMPOSE_RELATIVE_PATH
 
     def test_writes_compose_and_proxy_files(self, tmp_path: Path) -> None:
@@ -546,7 +546,7 @@ class TestGenerateTriageCompose:
             patch(_PORT_PATCH, return_value=mock_port),
             patch(_CM_PATCH, self._mock_config(api_key="sk-x")),
         ):
-            generate_triage_compose(tmp_path, {}, provider="claude")
+            generate_compose(tmp_path, {}, provider="claude")
         assert mock_port.write_compose_file.call_count == 4
         paths_written = {
             call[0][1].name for call in mock_port.write_compose_file.call_args_list
@@ -562,7 +562,7 @@ class TestGenerateTriageCompose:
             patch(_PORT_PATCH, return_value=mock_port),
             patch(_CM_PATCH, self._mock_config(api_key="sk-x")),
         ):
-            generate_triage_compose(tmp_path, {}, provider="claude")
+            generate_compose(tmp_path, {}, provider="claude")
         filter_call = [
             c
             for c in mock_port.write_compose_file.call_args_list
@@ -577,7 +577,7 @@ class TestGenerateTriageCompose:
             patch(_PORT_PATCH, return_value=mock_port),
             patch(_CM_PATCH, self._mock_config()),
         ):
-            generate_triage_compose(
+            generate_compose(
                 tmp_path,
                 {},
                 provider="ollama",
@@ -598,7 +598,7 @@ class TestGenerateTriageCompose:
             patch(_PORT_PATCH, return_value=mock_port),
             patch(_CM_PATCH, self._mock_config()),
         ):
-            generate_triage_compose(
+            generate_compose(
                 tmp_path,
                 {},
                 provider="llama_cpp",
@@ -631,7 +631,7 @@ class TestGenerateTriageCompose:
                 match="OAuth file not found.*\\.claude\\.json",
             ),
         ):
-            generate_triage_compose(tmp_path, {}, provider="claude")
+            generate_compose(tmp_path, {}, provider="claude")
 
     def test_claude_oauth_validates_credentials_file(self, tmp_path: Path) -> None:
         fake_home = tmp_path / "fakehome"
@@ -647,7 +647,7 @@ class TestGenerateTriageCompose:
                 match="OAuth file not found.*\\.credentials\\.json",
             ),
         ):
-            generate_triage_compose(tmp_path, {}, provider="claude")
+            generate_compose(tmp_path, {}, provider="claude")
 
     def test_claude_api_key_skips_oauth_validation(self, tmp_path: Path) -> None:
         mock_port = MagicMock()
@@ -655,7 +655,7 @@ class TestGenerateTriageCompose:
             patch(_PORT_PATCH, return_value=mock_port),
             patch(_CM_PATCH, self._mock_config(api_key="sk-x")),
         ):
-            generate_triage_compose(tmp_path, {}, provider="claude")
+            generate_compose(tmp_path, {}, provider="claude")
         assert mock_port.write_compose_file.call_count == 4
 
     def test_non_claude_provider_writes_opencode_config(self, tmp_path: Path) -> None:
@@ -664,7 +664,7 @@ class TestGenerateTriageCompose:
             patch(_PORT_PATCH, return_value=mock_port),
             patch(_CM_PATCH, self._mock_config()),
         ):
-            generate_triage_compose(
+            generate_compose(
                 tmp_path,
                 {},
                 provider="ollama",
@@ -691,7 +691,7 @@ class TestGenerateTriageCompose:
             patch(_PORT_PATCH, return_value=mock_port),
             patch(_CM_PATCH, self._mock_config(api_key="sk-x")),
         ):
-            generate_triage_compose(Path("."), {}, provider="claude")
+            generate_compose(Path("."), {}, provider="claude")
         compose_call = [
             c
             for c in mock_port.write_compose_file.call_args_list
@@ -706,7 +706,7 @@ class TestGenerateTriageCompose:
             patch(_PORT_PATCH, return_value=mock_port),
             patch(_CM_PATCH, self._mock_config(api_key="sk-x")),
         ):
-            generate_triage_compose(tmp_path, {}, provider="claude")
+            generate_compose(tmp_path, {}, provider="claude")
         paths_written = {
             call[0][1].name for call in mock_port.write_compose_file.call_args_list
         }
@@ -720,7 +720,7 @@ class TestGenerateTriageCompose:
             patch(_PORT_PATCH, return_value=mock_port),
             patch(_CM_PATCH, self._mock_config(api_key="sk-x")),
         ):
-            generate_triage_compose(tmp_path, {}, provider="claude")
+            generate_compose(tmp_path, {}, provider="claude")
         settings_call = [
             c
             for c in mock_port.write_compose_file.call_args_list
@@ -757,15 +757,16 @@ class TestClaudeSdkProvider:
         with (
             patch(_CM_PATCH) as cm,
             patch(
-                "application.triage.compose.resolve_claude_credentials",
+                "application.agent_sandbox.compose.resolve_claude_credentials",
                 return_value=_claude_api_key(),
             ),
             patch(
-                "application.triage.compose._resolve_compose_port", return_value=port
+                "application.agent_sandbox.compose._resolve_compose_port",
+                return_value=port,
             ),
         ):
             cm.return_value.global_config = cfg
-            generate_triage_compose(
+            generate_compose(
                 tmp_path,
                 {},
                 provider="claude_sdk",

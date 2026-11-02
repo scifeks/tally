@@ -1,4 +1,4 @@
-"""Port for triage agent Docker Compose file operations."""
+"""Port for agent sandbox Docker Compose file operations."""
 
 from __future__ import annotations
 
@@ -7,5 +7,5 @@ from typing import Protocol, runtime_checkable
 
 
 @runtime_checkable
-class TriageComposePort(Protocol):
+class AgentComposePort(Protocol):
     def write_compose_file(self, content: str, compose_path: Path) -> None: ...

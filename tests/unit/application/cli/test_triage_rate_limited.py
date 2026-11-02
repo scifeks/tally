@@ -52,10 +52,14 @@ def test_rate_limited_result_exits_with_rate_limited_code(
 
     with (
         patch(
-            "application.cli.commands.triage.ensure_triage_image",
+            "application.cli.commands.triage.ensure_image",
         ),
         patch(
-            "application.cli.commands.triage.ensure_triage_containers",
+            "application.cli.commands.triage.ensure_containers",
+        ),
+        patch(
+            "application.cli.commands.triage.resolve_triage_config",
+            return_value=MagicMock(provider_name="claude", base_url="", model="sonnet"),
         ),
         patch(
             "application.cli.commands.triage.create_triage_service",
@@ -86,10 +90,14 @@ def test_success_result_exits_with_success(capsys: pytest.CaptureFixture[str]) -
 
     with (
         patch(
-            "application.cli.commands.triage.ensure_triage_image",
+            "application.cli.commands.triage.ensure_image",
         ),
         patch(
-            "application.cli.commands.triage.ensure_triage_containers",
+            "application.cli.commands.triage.ensure_containers",
+        ),
+        patch(
+            "application.cli.commands.triage.resolve_triage_config",
+            return_value=MagicMock(provider_name="claude", base_url="", model="sonnet"),
         ),
         patch(
             "application.cli.commands.triage.create_triage_service",

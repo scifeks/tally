@@ -5,6 +5,20 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from application.agent_sandbox.compose import ComposeGenerationError
+from application.agent_sandbox.container import (
+    AgentContainerStartError,
+    containers_running,
+    ensure_containers,
+    teardown_containers,
+)
+from application.agent_sandbox.image import (
+    AgentImageBuildError,
+    DockerNotAvailableError,
+    ensure_image,
+    image_ready,
+    rebuild_image,
+)
 from application.locking import JobBusy
 from application.mcp.token_minting import mint_bearer_token
 from application.repl.adapters.console_triage_event_sink import (
@@ -12,18 +26,7 @@ from application.repl.adapters.console_triage_event_sink import (
 )
 from application.repl.commands.scan_commands import _parse_shared_mode_flags
 from application.repl.exceptions import ReplArgumentError
-from application.triage.compose import ComposeGenerationError
-from application.triage.container import (
-    DockerNotAvailableError,
-    TriageContainerStartError,
-    TriageImageBuildError,
-    ensure_triage_containers,
-    ensure_triage_image,
-    rebuild_triage_image,
-    teardown_triage_containers,
-    triage_containers_running,
-    triage_image_ready,
-)
+from application.triage.factory import resolve_triage_config
 from application.triage.orchestrator import (
     run_triage_batch_only,
     run_triage_dry_run,
@@ -189,16 +192,16 @@ class TriageCommands:
         )
 
     def _ensure_image(self) -> bool:
-        """Check triage image; build if missing. Returns False on error."""
+        """Check sandbox image; build if missing. Returns False on error."""
         app_root = Path(self._repl.base_path)
         try:
-            if not triage_image_ready():
+            if not image_ready():
                 self._repl.console.print(
                     "[yellow]Building triage agent image"
                     " (this may take a few minutes)..."
                     "[/yellow]"
                 )
-            built = ensure_triage_image(app_root)
+            built = ensure_image(app_root)
             if built:
                 self._repl.console.print("[green]Triage agent image ready.[/green]")
         except DockerNotAvailableError:
@@ -206,7 +209,7 @@ class TriageCommands:
                 "[red]Error:[/red] Docker is not installed or not running."
             )
             return False
-        except TriageImageBuildError as exc:
+        except AgentImageBuildError as exc:
             self._repl.console.print(f"[red]Error:[/red] {exc}")
             return False
         return True
@@ -215,7 +218,7 @@ class TriageCommands:
         self,
         repo_paths: dict[str, Path] | None = None,
     ) -> bool:
-        """Check triage containers; start if not running.
+        """Check sandbox containers; start if not running.
 
         Returns False on error.
         """
@@ -224,11 +227,18 @@ class TriageCommands:
         if not project:
             return False
         try:
-            if not triage_containers_running(app_root):
+            if not containers_running(app_root):
                 self._repl.console.print(
                     "[yellow]Starting triage containers...[/yellow]"
                 )
-            started = ensure_triage_containers(app_root, project, repo_paths=repo_paths)
+            resolved = resolve_triage_config(app_root=app_root)
+            started = ensure_containers(
+                app_root,
+                provider=resolved.provider_name,
+                base_url=resolved.base_url,
+                model=resolved.model,
+                repo_paths=repo_paths,
+            )
             if started:
                 self._repl.console.print("[green]Triage containers ready.[/green]")
         except DockerNotAvailableError:
@@ -238,25 +248,25 @@ class TriageCommands:
             return False
         except (
             ComposeGenerationError,
-            TriageContainerStartError,
+            AgentContainerStartError,
         ) as exc:
             self._repl.console.print(f"[red]Error:[/red] {exc}")
             return False
         return True
 
     def _rebuild_container(self) -> None:
-        """Tear down containers and rebuild the triage agent image."""
+        """Tear down containers and rebuild the sandbox image."""
         app_root = Path(self._repl.base_path)
         self._repl.console.print("Stopping triage agent containers...")
         try:
-            teardown_triage_containers(app_root)
-            rebuild_triage_image(app_root)
+            teardown_containers(app_root)
+            rebuild_image(app_root)
         except DockerNotAvailableError:
             self._repl.console.print(
                 "[red]Error:[/red] Docker is not installed or not running."
             )
             return
-        except TriageImageBuildError as exc:
+        except AgentImageBuildError as exc:
             self._repl.console.print(f"[red]Error:[/red] {exc}")
             return
         except FileNotFoundError as exc:

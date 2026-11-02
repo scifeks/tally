@@ -128,7 +128,7 @@ class TriageAgentFactory:
         if resolved is None:
             resolved = resolve_triage_config(app_root=self._app_root)
 
-        from application.triage.compose import (
+        from application.agent_sandbox.compose import (
             COMPOSE_RELATIVE_PATH,
         )
 

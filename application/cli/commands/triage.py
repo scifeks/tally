@@ -6,6 +6,18 @@ import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal, cast
 
+from application.agent_sandbox.compose import ComposeGenerationError
+from application.agent_sandbox.container import (
+    AgentContainerStartError,
+    ensure_containers,
+    teardown_containers,
+)
+from application.agent_sandbox.image import (
+    AgentImageBuildError,
+    DockerNotAvailableError,
+    ensure_image,
+    rebuild_image,
+)
 from application.cli.exit_codes import (
     GENERAL_ERROR,
     INVALID_ARGS,
@@ -21,16 +33,7 @@ from application.runtime import (
     RuntimeDependencyService,
     build_runtime_dependency_probes,
 )
-from application.triage.compose import ComposeGenerationError
-from application.triage.container import (
-    DockerNotAvailableError,
-    TriageContainerStartError,
-    TriageImageBuildError,
-    ensure_triage_containers,
-    ensure_triage_image,
-    rebuild_triage_image,
-    teardown_triage_containers,
-)
+from application.triage.factory import resolve_triage_config
 from application.triage.orchestrator import (
     run_triage_batch_only,
     run_triage_dry_run,
@@ -156,20 +159,27 @@ def _cmd_triage_resume(
 
     if interaction_mode == "interactive":
         try:
-            ensure_triage_image(base_path)
+            ensure_image(base_path)
         except DockerNotAvailableError:
             print("Error: Docker is not installed or not running.", file=sys.stderr)
             return GENERAL_ERROR
-        except TriageImageBuildError as exc:
+        except AgentImageBuildError as exc:
             print(f"Error: {exc}", file=sys.stderr)
             return GENERAL_ERROR
 
+        resolved = resolve_triage_config(app_root=base_path)
         try:
-            ensure_triage_containers(base_path, project_name, repo_paths=repo_paths)
+            ensure_containers(
+                base_path,
+                provider=resolved.provider_name,
+                base_url=resolved.base_url,
+                model=resolved.model,
+                repo_paths=repo_paths,
+            )
         except DockerNotAvailableError:
             print("Error: Docker is not installed or not running.", file=sys.stderr)
             return GENERAL_ERROR
-        except (ComposeGenerationError, TriageContainerStartError) as exc:
+        except (ComposeGenerationError, AgentContainerStartError) as exc:
             print(f"Error: {exc}", file=sys.stderr)
             return GENERAL_ERROR
 
@@ -275,20 +285,27 @@ def _cmd_triage_with_mode(
 
     if interaction_mode == "interactive":
         try:
-            ensure_triage_image(base_path)
+            ensure_image(base_path)
         except DockerNotAvailableError:
             print("Error: Docker is not installed or not running.", file=sys.stderr)
             return GENERAL_ERROR
-        except TriageImageBuildError as exc:
+        except AgentImageBuildError as exc:
             print(f"Error: {exc}", file=sys.stderr)
             return GENERAL_ERROR
 
+        resolved = resolve_triage_config(app_root=base_path)
         try:
-            ensure_triage_containers(base_path, project_name, repo_paths=repo_paths)
+            ensure_containers(
+                base_path,
+                provider=resolved.provider_name,
+                base_url=resolved.base_url,
+                model=resolved.model,
+                repo_paths=repo_paths,
+            )
         except DockerNotAvailableError:
             print("Error: Docker is not installed or not running.", file=sys.stderr)
             return GENERAL_ERROR
-        except (ComposeGenerationError, TriageContainerStartError) as exc:
+        except (ComposeGenerationError, AgentContainerStartError) as exc:
             print(f"Error: {exc}", file=sys.stderr)
             return GENERAL_ERROR
 
@@ -388,15 +405,15 @@ def _rebuild_container(base_path: Path) -> int:
     app_root = Path(base_path)
     print("Stopping triage agent containers...")
     try:
-        teardown_triage_containers(app_root)
-        rebuild_triage_image(app_root)
+        teardown_containers(app_root)
+        rebuild_image(app_root)
     except DockerNotAvailableError:
         print(
             "Error: Docker is not installed or not running.",
             file=sys.stderr,
         )
         return GENERAL_ERROR
-    except (TriageImageBuildError, FileNotFoundError) as exc:
+    except (AgentImageBuildError, FileNotFoundError) as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return GENERAL_ERROR
 
@@ -466,26 +483,33 @@ def _full_triage_mode(
     repo_paths = {r.name: Path(r.path) for r in repos if r.path}
 
     try:
-        ensure_triage_image(Path(base_path))
+        ensure_image(Path(base_path))
     except DockerNotAvailableError:
         print(
             "Error: Docker is not installed or not running.",
             file=sys.stderr,
         )
         return GENERAL_ERROR
-    except TriageImageBuildError as exc:
+    except AgentImageBuildError as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return GENERAL_ERROR
 
+    resolved = resolve_triage_config(app_root=Path(base_path))
     try:
-        ensure_triage_containers(Path(base_path), project_name, repo_paths=repo_paths)
+        ensure_containers(
+            Path(base_path),
+            provider=resolved.provider_name,
+            base_url=resolved.base_url,
+            model=resolved.model,
+            repo_paths=repo_paths,
+        )
     except DockerNotAvailableError:
         print(
             "Error: Docker is not installed or not running.",
             file=sys.stderr,
         )
         return GENERAL_ERROR
-    except (ComposeGenerationError, TriageContainerStartError) as exc:
+    except (ComposeGenerationError, AgentContainerStartError) as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return GENERAL_ERROR
 

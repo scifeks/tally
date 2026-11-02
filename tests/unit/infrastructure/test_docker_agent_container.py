@@ -1,4 +1,4 @@
-"""Unit tests for infrastructure.docker.triage_container."""
+"""Unit tests for infrastructure.docker.agent_container."""
 
 from __future__ import annotations
 
@@ -7,28 +7,26 @@ from unittest.mock import patch
 
 import pytest
 
-from application.triage.container import (
-    DockerNotAvailableError,
-    TriageContainerStartError,
-)
-from infrastructure.docker.triage_container import DockerTriageContainer
+from application.agent_sandbox.container import AgentContainerStartError
+from application.agent_sandbox.image import DockerNotAvailableError
+from infrastructure.docker.agent_container import DockerAgentContainer
 
-_RUN = "infrastructure.docker.triage_container.subprocess.run"
+_RUN = "infrastructure.docker.agent_container.subprocess.run"
 
 
 @pytest.fixture()
-def adapter() -> DockerTriageContainer:
-    return DockerTriageContainer()
+def adapter() -> DockerAgentContainer:
+    return DockerAgentContainer()
 
 
 class TestIsRunning:
     def test_returns_false_when_compose_file_missing(
-        self, adapter: DockerTriageContainer, tmp_path: Path
+        self, adapter: DockerAgentContainer, tmp_path: Path
     ) -> None:
         assert adapter.is_running(tmp_path / "missing.yaml") is False
 
     def test_returns_true_when_services_running(
-        self, adapter: DockerTriageContainer, tmp_path: Path
+        self, adapter: DockerAgentContainer, tmp_path: Path
     ) -> None:
         compose = tmp_path / "docker-compose.yaml"
         compose.write_text("services: {}")
@@ -37,7 +35,7 @@ class TestIsRunning:
             assert adapter.is_running(compose) is True
 
     def test_returns_false_when_no_services_running(
-        self, adapter: DockerTriageContainer, tmp_path: Path
+        self, adapter: DockerAgentContainer, tmp_path: Path
     ) -> None:
         compose = tmp_path / "docker-compose.yaml"
         compose.write_text("services: {}")
@@ -46,7 +44,7 @@ class TestIsRunning:
             assert adapter.is_running(compose) is False
 
     def test_raises_when_docker_missing(
-        self, adapter: DockerTriageContainer, tmp_path: Path
+        self, adapter: DockerAgentContainer, tmp_path: Path
     ) -> None:
         compose = tmp_path / "docker-compose.yaml"
         compose.write_text("services: {}")
@@ -59,7 +57,7 @@ class TestIsRunning:
 
 class TestUp:
     def test_calls_compose_up(
-        self, adapter: DockerTriageContainer, tmp_path: Path
+        self, adapter: DockerAgentContainer, tmp_path: Path
     ) -> None:
         compose = tmp_path / "docker-compose.yaml"
         mock_result = type("R", (), {"stdout": "", "stderr": "", "returncode": 0})()
@@ -67,7 +65,7 @@ class TestUp:
             adapter.up(compose)
 
     def test_raises_on_nonzero_exit(
-        self, adapter: DockerTriageContainer, tmp_path: Path
+        self, adapter: DockerAgentContainer, tmp_path: Path
     ) -> None:
         compose = tmp_path / "docker-compose.yaml"
         mock_result = type(
@@ -77,12 +75,12 @@ class TestUp:
         )()
         with (
             patch(_RUN, return_value=mock_result),
-            pytest.raises(TriageContainerStartError, match="failed"),
+            pytest.raises(AgentContainerStartError, match="failed"),
         ):
             adapter.up(compose)
 
     def test_raises_when_docker_missing(
-        self, adapter: DockerTriageContainer, tmp_path: Path
+        self, adapter: DockerAgentContainer, tmp_path: Path
     ) -> None:
         compose = tmp_path / "docker-compose.yaml"
         with (
@@ -92,7 +90,7 @@ class TestUp:
             adapter.up(compose)
 
     def test_up_includes_wait_flag(
-        self, adapter: DockerTriageContainer, tmp_path: Path
+        self, adapter: DockerAgentContainer, tmp_path: Path
     ) -> None:
         compose = tmp_path / "docker-compose.yaml"
         mock_result = type("R", (), {"stdout": "", "stderr": "", "returncode": 0})()
@@ -104,7 +102,7 @@ class TestUp:
 
 class TestDown:
     def test_calls_compose_down(
-        self, adapter: DockerTriageContainer, tmp_path: Path
+        self, adapter: DockerAgentContainer, tmp_path: Path
     ) -> None:
         compose = tmp_path / "docker-compose.yaml"
         mock_result = type("R", (), {"stdout": "", "stderr": "", "returncode": 0})()
@@ -112,7 +110,7 @@ class TestDown:
             adapter.down(compose)
 
     def test_ignores_nonzero_exit(
-        self, adapter: DockerTriageContainer, tmp_path: Path
+        self, adapter: DockerAgentContainer, tmp_path: Path
     ) -> None:
         compose = tmp_path / "docker-compose.yaml"
         mock_result = type(
@@ -124,7 +122,7 @@ class TestDown:
             adapter.down(compose)
 
     def test_raises_when_docker_missing(
-        self, adapter: DockerTriageContainer, tmp_path: Path
+        self, adapter: DockerAgentContainer, tmp_path: Path
     ) -> None:
         compose = tmp_path / "docker-compose.yaml"
         with (

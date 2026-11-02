@@ -231,11 +231,9 @@ class ProjectCommands:
     def _teardown_triage_containers(self) -> None:
         """Best-effort compose-down after a project switch."""
         try:
-            from application.triage.container import (
-                teardown_triage_containers,
-            )
+            from application.agent_sandbox.container import teardown_containers
 
-            teardown_triage_containers(Path(self.repl.base_path))
+            teardown_containers(Path(self.repl.base_path))
         except Exception:
             pass
 

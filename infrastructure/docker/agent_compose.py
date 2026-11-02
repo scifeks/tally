@@ -1,11 +1,11 @@
-"""Docker adapter for triage agent Compose file operations."""
+"""Docker adapter for agent sandbox Compose file operations."""
 
 from __future__ import annotations
 
 from pathlib import Path
 
 
-class DockerTriageCompose:
+class DockerAgentCompose:
     def write_compose_file(self, content: str, compose_path: Path) -> None:
         compose_path.parent.mkdir(parents=True, exist_ok=True)
         compose_path.write_text(content)

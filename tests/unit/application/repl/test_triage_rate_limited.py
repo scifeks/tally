@@ -75,20 +75,24 @@ def test_rate_limited_result_prints_yellow_warning() -> None:
     with (
         patch("builtins.input", return_value="y"),
         patch(
-            "application.repl.commands.triage_commands.ensure_triage_image",
+            "application.repl.commands.triage_commands.ensure_image",
             return_value=False,
         ),
         patch(
-            "application.repl.commands.triage_commands.triage_image_ready",
+            "application.repl.commands.triage_commands.image_ready",
             return_value=True,
         ),
         patch(
-            "application.repl.commands.triage_commands.triage_containers_running",
+            "application.repl.commands.triage_commands.containers_running",
             return_value=True,
         ),
         patch(
-            "application.repl.commands.triage_commands.ensure_triage_containers",
+            "application.repl.commands.triage_commands.ensure_containers",
             return_value=False,
+        ),
+        patch(
+            "application.repl.commands.triage_commands.resolve_triage_config",
+            return_value=MagicMock(provider_name="claude", base_url="", model="sonnet"),
         ),
         patch(
             "application.repl.commands.triage_commands.create_triage_service",
@@ -117,20 +121,24 @@ def test_success_result_prints_summary() -> None:
     with (
         patch("builtins.input", return_value="y"),
         patch(
-            "application.repl.commands.triage_commands.ensure_triage_image",
+            "application.repl.commands.triage_commands.ensure_image",
             return_value=False,
         ),
         patch(
-            "application.repl.commands.triage_commands.triage_image_ready",
+            "application.repl.commands.triage_commands.image_ready",
             return_value=True,
         ),
         patch(
-            "application.repl.commands.triage_commands.triage_containers_running",
+            "application.repl.commands.triage_commands.containers_running",
             return_value=True,
         ),
         patch(
-            "application.repl.commands.triage_commands.ensure_triage_containers",
+            "application.repl.commands.triage_commands.ensure_containers",
             return_value=False,
+        ),
+        patch(
+            "application.repl.commands.triage_commands.resolve_triage_config",
+            return_value=MagicMock(provider_name="claude", base_url="", model="sonnet"),
         ),
         patch(
             "application.repl.commands.triage_commands.create_triage_service",

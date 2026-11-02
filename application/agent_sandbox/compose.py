@@ -1,4 +1,4 @@
-"""Per-project Docker Compose file generation for triage agents."""
+"""Per-project Docker Compose file generation for the agent sandbox."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from urllib.parse import urlparse, urlunparse
 
 import yaml
 
-from application.triage.container import TRIAGE_IMAGE_TAG
+from application.agent_sandbox.image import AGENT_IMAGE_TAG
 from application.triage.credentials import (
     ClaudeAuthMode,
     ClaudeCredentials,
@@ -19,7 +19,7 @@ from application.triage.credentials import (
 from core.config.manager import ConfigManager
 
 if TYPE_CHECKING:
-    from application.ports.triage_compose import TriageComposePort
+    from application.ports.agent_compose import AgentComposePort
 
 COMPOSE_RELATIVE_PATH = Path("docker/triage-agent/docker-compose.yaml")
 PROXY_CONFIG_DIR = Path("docker/triage-agent")
@@ -401,12 +401,12 @@ def build_compose_dict(
     }
 
 
-def _resolve_compose_port() -> TriageComposePort:
-    from infrastructure.docker.triage_compose import (
-        DockerTriageCompose,
+def _resolve_compose_port() -> AgentComposePort:
+    from infrastructure.docker.agent_compose import (
+        DockerAgentCompose,
     )
 
-    return DockerTriageCompose()
+    return DockerAgentCompose()
 
 
 _ALLOWED_MCP_HOSTS = frozenset({"host.docker.internal", "127.0.0.1", "localhost"})
@@ -426,7 +426,7 @@ def _validate_mcp_endpoint(mcp_host: str | None, mcp_port: int | None) -> None:
         raise ValueError(f"mcp_port must be an int in 1..65535, got {mcp_port!r}")
 
 
-def generate_triage_compose(
+def generate_compose(
     app_root: Path,
     repo_paths: dict[str, Path],
     *,
@@ -529,7 +529,7 @@ def generate_triage_compose(
         repo_paths=repo_paths,
         claude_creds=claude_creds,
         opencode_creds=opencode_creds,
-        image_tag=TRIAGE_IMAGE_TAG,
+        image_tag=AGENT_IMAGE_TAG,
         proxy_config_path=proxy_config_path,
         proxy_filter_path=proxy_filter_path,
         oauth_identity_path=oauth_identity,

@@ -16,7 +16,9 @@ from pathlib import Path
 from threading import Thread
 from typing import TYPE_CHECKING, Any, Literal, Protocol
 
-from application.triage.compose import COMPOSE_RELATIVE_PATH
+from application.agent_sandbox.compose import COMPOSE_RELATIVE_PATH
+from application.agent_sandbox.container import ensure_containers
+from application.agent_sandbox.image import ensure_image
 from factories.persistence import load_active_repos
 from infrastructure.anthropic.error_classifier import classify
 from infrastructure.anthropic.sdk_relay.client import SDKRelayClient
@@ -220,6 +222,11 @@ class ScanBackgroundLauncher:
             raise ScanConfigurationError(
                 f"primary repo for project {project_name!r} has no path configured"
             )
+        repo_paths = {r.name: Path(r.path) for r in repos if r.path}
+
+        bp = Path(base_path)
+        ensure_image(bp)
+        ensure_containers(bp, provider="claude_sdk", repo_paths=repo_paths)
 
         self._mcp.set_scan_config(
             project=project_name,
@@ -242,7 +249,6 @@ class ScanBackgroundLauncher:
             phase_status.get("completed_phases", []) if _needs_resume(latest) else []
         )
 
-        bp = Path(base_path)
         bearer_token = _mint_bearer_token(run_id, base_path=bp)
 
         # The sandbox cannot reach the host's loopback, so the MCP URL is

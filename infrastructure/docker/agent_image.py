@@ -1,17 +1,17 @@
-"""Docker adapter for triage agent image operations."""
+"""Docker adapter for agent sandbox image operations."""
 
 from __future__ import annotations
 
 import subprocess
 from pathlib import Path
 
-from application.triage.container import (
+from application.agent_sandbox.image import (
+    AgentImageBuildError,
     DockerNotAvailableError,
-    TriageImageBuildError,
 )
 
 
-class DockerTriageImage:
+class DockerAgentImage:
     def image_exists(self, tag: str) -> bool:
         try:
             result = subprocess.run(
@@ -34,7 +34,7 @@ class DockerTriageImage:
             raise DockerNotAvailableError("Docker is not installed or not on PATH")
         if result.returncode != 0:
             stderr = (result.stderr or "").strip()
-            raise TriageImageBuildError(
+            raise AgentImageBuildError(
                 f"Image build failed (exit {result.returncode}): {stderr[:500]}"
             )
 

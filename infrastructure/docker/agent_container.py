@@ -1,17 +1,15 @@
-"""Docker Compose adapter for triage agent service lifecycle."""
+"""Docker Compose adapter for agent sandbox service lifecycle."""
 
 from __future__ import annotations
 
 import subprocess
 from pathlib import Path
 
-from application.triage.container import (
-    DockerNotAvailableError,
-    TriageContainerStartError,
-)
+from application.agent_sandbox.container import AgentContainerStartError
+from application.agent_sandbox.image import DockerNotAvailableError
 
 
-class DockerTriageContainer:
+class DockerAgentContainer:
     def is_running(self, compose_path: Path) -> bool:
         if not compose_path.is_file():
             return False
@@ -53,7 +51,7 @@ class DockerTriageContainer:
             raise DockerNotAvailableError("Docker is not installed or not on PATH")
         if result.returncode != 0:
             stderr = (result.stderr or "").strip()
-            raise TriageContainerStartError(
+            raise AgentContainerStartError(
                 f"Container start failed (exit {result.returncode}): {stderr[:500]}"
             )
 
