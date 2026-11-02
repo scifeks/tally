@@ -6,8 +6,10 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from application.ports.triage_agent import TriageBackendUnavailable
+from application.triage.prompts.output_instructions import STDOUT_OUTPUT_INSTRUCTION
 from application.triage.prompts.triage_prompt import TriagePrompt
 from domain.triage.verdict import Verdict
+from infrastructure.anthropic import claude_sdk_triage_agent
 from infrastructure.anthropic.claude_sdk_triage_agent import (
     AgentSDKTriageAgent,
     _SDKRuntimeError,
@@ -212,3 +214,10 @@ def test_timeout_raises_timeout_expired_not_unavailable(
             cwd=Path("/tmp"),
         )
     assert info.value.timeout == 120
+
+
+def test_class_exposes_stdout_output_instruction() -> None:
+    assert (
+        claude_sdk_triage_agent.AgentSDKTriageAgent.OUTPUT_INSTRUCTION
+        == STDOUT_OUTPUT_INSTRUCTION
+    )

@@ -9,11 +9,15 @@ import subprocess
 import threading
 from contextlib import contextmanager
 from pathlib import Path
+from typing import ClassVar
 
 from application.ports.triage_agent import (
     PreparedTriageSession,
     TriageBackendUnavailable,
     TriageSessionResult,
+)
+from application.triage.prompts.output_instructions import (
+    FILE_OUTPUT_INSTRUCTION,
 )
 from application.triage.prompts.triage_prompt import TriagePrompt
 from domain.triage.verdict import (
@@ -28,6 +32,8 @@ _TIMEOUT_EXIT_CODE = 124
 
 class OpenCodeTriageAgent:
     """OpenCode-backed triage adapter with persistent relay."""
+
+    OUTPUT_INSTRUCTION: ClassVar[str] = FILE_OUTPUT_INSTRUCTION
 
     def __init__(
         self,
@@ -177,7 +183,7 @@ class OpenCodeTriageAgent:
         except VerdictParseError as first_err:
             retry_prompt = (
                 f"{single_message}\n\nPrevious attempt failed: {first_err}. "
-                f"Write the corrected JSON to /workspace/out/verdict.json."
+                f"{FILE_OUTPUT_INSTRUCTION}"
             )
             self._clear_verdict_file()
             self._dispatch_prompt(

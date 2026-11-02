@@ -17,11 +17,14 @@ import os
 import subprocess as _subprocess
 from contextlib import contextmanager
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, ClassVar, Literal
 
 from application.ports.triage_agent import (
     PreparedTriageSession,
     TriageBackendUnavailable,
+)
+from application.triage.prompts.output_instructions import (
+    STDOUT_OUTPUT_INSTRUCTION,
 )
 from domain.triage.verdict import Verdict, parse_verdict
 from infrastructure.anthropic.error_classifier import classify
@@ -106,6 +109,8 @@ def _run_sdk_once(
 
 class AgentSDKTriageAgent:
     """One-shot triage adapter using the Claude Agent SDK."""
+
+    OUTPUT_INSTRUCTION: ClassVar[str] = STDOUT_OUTPUT_INSTRUCTION
 
     def __init__(
         self,

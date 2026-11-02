@@ -8,6 +8,9 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
 from application.triage.prompts import api_trace, dast_trace, sast_trace
+from application.triage.prompts.output_instructions import (
+    MCP_TOOL_CALL_OUTPUT_INSTRUCTION,
+)
 from domain.findings.normalization import (
     build_triage_meta,
     normalise_finding_type,
@@ -95,7 +98,11 @@ class McpTriageService:
             render_fn = sast_trace.render
         findings_with_prompts = []
         for finding in batch.batch_data:
-            prompt = render_fn(finding, project=project_name)
+            prompt = render_fn(
+                finding,
+                project=project_name,
+                output_instruction=MCP_TOOL_CALL_OUTPUT_INSTRUCTION,
+            )
             findings_with_prompts.append(
                 {
                     "finding_id": finding.get("id"),

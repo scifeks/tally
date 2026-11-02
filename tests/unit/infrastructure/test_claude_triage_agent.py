@@ -14,11 +14,13 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from application.triage.prompts.output_instructions import STDOUT_OUTPUT_INSTRUCTION
 from application.triage.prompts.triage_prompt import TriagePrompt
 from application.triage.verdict import (
     Verdict,
     VerdictParseError,
 )
+from infrastructure.agents import claude_triage_agent
 from infrastructure.agents.claude_triage_agent import (
     ClaudeTriageAgent,
 )
@@ -354,3 +356,10 @@ def test_missing_verdict_field_raises(
                     timeout_seconds=60,
                     cwd=tmp_path,
                 )
+
+
+def test_class_exposes_stdout_output_instruction() -> None:
+    assert (
+        claude_triage_agent.ClaudeTriageAgent.OUTPUT_INSTRUCTION
+        == STDOUT_OUTPUT_INSTRUCTION
+    )

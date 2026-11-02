@@ -20,6 +20,9 @@ from application.ports.triage_event_sink import (
 from application.tools.registry import ToolRegistry
 from application.triage.batch_creator import create_triage_batches
 from application.triage.prompts import dast_trace, sast_trace
+from application.triage.prompts.output_instructions import (
+    STDOUT_OUTPUT_INSTRUCTION,
+)
 from application.triage.prompts.triage_prompt import TriagePrompt
 from application.triage.verdict import (
     SourceNotExaminedError,
@@ -264,11 +267,13 @@ class TriageRunner:
             segment: str,
         ) -> str:
             compose_fn = _PROMPT_COMPOSERS[segment]
+            output_instruction = self._output_instruction()
             for finding in batch_data:
                 fid = finding.get("id", "?")
                 prompt = compose_fn(
                     finding,
                     project=self._project,
+                    output_instruction=output_instruction,
                 ).combined()
                 _log.debug(
                     "========== FINDING %s (batch %d)"
@@ -285,6 +290,11 @@ class TriageRunner:
         return result.sessions_run
 
     # Private helpers
+
+    def _output_instruction(self) -> str:
+        return getattr(
+            self._triage_backend, "OUTPUT_INSTRUCTION", STDOUT_OUTPUT_INSTRUCTION
+        )
 
     def _resolve_scan_run_id(self) -> int:
         """Return the scan_run_id triage will operate on."""
@@ -643,6 +653,7 @@ class TriageRunner:
         'incomplete' (mixed).
         """
         compose_fn = _PROMPT_COMPOSERS[segment]
+        output_instruction = self._output_instruction()
         succeeded = 0
         total = len(batch_data)
         max_attempts = self._retry_count + 1
@@ -650,7 +661,11 @@ class TriageRunner:
         for finding in batch_data:
             self._check_canceled()
             fid = finding.get("id", -1)
-            prompt = compose_fn(finding, project=self._project)
+            prompt = compose_fn(
+                finding,
+                project=self._project,
+                output_instruction=output_instruction,
+            )
             ok = False
             for attempt in range(max_attempts):
                 try:

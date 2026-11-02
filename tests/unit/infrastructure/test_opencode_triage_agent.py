@@ -14,11 +14,13 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from application.triage.prompts.output_instructions import FILE_OUTPUT_INSTRUCTION
 from application.triage.prompts.triage_prompt import TriagePrompt
 from application.triage.verdict import (
     Verdict,
     VerdictParseError,
 )
+from infrastructure.agents import opencode_triage_agent
 from infrastructure.agents.opencode_triage_agent import (
     OpenCodeTriageAgent,
 )
@@ -254,7 +256,7 @@ def test_missing_file_triggers_retry_with_error_context(tmp_path: Path) -> None:
     assert verdict.finding_id == _FINDING_ID
     assert len(dispatches) == 2
     assert "Previous attempt failed" in dispatches[1]
-    assert "/workspace/out/verdict.json" in dispatches[1]
+    assert FILE_OUTPUT_INSTRUCTION in dispatches[1]
 
 
 def test_both_attempts_fail_raises(tmp_path: Path) -> None:
@@ -373,3 +375,10 @@ def test_missing_verdict_field_retries_then_raises(tmp_path: Path) -> None:
                         timeout_seconds=60,
                         cwd=tmp_path,
                     )
+
+
+def test_class_exposes_file_output_instruction() -> None:
+    assert (
+        opencode_triage_agent.OpenCodeTriageAgent.OUTPUT_INSTRUCTION
+        == FILE_OUTPUT_INSTRUCTION
+    )

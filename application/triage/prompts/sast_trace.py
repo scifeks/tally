@@ -19,6 +19,7 @@ def compose(
     finding: dict[str, Any],
     *,
     project: str,
+    output_instruction: str,
 ) -> TriagePrompt:
     """Build a one-shot triage prompt for a semgrep finding."""
     finding_id = finding["id"]
@@ -36,7 +37,7 @@ def compose(
         _CONFIDENCE_GUIDANCE,
         _PREDICATE_GUIDANCE,
         DECISION_REMINDER,
-        _output_schema(finding_id),
+        _output_schema(finding_id, output_instruction),
     ]
     return TriagePrompt(
         preamble="\n\n".join(preamble),
@@ -46,9 +47,16 @@ def compose(
     )
 
 
-def render(finding: dict[str, Any], *, project: str) -> str:
+def render(
+    finding: dict[str, Any],
+    *,
+    project: str,
+    output_instruction: str,
+) -> str:
     """Build the prompt as a single message."""
-    return compose(finding, project=project).combined()
+    return compose(
+        finding, project=project, output_instruction=output_instruction
+    ).combined()
 
 
 # Private helpers
@@ -184,16 +192,11 @@ actual risk. Examples of common misclassifications:
 Always re-derive the vulnerability class from the code, not the rule."""
 
 
-def _output_schema(finding_id: int) -> str:
+def _output_schema(finding_id: int, output_instruction: str) -> str:
     return f"""\
-## Output
+{output_instruction}
 
-When your verdict is ready, use the write tool to write the JSON object to
-`/workspace/out/verdict.json`. The file MUST contain only the JSON object -
-no markdown fences, no commentary, no leading or trailing whitespace.
-Anything you say in chat is ignored; only the file contents are read.
-
-Schema for verdict.json:
+Schema for the verdict JSON object:
 
 {{"finding_id": {finding_id}, "confidence": "<confirmed|probable\
 |potential|false_positive>", "finding_type": "<vulnerability|weakness\
