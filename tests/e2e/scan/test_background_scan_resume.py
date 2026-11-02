@@ -1,11 +1,11 @@
 """E2E test: background scan resume after rate limit.
 
-Fakes only _run_sdk_skill. Every other layer (ScanBackgroundLauncher,
+Fakes only _run_scan_via_relay. Every other layer (ScanBackgroundLauncher,
 McpIngestService, FastAPI routes, repositories) runs for real. The test
 fires a background scan with billing=plan, scripts recon to complete and
 domain:injection to rate_limit, then resumes with billing=api. Asserts
 that recon has one attempt, domain:injection has two (plan rate_limited
-then api completed), and domain:xss has one api attempt.
+then api completed) and domain:xss has one api attempt.
 """
 
 from __future__ import annotations
@@ -242,7 +242,7 @@ class TestBackgroundScanResume:
         controller.on_phase("domain:injection").mark_complete()
         controller.on_phase("domain:xss").mark_complete()
 
-        with controller.active():
+        with controller.active(billing_method="api"):
             resp = await client.post(
                 f"/api/v1/projects/{project_id}/scans/{run_id}/resume",
                 json={

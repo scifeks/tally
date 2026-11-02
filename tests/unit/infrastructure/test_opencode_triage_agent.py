@@ -1,6 +1,6 @@
 """Unit tests for OpenCodeTriageAgent.
 
-Pin the relay startup, framing protocol, verdict file-drop contract,
+Pin the relay startup, framing protocol, verdict file-drop contract
 and error translation of the OpenCode adapter.
 """
 
@@ -78,7 +78,7 @@ def _mock_relay(response_line: str) -> MagicMock:
     return proc
 
 
-# -- session prep / relay startup -------------------------
+# session prep / relay startup
 
 
 def test_prepare_session_yields_cwd(tmp_path: Path) -> None:
@@ -157,7 +157,7 @@ def test_prepare_session_terminates_relay(tmp_path: Path) -> None:
     mock_proc.wait.assert_called_once()
 
 
-# -- happy path -------------------------------------------
+# happy path
 
 
 def test_happy_path_returns_verdict(tmp_path: Path) -> None:
@@ -275,7 +275,7 @@ def test_both_attempts_fail_raises(tmp_path: Path) -> None:
                     )
 
 
-# -- dispatch/relay error handling -------------------------
+# dispatch/relay error handling
 
 
 def test_nonzero_exit_raises(tmp_path: Path) -> None:
@@ -326,7 +326,7 @@ def test_relay_death_raises(tmp_path: Path) -> None:
                 )
 
 
-# -- verdict content validation ----------------------------
+# verdict content validation
 
 
 def test_finding_id_mismatch_retries_then_raises(tmp_path: Path) -> None:

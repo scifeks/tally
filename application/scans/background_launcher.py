@@ -4,27 +4,28 @@ The minted token is passed as a Bearer header on the MCP server config so the
 SDK session authenticates against the running Tally MCP server. Tokens are
 tagged ``scan-background-<run_id>`` and left to expire naturally.
 
-Security debt (TAL-266): this runs on the host with permission_mode=bypassPermissions.
-Bypass is required so the non-interactive scan session does not hang on tool-use
-prompts, but it gives the SDK session full Bash/Write/Edit access on the host.
-The follow-up ticket moves non-interactive SDK runs into a Docker sandbox with a
-typed-event output relay back to the host.
+The session runs inside the Docker sandbox and reaches the host MCP server via
+host.docker.internal; the host only consumes typed relay events.
 """
 
 from __future__ import annotations
 
-import asyncio
 import logging
-import os
-import subprocess
 from concurrent.futures import Future
 from pathlib import Path
 from threading import Thread
 from typing import TYPE_CHECKING, Any, Literal, Protocol
 
+from application.triage.compose import COMPOSE_RELATIVE_PATH
 from factories.persistence import load_active_repos
 from infrastructure.anthropic.error_classifier import classify
-from infrastructure.anthropic.subprocess_env import build_child_env
+from infrastructure.anthropic.sdk_relay.client import SDKRelayClient
+from infrastructure.anthropic.sdk_relay.events import (
+    AssistantTextEvent,
+    ErrorEvent,
+    ResultEvent,
+)
+from infrastructure.anthropic.sdk_relay.job_spec import ScanJobSpec
 
 if TYPE_CHECKING:
     from application.anthropic.mode_availability import (
@@ -35,6 +36,16 @@ if TYPE_CHECKING:
 _log = logging.getLogger(__name__)
 
 _SDK_TIMEOUT_SECONDS = 3600
+
+_SCAN_ALLOWED_TOOLS = (
+    "Read",
+    "Grep",
+    "Glob",
+    "Bash",
+    "Task",
+    "WebFetch",
+    "mcp__tally__*",
+)
 
 
 class ScanConfigurationError(ValueError):
@@ -111,84 +122,29 @@ def _build_prompt(
     return "\n\n".join(parts)
 
 
-def _run_sdk_skill(
-    prompt: str,
-    *,
-    billing_method: Literal["plan", "api"],
-    api_key_source: str | None,
-    cwd: str,
-    model: str,
-    mcp_server_url: str,
-    mcp_bearer_token: str,
-    timeout_seconds: int = _SDK_TIMEOUT_SECONDS,
-) -> None:
-    """Start one SDK session, send the prompt, run to completion.
+def _run_scan_via_relay(spec: ScanJobSpec, *, compose_path: Path) -> None:
+    """Run one scan job through a per-run sandbox relay.
 
-    Separated from the class so tests can monkeypatch it without touching the
-    SDK's async internals.
+    Separated from the class so tests can monkeypatch it without spawning docker.
     """
-    from claude_agent_sdk import (
-        AssistantMessage,
-        ClaudeAgentOptions,
-        ResultMessage,
-        TextBlock,
-        query,
-    )
-    from claude_agent_sdk.types import McpHttpServerConfig
-
-    env = build_child_env(
-        billing_method=billing_method,
-        api_key_source=api_key_source,
-        base_env=os.environ,
-    )
-
-    tally_mcp: McpHttpServerConfig = McpHttpServerConfig(
-        type="http",
-        url=mcp_server_url,
-        headers={"Authorization": f"Bearer {mcp_bearer_token}"},
-    )
-
-    options = ClaudeAgentOptions(
-        model=model,
-        cwd=cwd,
-        permission_mode="bypassPermissions",
-        env=env,
-        mcp_servers={"tally": tally_mcp},
-        allowed_tools=[
-            "Read",
-            "Grep",
-            "Glob",
-            "Bash",
-            "Task",
-            "WebFetch",
-            "mcp__tally__*",
-        ],
-    )
-
-    async def _go() -> None:
-        async for msg in query(prompt=prompt, options=options):
-            if isinstance(msg, AssistantMessage):
-                for block in msg.content:
-                    if isinstance(block, TextBlock):
-                        _log.debug("scan sdk: %s", block.text[:200])
-            elif isinstance(msg, ResultMessage):
-                if msg.is_error:
-                    status = getattr(msg, "api_error_status", None) or getattr(
-                        msg, "status_code", None
-                    )
-                    raise _SDKRuntimeError(
-                        f"SDK query error (subtype={msg.subtype}): "
-                        f"{msg.result or 'unknown'}",
-                        status_code=status,
-                    )
-
+    client = SDKRelayClient(compose_path=compose_path)
     try:
-        asyncio.run(asyncio.wait_for(_go(), timeout=timeout_seconds))
-    except TimeoutError as exc:
-        raise subprocess.TimeoutExpired(
-            cmd=["claude-agent-sdk"],
-            timeout=timeout_seconds,
-        ) from exc
+        client.start()
+        for event in client.submit(spec):
+            if isinstance(event, ErrorEvent):
+                raise _SDKRuntimeError(
+                    f"SDK query error (subtype={event.subtype}): "
+                    f"{event.message or 'unknown'}",
+                    status_code=event.status_code,
+                )
+            if isinstance(event, ResultEvent) and event.is_error:
+                raise _SDKRuntimeError(
+                    f"SDK query error: {event.text or 'unknown'}",
+                )
+            if isinstance(event, AssistantTextEvent):
+                _log.debug("scan sdk: %s", event.text[:200])
+    finally:
+        client.stop()
 
 
 def _mint_bearer_token(
@@ -289,8 +245,10 @@ class ScanBackgroundLauncher:
         bp = Path(base_path)
         bearer_token = _mint_bearer_token(run_id, base_path=bp)
 
-        mcp_cfg = self._config.mcp
-        mcp_server_url = f"http://{mcp_cfg.host}:{mcp_cfg.port}/mcp"
+        # The sandbox cannot reach the host's loopback, so the MCP URL is
+        # always addressed through host.docker.internal.
+        mcp_server_url = f"http://host.docker.internal:{self._config.mcp.port}/mcp"
+        compose_path = bp / COMPOSE_RELATIVE_PATH
 
         prompt = _build_prompt(
             "/tally-scan-external",
@@ -302,22 +260,27 @@ class ScanBackgroundLauncher:
             completed_phases=completed_phases,
         )
 
+        spec = ScanJobSpec(
+            model=self._config.claude.model,
+            user_prompt=prompt,
+            allowed_tools=list(_SCAN_ALLOWED_TOOLS),
+            cwd=repo_cwd,
+            timeout_seconds=_SDK_TIMEOUT_SECONDS,
+            mcp_servers={
+                "tally": {
+                    "type": "http",
+                    "url": mcp_server_url,
+                    "headers": {"Authorization": f"Bearer {bearer_token}"},
+                }
+            },
+        )
+
         fut: Future[str] = Future()
         scan_event_sink = self._scan_event_sink
 
         def _worker() -> None:
             try:
-                _run_sdk_skill(
-                    prompt,
-                    billing_method=resolved_billing,
-                    api_key_source=(
-                        api_key_source or self._config.claude.api_key or None
-                    ),
-                    cwd=repo_cwd,
-                    model=self._config.claude.model,
-                    mcp_server_url=mcp_server_url,
-                    mcp_bearer_token=bearer_token,
-                )
+                _run_scan_via_relay(spec, compose_path=compose_path)
                 fut.set_result("done")
             except Exception as exc:
                 kind = classify(exc, billing_method=resolved_billing)

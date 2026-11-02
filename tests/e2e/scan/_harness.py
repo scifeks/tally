@@ -6,7 +6,7 @@ import re
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Literal
 
 import application.scans.background_launcher as bl
 from application.mcp.ingest_service import McpIngestService
@@ -21,7 +21,7 @@ class _ScriptedPhase:
 
 @dataclass
 class FakeSkillRunner:
-    """Scripts per-phase outcomes for successive _run_sdk_skill calls.
+    """Scripts per-phase outcomes for successive _run_scan_via_relay calls.
 
     The fake extracts run_id from the prompt to avoid a race between
     route-response and daemon-thread start.
@@ -40,14 +40,19 @@ class FakeSkillRunner:
         return _PhaseBuilder(controller=self, phase=phase)
 
     @contextmanager
-    def active(self) -> Iterator[FakeSkillRunner]:
-        original = bl._run_sdk_skill
+    def active(
+        self, billing_method: Literal["plan", "api"] = "plan"
+    ) -> Iterator[FakeSkillRunner]:
+        original = bl._run_scan_via_relay
 
-        def fake(prompt: str, **kwargs: Any) -> None:
-            self.calls.append({"prompt": prompt, **kwargs})
+        # The job spec carries no billing method, so the test supplies the pool
+        # the launch under test was started with.
+        def fake(spec: Any, **kwargs: Any) -> None:
+            prompt = spec.user_prompt
+            self.calls.append({"prompt": prompt, "spec": spec, **kwargs})
 
             run_id = _extract_run_id(prompt)
-            billing = kwargs["billing_method"]
+            billing = billing_method
 
             for scripted in self._script:
                 self.ingest_service.start_scan_phase(
@@ -74,11 +79,11 @@ class FakeSkillRunner:
                     )
                     raise _SDKRuntimeError("rate limit (plan)", status_code=429)
 
-        bl._run_sdk_skill = fake  # type: ignore[assignment]
+        bl._run_scan_via_relay = fake  # type: ignore[assignment]
         try:
             yield self
         finally:
-            bl._run_sdk_skill = original  # type: ignore[assignment]
+            bl._run_scan_via_relay = original  # type: ignore[assignment]
 
 
 def _extract_run_id(prompt: str) -> int:

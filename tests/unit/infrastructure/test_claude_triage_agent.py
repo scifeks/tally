@@ -1,7 +1,7 @@
 """Unit tests for ClaudeTriageAgent.
 
 Pin the relay startup, framing protocol, text output
-parsing, and error translation of the Claude adapter.
+parsing and error translation of the Claude adapter.
 """
 
 from __future__ import annotations
@@ -72,7 +72,7 @@ def _mock_relay(response_line: str) -> MagicMock:
     return proc
 
 
-# -- session prep / relay startup ---------------------
+# session prep / relay startup
 
 
 def test_prepare_session_yields_cwd(
@@ -172,7 +172,7 @@ def test_model_from_constructor_in_command(
     assert "opus" in cmd
 
 
-# -- happy path ---------------------------------------
+# happy path
 
 
 def test_happy_path_returns_verdict(
@@ -239,7 +239,7 @@ def test_multi_json_in_result_succeeds(
     assert verdict.finding_id == _FINDING_ID
 
 
-# -- error handling -----------------------------------
+# error handling
 
 
 def test_nonzero_exit_raises(tmp_path: Path) -> None:

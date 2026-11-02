@@ -12,6 +12,7 @@ from application.triage.compose import (
     PROXY_PORT,
     ComposeGenerationError,
     _dockerize_url,
+    _validate_mcp_endpoint,
     build_claude_settings,
     build_compose_dict,
     build_opencode_config,
@@ -727,3 +728,80 @@ class TestGenerateTriageCompose:
         ][0]
         cfg = json.loads(settings_call[0][0])
         assert cfg["hooks"]["PreToolUse"][0]["matcher"] == ("Read|Grep|Glob")
+
+
+# -- claude_sdk provider ---------------------------------------------
+
+
+class TestClaudeSdkProvider:
+    def test_emits_sdk_sidecar_with_hardened_posture(self) -> None:
+        result = build_compose_dict(**_base_kwargs(provider="claude_sdk"))
+        assert "triage-agent" not in result["services"]
+        service = result["services"]["sdk-sidecar"]
+        assert service["read_only"] is True
+        assert service["cap_drop"] == ["ALL"]
+        assert "no-new-privileges:true" in service["security_opt"]
+        assert service["user"] == "agent"
+        assert service["command"] == ["sleep", "infinity"]
+
+    def test_omits_workspace_out_mount(self, tmp_path: Path) -> None:
+        result = build_compose_dict(
+            **_base_kwargs(provider="claude_sdk", verdict_out_dir=tmp_path)
+        )
+        volumes = result["services"]["sdk-sidecar"]["volumes"]
+        assert not any(v.get("target") == "/workspace/out" for v in volumes)
+
+    def test_generate_allows_mcp_endpoint_through_proxy(self, tmp_path: Path) -> None:
+        port = MagicMock()
+        cfg = MagicMock()
+        with (
+            patch(_CM_PATCH) as cm,
+            patch(
+                "application.triage.compose.resolve_claude_credentials",
+                return_value=_claude_api_key(),
+            ),
+            patch(
+                "application.triage.compose._resolve_compose_port", return_value=port
+            ),
+        ):
+            cm.return_value.global_config = cfg
+            generate_triage_compose(
+                tmp_path,
+                {},
+                provider="claude_sdk",
+                mcp_host="host.docker.internal",
+                mcp_port=5555,
+            )
+        written = {
+            c.args[1].name: c.args[0] for c in port.write_compose_file.call_args_list
+        }
+        assert "ConnectPort 5555" in written["tinyproxy.conf"]
+        assert "host\\.docker\\.internal" in written["filter"]
+        assert "sdk-sidecar" in written["docker-compose.yaml"]
+
+
+class TestValidateMcpEndpoint:
+    def test_both_none_is_allowed(self) -> None:
+        _validate_mcp_endpoint(None, None)
+
+    @pytest.mark.parametrize("host", ["host.docker.internal", "127.0.0.1", "localhost"])
+    def test_allowed_hosts_pass(self, host: str) -> None:
+        _validate_mcp_endpoint(host, 5555)
+
+    def test_rejects_half_specified_endpoint(self) -> None:
+        with pytest.raises(ValueError, match="together or both omitted"):
+            _validate_mcp_endpoint("host.docker.internal", None)
+        with pytest.raises(ValueError, match="together or both omitted"):
+            _validate_mcp_endpoint(None, 5555)
+
+    @pytest.mark.parametrize(
+        "host", ["evil.example.com", "0.0.0.0", "", "169.254.169.254"]
+    )
+    def test_rejects_unexpected_host(self, host: str) -> None:
+        with pytest.raises(ValueError, match="not allowed"):
+            _validate_mcp_endpoint(host, 5555)
+
+    @pytest.mark.parametrize("port", [0, -1, 65536, 1_000_000])
+    def test_rejects_out_of_range_port(self, port: int) -> None:
+        with pytest.raises(ValueError, match="1..65535"):
+            _validate_mcp_endpoint("host.docker.internal", port)

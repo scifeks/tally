@@ -128,6 +128,12 @@ class TriageAgentFactory:
         if resolved is None:
             resolved = resolve_triage_config(app_root=self._app_root)
 
+        from application.triage.compose import (
+            COMPOSE_RELATIVE_PATH,
+        )
+
+        compose_path = self._app_root / COMPOSE_RELATIVE_PATH
+
         if resolved.provider_name == "claude_sdk":
             from infrastructure.anthropic.claude_sdk_triage_agent import (
                 AgentSDKTriageAgent,
@@ -137,13 +143,8 @@ class TriageAgentFactory:
                 billing_method=resolved.billing_method or "plan",
                 api_key_source=resolved.api_key_source,
                 model=resolved.model,
+                compose_path=compose_path,
             )
-
-        from application.triage.compose import (
-            COMPOSE_RELATIVE_PATH,
-        )
-
-        compose_path = self._app_root / COMPOSE_RELATIVE_PATH
 
         if resolved.provider_name == "claude":
             from infrastructure.agents.claude_triage_agent import (

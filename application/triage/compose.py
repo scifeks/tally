@@ -41,7 +41,7 @@ def resolve_egress_target(
     Claude targets api.anthropic.com:443. OpenCode targets
     the configured inference endpoint parsed from the provider URL.
     """
-    if provider == "claude":
+    if provider in ("claude", "claude_sdk"):
         return ("api.anthropic.com", 443)
 
     if not api_provider_url:
@@ -204,11 +204,17 @@ def build_compose_dict(
     claude_hook_script_path: Path | None = None,
     opencode_share_path: Path | None = None,
     verdict_out_dir: Path | None = None,
+    provider: str = "claude",
 ) -> dict[str, Any]:
     """Builds the compose file structure as a dict.
 
-    Pure function with no I/O.
+    Pure function with no I/O. The ``claude_sdk`` provider emits an
+    ``sdk-sidecar`` service in place of ``triage-agent`` and never
+    mounts the verdict output directory, since verdicts travel over
+    stdout. The proxy's host and port allowlists are written to disk
+    by the caller before this function runs; they are not needed here.
     """
+    is_sdk = provider == "claude_sdk"
     volumes: list[dict[str, Any]] = []
 
     for name, host_path in sorted(repo_paths.items()):
@@ -258,7 +264,7 @@ def build_compose_dict(
             }
         )
 
-    if verdict_out_dir is not None:
+    if verdict_out_dir is not None and not is_sdk:
         volumes.append(
             {
                 "type": "bind",
@@ -382,9 +388,10 @@ def build_compose_dict(
         ],
     }
 
+    agent_name = "sdk-sidecar" if is_sdk else "triage-agent"
     return {
         "services": {
-            "triage-agent": agent_service,
+            agent_name: agent_service,
             "triage-proxy": proxy_service,
         },
         "networks": {
@@ -402,6 +409,23 @@ def _resolve_compose_port() -> TriageComposePort:
     return DockerTriageCompose()
 
 
+_ALLOWED_MCP_HOSTS = frozenset({"host.docker.internal", "127.0.0.1", "localhost"})
+
+
+def _validate_mcp_endpoint(mcp_host: str | None, mcp_port: int | None) -> None:
+    if mcp_host is None and mcp_port is None:
+        return
+    if mcp_host is None or mcp_port is None:
+        raise ValueError("mcp_host and mcp_port must be set together or both omitted")
+    if mcp_host not in _ALLOWED_MCP_HOSTS:
+        raise ValueError(
+            f"mcp_host {mcp_host!r} not allowed; expected one of "
+            f"{sorted(_ALLOWED_MCP_HOSTS)}"
+        )
+    if not isinstance(mcp_port, int) or not 1 <= mcp_port <= 65535:
+        raise ValueError(f"mcp_port must be an int in 1..65535, got {mcp_port!r}")
+
+
 def generate_triage_compose(
     app_root: Path,
     repo_paths: dict[str, Path],
@@ -409,6 +433,8 @@ def generate_triage_compose(
     provider: str,
     base_url: str = "",
     model: str = "",
+    mcp_host: str | None = None,
+    mcp_port: int | None = None,
 ) -> Path:
     """Resolves credentials, validates OAuth files, generates
     and writes the compose file and proxy config. Returns the
@@ -419,11 +445,14 @@ def generate_triage_compose(
     providers, ``base_url`` and ``model`` are the merged values
     from the resolved triage config.
     """
+    _validate_mcp_endpoint(mcp_host, mcp_port)
+
     app_root = app_root.resolve()
     cfg = ConfigManager(str(app_root)).global_config
     claude_creds = resolve_claude_credentials(cfg.claude)
 
-    is_claude = provider == "claude"
+    is_sdk = provider == "claude_sdk"
+    is_claude = provider in ("claude", "claude_sdk")
     api_provider_url = "" if is_claude else base_url
     opencode_creds = OpenCodeCredentials(
         api_key="",
@@ -458,11 +487,15 @@ def generate_triage_compose(
     connect_ports = [443]
     if egress_port != 443:
         connect_ports.append(egress_port)
+    if mcp_host is not None and mcp_port is not None:
+        connect_ports.append(mcp_port)
 
     proxy_config_content = build_proxy_config(connect_ports)
 
     if is_claude:
         allowed_hosts = ["api.anthropic.com"]
+        if mcp_host is not None and mcp_port is not None:
+            allowed_hosts.append(mcp_host)
     else:
         allowed_hosts = [egress_host]
     proxy_filter_content = build_proxy_filter(allowed_hosts)
@@ -506,6 +539,7 @@ def generate_triage_compose(
         claude_hook_script_path=hook_script_path,
         opencode_share_path=opencode_share_path if not is_claude and model else None,
         verdict_out_dir=verdict_out_dir if not is_claude and model else None,
+        provider="claude_sdk" if is_sdk else "claude",
     )
 
     content = yaml.dump(

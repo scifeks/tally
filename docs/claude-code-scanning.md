@@ -263,6 +263,16 @@ The scan flow above describes **interactive** mode: a user drives their own Clau
 
 Background runs require a billing method. See [Credential and Billing Model](credential-and-billing-model.md) for the four supported credential configurations.
 
+### Prerequisites
+
+Background scans run the Agent SDK inside the Docker-sandboxed `sdk-sidecar` service. The compose file must have been generated with the `claude_sdk` provider so that service is defined, and the service must be running before the scan starts:
+
+```
+docker compose -f .tally/triage/docker-compose.yaml up -d sdk-sidecar
+```
+
+If the compose file was generated for the CLI provider instead, the launcher's `docker compose exec sdk-sidecar` fails with "service not defined". Regenerate by setting `triage_inference.provider = "claude_sdk"` in the project config and rerunning the triage setup. See [Credential and Billing Model](credential-and-billing-model.md#docker-sandboxed-agent-sdk-runs-tal-266) for the full container posture.
+
 ### Starting a background scan
 
 CLI:

@@ -1,19 +1,13 @@
-"""Agent SDK adapter implementing OneshotTriageBackendPort.
+"""Agent SDK adapter driving the Docker-sandboxed sdk-runner via SDKRelayClient.
 
-Each run_triage call starts a fresh SDK session with its own context window.
-The runner above batches findings; this adapter handles one finding per call.
-
-Security debt (TAL-266): this runs on the host with permission_mode=bypassPermissions.
-Bypass is required so non-interactive runs do not hang on tool-use prompts, but it
-gives the SDK session full Bash/Write/Edit access on the host. The follow-up ticket
-moves non-interactive SDK runs into a Docker sandbox with a typed-event output relay
-back to the host.
+Each run_triage call submits one job to the long-lived relay process and
+translates the typed event stream back into the exception shapes the error
+classifier and verdict parser already consume.
 """
 
 from __future__ import annotations
 
-import asyncio
-import os
+import atexit
 import subprocess as _subprocess
 from contextlib import contextmanager
 from pathlib import Path
@@ -27,8 +21,13 @@ from application.triage.prompts.output_instructions import (
     STDOUT_OUTPUT_INSTRUCTION,
 )
 from domain.triage.verdict import Verdict, parse_verdict
-from infrastructure.anthropic.error_classifier import classify
-from infrastructure.anthropic.subprocess_env import build_child_env
+from infrastructure.anthropic.error_classifier import ErrorClass, classify
+from infrastructure.anthropic.sdk_relay.client import (
+    SDKRelayClient,
+    SDKRelayUnavailable,
+)
+from infrastructure.anthropic.sdk_relay.events import ErrorEvent, ResultEvent
+from infrastructure.anthropic.sdk_relay.job_spec import TriageJobSpec
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -37,78 +36,25 @@ if TYPE_CHECKING:
 
 
 class _SDKRuntimeError(RuntimeError):
-    """Carries status_code from SDK ResultMessage errors for the classifier."""
+    """Carries status_code from relay errors for the classifier."""
 
     def __init__(self, message: str, status_code: int | None = None) -> None:
         super().__init__(message)
         self.status_code = status_code
 
 
-def _run_sdk_once(
-    instructions: str,
-    finding_data: str,
-    model: str,
-    billing_method: Literal["plan", "api"],
-    api_key_source: str | None,
-    cwd: str,
-    timeout_seconds: int,
-) -> str:
-    """Start one SDK session and return the final text output.
-
-    Instructions go in as the system prompt; only the fenced finding
-    data goes in as the user message. The provider's role hierarchy
-    keeps the two apart so prompt injection in finding content cannot
-    override the triage instructions.
-
-    Separated from the class so tests can monkeypatch it without caring
-    about the SDK's async internals.
-    """
-    from claude_agent_sdk import (
-        AssistantMessage,
-        ClaudeAgentOptions,
-        ResultMessage,
-        TextBlock,
-        query,
-    )
-
-    env = build_child_env(
-        billing_method=billing_method,
-        api_key_source=api_key_source,
-        base_env=os.environ,
-    )
-
-    options = ClaudeAgentOptions(
-        model=model,
-        cwd=cwd,
-        permission_mode="bypassPermissions",
-        env=env,
-        system_prompt=instructions,
-    )
-
-    async def _go() -> str:
-        final_text = ""
-        async for msg in query(prompt=finding_data, options=options):
-            if isinstance(msg, AssistantMessage):
-                for block in msg.content:
-                    if isinstance(block, TextBlock):
-                        final_text += block.text
-            elif isinstance(msg, ResultMessage):
-                if msg.is_error:
-                    status = getattr(msg, "api_error_status", None) or getattr(
-                        msg, "status_code", None
-                    )
-                    raise _SDKRuntimeError(
-                        f"SDK query error (subtype={msg.subtype}): "
-                        f"{msg.result or 'unknown'}",
-                        status_code=status,
-                    )
-        return final_text
-
-    return asyncio.run(asyncio.wait_for(_go(), timeout=timeout_seconds))
+def _start_client(client: SDKRelayClient) -> None:
+    try:
+        client.start()
+    except SDKRelayUnavailable as exc:
+        raise TriageBackendUnavailable(
+            f"SDK relay failed to start: {exc}",
+            error_class=ErrorClass.UNKNOWN,
+        ) from exc
 
 
 class AgentSDKTriageAgent:
-    """One-shot triage adapter using the Claude Agent SDK."""
+    """One-shot triage adapter using the Claude Agent SDK inside a sandbox."""
 
     OUTPUT_INSTRUCTION: ClassVar[str] = STDOUT_OUTPUT_INSTRUCTION
 
@@ -117,12 +63,15 @@ class AgentSDKTriageAgent:
         billing_method: Literal["plan", "api"],
         api_key_source: str | None,
         model: str,
+        compose_path: Path,
     ) -> None:
         if billing_method == "api" and not api_key_source:
             raise ValueError("billing_method='api' requires an api_key_source.")
         self._billing_method: Literal["plan", "api"] = billing_method
         self._api_key_source = api_key_source
         self._model = model
+        self._compose_path = compose_path
+        self._client: SDKRelayClient | None = None
 
     @contextmanager
     def prepare_session(
@@ -132,7 +81,16 @@ class AgentSDKTriageAgent:
         run_id: int,
         app_root: Path,
     ) -> Iterator[PreparedTriageSession]:
-        yield PreparedTriageSession(cwd=app_root)
+        client = SDKRelayClient(
+            compose_path=self._compose_path, service_name="sdk-sidecar"
+        )
+        _start_client(client)
+        self._client = client
+        try:
+            yield PreparedTriageSession(cwd=app_root)
+        finally:
+            self._client = None
+            client.stop()
 
     def run_triage(
         self,
@@ -142,19 +100,46 @@ class AgentSDKTriageAgent:
         timeout_seconds: int,
         cwd: Path,
     ) -> Verdict:
-        try:
-            raw = _run_sdk_once(
-                instructions=prompt.instructions,
-                finding_data=prompt.finding_data,
-                model=self._model,
-                billing_method=self._billing_method,
-                api_key_source=self._api_key_source,
-                cwd=str(cwd),
-                timeout_seconds=timeout_seconds,
+        # Plan-to-api failover swaps in a fresh adapter mid-run without a
+        # prepare_session call, so start the relay on first use. Nothing
+        # else stops it, so tie its shutdown to interpreter exit.
+        if self._client is None:
+            client = SDKRelayClient(
+                compose_path=self._compose_path, service_name="sdk-sidecar"
             )
-        except TimeoutError as exc:
-            raise _subprocess.TimeoutExpired(
-                cmd=["claude-agent-sdk"], timeout=timeout_seconds
+            _start_client(client)
+            atexit.register(client.stop)
+            self._client = client
+
+        # Instructions go in as the system prompt so injection in finding
+        # content cannot override them.
+        spec = TriageJobSpec(
+            model=self._model,
+            system_prompt=prompt.instructions,
+            user_prompt=prompt.finding_data,
+            allowed_tools=["Read", "Grep", "Glob", "Bash"],
+            cwd=str(cwd),
+            timeout_seconds=timeout_seconds,
+        )
+
+        final_text = ""
+        try:
+            for event in self._client.submit(spec):
+                if isinstance(event, ResultEvent):
+                    if event.is_error:
+                        raise _SDKRuntimeError(f"relay result error: {event.text}")
+                    final_text = event.text
+                elif isinstance(event, ErrorEvent):
+                    raise _SDKRuntimeError(
+                        f"relay error (subtype={event.subtype}): {event.message}",
+                        status_code=event.status_code,
+                    )
+        except _subprocess.TimeoutExpired:
+            raise
+        except SDKRelayUnavailable as exc:
+            raise TriageBackendUnavailable(
+                f"SDK relay unavailable for finding {finding_id}: {exc}",
+                error_class=ErrorClass.UNKNOWN,
             ) from exc
         except Exception as exc:
             kind = classify(exc, billing_method=self._billing_method)
@@ -162,4 +147,4 @@ class AgentSDKTriageAgent:
                 f"Agent SDK failed for finding {finding_id}: {exc}",
                 error_class=kind,
             ) from exc
-        return parse_verdict(raw, expected_finding_id=finding_id)
+        return parse_verdict(final_text, expected_finding_id=finding_id)

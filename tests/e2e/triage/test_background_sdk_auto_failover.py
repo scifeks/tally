@@ -1,6 +1,6 @@
 """E2E test: background triage auto-failover from plan to api.
 
-Fakes only _run_sdk_once. Every other layer (TriageService, TriageRunner,
+Fakes only SDKRelayClient.submit. Every other layer (TriageService, TriageRunner,
 repositories, FastAPI route) runs for real. The test seeds a project with
 one SAST finding, POSTs background triage with no explicit billing_method
 (triggering auto-failover eligibility), scripts a RATE_LIMIT_PLAN on the

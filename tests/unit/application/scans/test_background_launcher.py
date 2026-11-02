@@ -1,10 +1,11 @@
-"""Tests for ScanBackgroundLauncher orchestration and _run_sdk_skill wiring."""
+"""Tests for ScanBackgroundLauncher orchestration and _run_scan_via_relay wiring."""
 
 from __future__ import annotations
 
 import subprocess
+from collections.abc import Iterator
 from pathlib import Path
-from typing import Any
+from typing import ClassVar
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -14,8 +15,18 @@ from application.scans.background_launcher import (
     ScanBackgroundLauncher,
     ScanConfigurationError,
     _build_prompt,
-    _run_sdk_skill,
+    _run_scan_via_relay,
+    _SDKRuntimeError,
 )
+from application.triage.compose import COMPOSE_RELATIVE_PATH
+from infrastructure.anthropic.error_classifier import ErrorClass, classify
+from infrastructure.anthropic.sdk_relay.events import (
+    EndEvent,
+    ErrorEvent,
+    Event,
+    ResultEvent,
+)
+from infrastructure.anthropic.sdk_relay.job_spec import ScanJobSpec
 
 
 def _mk_availability(*, oauth_available: bool, api_key_available: bool) -> MagicMock:
@@ -90,7 +101,7 @@ def _default_launch_kwargs(
     "application.scans.background_launcher._mint_bearer_token", return_value="tok-abc"
 )
 @patch("application.scans.background_launcher.load_active_repos")
-@patch("application.scans.background_launcher._run_sdk_skill")
+@patch("application.scans.background_launcher._run_scan_via_relay")
 def test_launch_writes_scan_config_and_runs_skill(
     mock_run: MagicMock,
     mock_repos: MagicMock,
@@ -116,7 +127,7 @@ def test_launch_writes_scan_config_and_runs_skill(
     "application.scans.background_launcher._mint_bearer_token", return_value="tok-abc"
 )
 @patch("application.scans.background_launcher.load_active_repos")
-@patch("application.scans.background_launcher._run_sdk_skill")
+@patch("application.scans.background_launcher._run_scan_via_relay")
 def test_launch_cwd_equals_primary_repo_path(
     mock_run: MagicMock,
     mock_repos: MagicMock,
@@ -131,54 +142,7 @@ def test_launch_cwd_equals_primary_repo_path(
     handle = launcher.launch(**_default_launch_kwargs())
     handle.result.result(timeout=5)
 
-    call_kwargs = mock_run.call_args.kwargs
-    assert call_kwargs["cwd"] == "/repos/target"
-
-
-@patch(
-    "application.scans.background_launcher._mint_bearer_token", return_value="tok-abc"
-)
-@patch("application.scans.background_launcher.load_active_repos")
-@patch("application.scans.background_launcher._run_sdk_skill")
-def test_launch_mcp_url_includes_configured_host_and_port(
-    mock_run: MagicMock,
-    mock_repos: MagicMock,
-    _mock_mint: MagicMock,
-) -> None:
-    mock_repos.return_value = [_mk_repo()]
-    launcher = ScanBackgroundLauncher(
-        mcp_service=_mk_mcp_service(),
-        availability=_mk_availability(oauth_available=True, api_key_available=True),
-        config=_mk_config(default_billing="plan", mcp_host="10.0.0.5", mcp_port=9999),
-    )
-    handle = launcher.launch(**_default_launch_kwargs())
-    handle.result.result(timeout=5)
-
-    call_kwargs = mock_run.call_args.kwargs
-    assert call_kwargs["mcp_server_url"] == "http://10.0.0.5:9999/mcp"
-
-
-@patch(
-    "application.scans.background_launcher._mint_bearer_token", return_value="my-secret"
-)
-@patch("application.scans.background_launcher.load_active_repos")
-@patch("application.scans.background_launcher._run_sdk_skill")
-def test_launch_bearer_token_passed_to_skill(
-    mock_run: MagicMock,
-    mock_repos: MagicMock,
-    _mock_mint: MagicMock,
-) -> None:
-    mock_repos.return_value = [_mk_repo()]
-    launcher = ScanBackgroundLauncher(
-        mcp_service=_mk_mcp_service(),
-        availability=_mk_availability(oauth_available=True, api_key_available=True),
-        config=_mk_config(default_billing="plan"),
-    )
-    handle = launcher.launch(**_default_launch_kwargs())
-    handle.result.result(timeout=5)
-
-    call_kwargs = mock_run.call_args.kwargs
-    assert call_kwargs["mcp_bearer_token"] == "my-secret"
+    assert mock_run.call_args.args[0].cwd == "/repos/target"
 
 
 def test_launch_rejects_api_without_key() -> None:
@@ -217,7 +181,7 @@ def test_launch_raises_when_no_active_repos(mock_repos: MagicMock) -> None:
     "application.scans.background_launcher._mint_bearer_token", return_value="tok-abc"
 )
 @patch("application.scans.background_launcher.load_active_repos")
-@patch("application.scans.background_launcher._run_sdk_skill")
+@patch("application.scans.background_launcher._run_scan_via_relay")
 def test_launch_cleans_up_in_progress_phases_on_crash(
     mock_run: MagicMock,
     mock_repos: MagicMock,
@@ -262,7 +226,7 @@ def test_launch_defaults_to_plan_billing() -> None:
     "application.scans.background_launcher._mint_bearer_token", return_value="tok-abc"
 )
 @patch("application.scans.background_launcher.load_active_repos")
-@patch("application.scans.background_launcher._run_sdk_skill")
+@patch("application.scans.background_launcher._run_scan_via_relay")
 def test_resume_preamble_included_when_phases_in_progress(
     mock_run: MagicMock,
     mock_repos: MagicMock,
@@ -284,7 +248,7 @@ def test_resume_preamble_included_when_phases_in_progress(
     handle = launcher.launch(**_default_launch_kwargs())
     handle.result.result(timeout=5)
 
-    prompt = mock_run.call_args[0][0]
+    prompt = mock_run.call_args.args[0].user_prompt
     assert "Resume:" in prompt
     assert "discovery" in prompt
 
@@ -293,7 +257,7 @@ def test_resume_preamble_included_when_phases_in_progress(
     "application.scans.background_launcher._mint_bearer_token", return_value="tok-abc"
 )
 @patch("application.scans.background_launcher.load_active_repos")
-@patch("application.scans.background_launcher._run_sdk_skill")
+@patch("application.scans.background_launcher._run_scan_via_relay")
 def test_resume_preamble_included_when_phases_rate_limited(
     mock_run: MagicMock,
     mock_repos: MagicMock,
@@ -315,7 +279,7 @@ def test_resume_preamble_included_when_phases_rate_limited(
     handle = launcher.launch(**_default_launch_kwargs())
     handle.result.result(timeout=5)
 
-    prompt = mock_run.call_args[0][0]
+    prompt = mock_run.call_args.args[0].user_prompt
     assert "Resume:" in prompt
     assert "discovery" in prompt
 
@@ -324,7 +288,7 @@ def test_resume_preamble_included_when_phases_rate_limited(
     "application.scans.background_launcher._mint_bearer_token", return_value="tok-abc"
 )
 @patch("application.scans.background_launcher.load_active_repos")
-@patch("application.scans.background_launcher._run_sdk_skill")
+@patch("application.scans.background_launcher._run_scan_via_relay")
 def test_resume_preamble_omitted_when_only_completed(
     mock_run: MagicMock,
     mock_repos: MagicMock,
@@ -346,7 +310,7 @@ def test_resume_preamble_omitted_when_only_completed(
     handle = launcher.launch(**_default_launch_kwargs())
     handle.result.result(timeout=5)
 
-    prompt = mock_run.call_args[0][0]
+    prompt = mock_run.call_args.args[0].user_prompt
     assert "Resume:" not in prompt
 
 
@@ -354,7 +318,7 @@ def test_resume_preamble_omitted_when_only_completed(
     "application.scans.background_launcher._mint_bearer_token", return_value="tok-abc"
 )
 @patch("application.scans.background_launcher.load_active_repos")
-@patch("application.scans.background_launcher._run_sdk_skill")
+@patch("application.scans.background_launcher._run_scan_via_relay")
 def test_resume_preamble_omitted_when_no_prior_phases(
     mock_run: MagicMock,
     mock_repos: MagicMock,
@@ -373,7 +337,7 @@ def test_resume_preamble_omitted_when_no_prior_phases(
     handle = launcher.launch(**_default_launch_kwargs())
     handle.result.result(timeout=5)
 
-    prompt = mock_run.call_args[0][0]
+    prompt = mock_run.call_args.args[0].user_prompt
     assert "Resume:" not in prompt
 
 
@@ -381,7 +345,7 @@ def test_resume_preamble_omitted_when_no_prior_phases(
     "application.scans.background_launcher._mint_bearer_token", return_value="tok-abc"
 )
 @patch("application.scans.background_launcher.load_active_repos")
-@patch("application.scans.background_launcher._run_sdk_skill")
+@patch("application.scans.background_launcher._run_scan_via_relay")
 def test_launch_calls_set_scan_config_before_sdk_session(
     mock_run: MagicMock,
     mock_repos: MagicMock,
@@ -446,288 +410,258 @@ def test_build_prompt_resume_run() -> None:
 
 
 # ---------------------------------------------------------------------------
-# _run_sdk_skill SDK wiring tests
+# _run_scan_via_relay
 # ---------------------------------------------------------------------------
 
 
-class TestRunSdkSkillWiring:
-    """Verify _run_sdk_skill wires ClaudeAgentOptions correctly."""
+class _FakeRelayClient:
+    """Stands in for SDKRelayClient; events are set per test."""
 
-    @staticmethod
-    def _make_sdk_mocks() -> tuple[MagicMock, dict[str, Any]]:
-        sdk = MagicMock()
-        captured: dict[str, Any] = {}
+    events: ClassVar[list[Event]] = []
+    instances: ClassVar[list[_FakeRelayClient]] = []
 
-        class FakeAssistantMessage:
-            pass
+    def __init__(self, *, compose_path: Path) -> None:
+        self.compose_path = compose_path
+        self.started = False
+        self.stopped = False
+        self.specs: list[ScanJobSpec] = []
+        type(self).instances.append(self)
 
-        class FakeTextBlock:
-            pass
+    def start(self) -> None:
+        self.started = True
 
-        class FakeResultMessage:
-            def __init__(self) -> None:
-                self.is_error = False
+    def submit(self, spec: ScanJobSpec) -> Iterator[Event]:
+        self.specs.append(spec)
+        return iter(type(self).events)
 
-        class FakeClaudeAgentOptions:
-            def __init__(self, **kwargs: object) -> None:
-                captured.update(kwargs)
-
-        sdk.AssistantMessage = FakeAssistantMessage
-        sdk.TextBlock = FakeTextBlock
-        sdk.ResultMessage = FakeResultMessage
-        sdk.ClaudeAgentOptions = FakeClaudeAgentOptions
-
-        async def fake_query(prompt: str, options: object) -> object:  # noqa: ARG004
-            yield FakeResultMessage()
-
-        sdk.query = fake_query
-        return sdk, captured
-
-    @patch("application.scans.background_launcher.build_child_env")
-    def test_plan_mode_env_omits_api_key(self, mock_build_env: MagicMock) -> None:
-        mock_build_env.return_value = {"PATH": "/usr/bin"}
-        sdk, captured = self._make_sdk_mocks()
-
-        sdk_types = MagicMock()
-        sdk_types.McpHttpServerConfig = dict
-
-        with patch.dict(
-            "sys.modules",
-            {"claude_agent_sdk": sdk, "claude_agent_sdk.types": sdk_types},
-        ):
-            _run_sdk_skill(
-                "Run /tally-scan-external",
-                billing_method="plan",
-                api_key_source=None,
-                cwd="/tmp",
-                model="x",
-                mcp_server_url="http://127.0.0.1:8765/mcp",
-                mcp_bearer_token="tok",
-                timeout_seconds=60,
-            )
-
-        mock_build_env.assert_called_once()
-        assert mock_build_env.call_args.kwargs["billing_method"] == "plan"
-        assert "ANTHROPIC_API_KEY" not in captured.get("env", {})
-
-    @patch("application.scans.background_launcher.build_child_env")
-    def test_api_mode_env_contains_api_key(self, mock_build_env: MagicMock) -> None:
-        mock_build_env.return_value = {"ANTHROPIC_API_KEY": "sk-test"}
-        sdk, captured = self._make_sdk_mocks()
-
-        sdk_types = MagicMock()
-        sdk_types.McpHttpServerConfig = dict
-
-        with patch.dict(
-            "sys.modules",
-            {"claude_agent_sdk": sdk, "claude_agent_sdk.types": sdk_types},
-        ):
-            _run_sdk_skill(
-                "Run /tally-scan-external",
-                billing_method="api",
-                api_key_source="sk-test",
-                cwd="/tmp",
-                model="x",
-                mcp_server_url="http://127.0.0.1:8765/mcp",
-                mcp_bearer_token="tok",
-                timeout_seconds=60,
-            )
-
-        assert mock_build_env.call_args.kwargs["billing_method"] == "api"
-        assert mock_build_env.call_args.kwargs["api_key_source"] == "sk-test"
-        env = captured.get("env", {})
-        assert env.get("ANTHROPIC_API_KEY") == "sk-test"
-
-    @patch("application.scans.background_launcher.build_child_env")
-    def test_mcp_server_url_and_bearer_token(self, mock_build_env: MagicMock) -> None:
-        mock_build_env.return_value = {}
-        sdk, captured = self._make_sdk_mocks()
-
-        sdk_types = MagicMock()
-        sdk_types.McpHttpServerConfig = dict
-
-        with patch.dict(
-            "sys.modules",
-            {"claude_agent_sdk": sdk, "claude_agent_sdk.types": sdk_types},
-        ):
-            _run_sdk_skill(
-                "Run /tally-scan-external",
-                billing_method="plan",
-                api_key_source=None,
-                cwd="/repos/app",
-                model="x",
-                mcp_server_url="http://10.0.0.1:9999/mcp",
-                mcp_bearer_token="secret-tok",
-                timeout_seconds=60,
-            )
-
-        mcp_servers = captured.get("mcp_servers", {})
-        assert "tally" in mcp_servers
-        tally_cfg = mcp_servers["tally"]
-        assert tally_cfg["url"] == "http://10.0.0.1:9999/mcp"
-        assert tally_cfg["headers"]["Authorization"] == "Bearer secret-tok"
-
-    @patch("application.scans.background_launcher.build_child_env")
-    def test_cwd_passed_to_options(self, mock_build_env: MagicMock) -> None:
-        mock_build_env.return_value = {}
-        sdk, captured = self._make_sdk_mocks()
-
-        sdk_types = MagicMock()
-        sdk_types.McpHttpServerConfig = dict
-
-        with patch.dict(
-            "sys.modules",
-            {"claude_agent_sdk": sdk, "claude_agent_sdk.types": sdk_types},
-        ):
-            _run_sdk_skill(
-                "Run /tally-scan-external",
-                billing_method="plan",
-                api_key_source=None,
-                cwd="/repos/my-project",
-                model="x",
-                mcp_server_url="http://127.0.0.1:8765/mcp",
-                mcp_bearer_token="tok",
-                timeout_seconds=60,
-            )
-
-        assert captured["cwd"] == "/repos/my-project"
+    def stop(self) -> None:
+        self.stopped = True
 
 
-# ---------------------------------------------------------------------------
-# Error classification and timeout
-# ---------------------------------------------------------------------------
+@pytest.fixture
+def fake_relay(monkeypatch: pytest.MonkeyPatch) -> type[_FakeRelayClient]:
+    _FakeRelayClient.events = []
+    _FakeRelayClient.instances = []
+    monkeypatch.setattr(
+        "application.scans.background_launcher.SDKRelayClient", _FakeRelayClient
+    )
+    return _FakeRelayClient
 
 
-@patch("application.scans.background_launcher.build_child_env")
-def test_sdk_result_error_429_raises_with_status_code(
-    mock_build_env: MagicMock,
+def _mk_spec() -> ScanJobSpec:
+    return ScanJobSpec(
+        model="x",
+        user_prompt="p",
+        allowed_tools=["Read"],
+        cwd="/tmp",
+        timeout_seconds=60,
+    )
+
+
+def test_relay_happy_path_submits_spec_and_stops_client(
+    fake_relay: type[_FakeRelayClient],
 ) -> None:
-    """ResultMessage(is_error=True, api_error_status=429) raises _SDKRuntimeError."""
-    mock_build_env.return_value = {}
-    sdk = MagicMock()
+    fake_relay.events = [ResultEvent(text="ok", is_error=False), EndEvent()]
+    spec = _mk_spec()
 
-    class FakeAssistantMessage:
-        pass
+    _run_scan_via_relay(spec, compose_path=Path("/app/compose.yaml"))
 
-    class FakeTextBlock:
-        pass
+    (client,) = fake_relay.instances
+    assert client.specs == [spec]
+    assert client.compose_path == Path("/app/compose.yaml")
+    assert client.started
+    assert client.stopped
 
-    class FakeResultMessage:
-        def __init__(
-            self, *, is_error: bool = False, api_error_status: int | None = None
-        ) -> None:
-            self.is_error = is_error
-            self.api_error_status = api_error_status
-            self.status_code = None
-            self.subtype = "error"
-            self.result = "rate limited"
 
-    class FakeOptions:
-        def __init__(self, **kwargs: object) -> None:
-            pass
+def test_relay_error_event_raises_with_status_code_and_stops_client(
+    fake_relay: type[_FakeRelayClient],
+) -> None:
+    fake_relay.events = [
+        ErrorEvent(status_code=429, subtype="rate_limit", message="slow down"),
+        EndEvent(),
+    ]
 
-    sdk.AssistantMessage = FakeAssistantMessage
-    sdk.TextBlock = FakeTextBlock
-    sdk.ResultMessage = FakeResultMessage
-    sdk.ClaudeAgentOptions = FakeOptions
-
-    async def fake_query(prompt: str, options: object) -> object:  # noqa: ARG001
-        yield FakeResultMessage(is_error=True, api_error_status=429)
-
-    sdk.query = fake_query
-
-    sdk_types = MagicMock()
-    sdk_types.McpHttpServerConfig = dict
-
-    from application.scans.background_launcher import _SDKRuntimeError
-
-    with (
-        patch.dict(
-            "sys.modules",
-            {"claude_agent_sdk": sdk, "claude_agent_sdk.types": sdk_types},
-        ),
-        pytest.raises(_SDKRuntimeError) as info,
-    ):
-        _run_sdk_skill(
-            "prompt",
-            billing_method="plan",
-            api_key_source=None,
-            cwd="/tmp",
-            model="x",
-            mcp_server_url="http://127.0.0.1:8765/mcp",
-            mcp_bearer_token="tok",
-            timeout_seconds=60,
-        )
+    with pytest.raises(_SDKRuntimeError) as info:
+        _run_scan_via_relay(_mk_spec(), compose_path=Path("/app/compose.yaml"))
 
     assert info.value.status_code == 429
+    assert classify(info.value, billing_method="plan") is ErrorClass.RATE_LIMIT_PLAN
+    assert fake_relay.instances[0].stopped
 
-    # Verify the classifier maps this to RATE_LIMIT_PLAN
-    from infrastructure.anthropic.error_classifier import (
-        ErrorClass,
+
+def test_relay_error_result_raises(fake_relay: type[_FakeRelayClient]) -> None:
+    fake_relay.events = [ResultEvent(text="boom", is_error=True), EndEvent()]
+
+    with pytest.raises(_SDKRuntimeError, match="boom"):
+        _run_scan_via_relay(_mk_spec(), compose_path=Path("/app/compose.yaml"))
+
+
+def test_relay_timeout_propagates_and_stops_client(
+    fake_relay: type[_FakeRelayClient], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def stalled(self: _FakeRelayClient, spec: ScanJobSpec) -> Iterator[Event]:
+        raise subprocess.TimeoutExpired(cmd=["sdk-relay"], timeout=60)
+
+    monkeypatch.setattr(fake_relay, "submit", stalled)
+    with pytest.raises(subprocess.TimeoutExpired):
+        _run_scan_via_relay(_mk_spec(), compose_path=Path("/app/compose.yaml"))
+    assert fake_relay.instances[0].stopped
+
+
+# ---------------------------------------------------------------------------
+# Worker spec construction and status handling through the relay
+# ---------------------------------------------------------------------------
+
+
+@patch(
+    "application.scans.background_launcher._mint_bearer_token", return_value="my-secret"
+)
+@patch("application.scans.background_launcher.load_active_repos")
+@patch("application.scans.background_launcher._run_scan_via_relay")
+def test_launch_builds_scan_job_spec(
+    mock_run: MagicMock,
+    mock_repos: MagicMock,
+    _mock_mint: MagicMock,
+) -> None:
+    mock_repos.return_value = [_mk_repo(path="/repos/target")]
+    launcher = ScanBackgroundLauncher(
+        mcp_service=_mk_mcp_service(),
+        availability=_mk_availability(oauth_available=True, api_key_available=True),
+        config=_mk_config(default_billing="plan", mcp_host="10.0.0.5", mcp_port=9999),
     )
-    from infrastructure.anthropic.error_classifier import (
-        classify as _classify,
+    handle = launcher.launch(**_default_launch_kwargs(base_path="/data/tally"))
+    handle.result.result(timeout=5)
+
+    spec = mock_run.call_args.args[0]
+    assert spec.mcp_servers == {
+        "tally": {
+            "type": "http",
+            "url": "http://host.docker.internal:9999/mcp",
+            "headers": {"Authorization": "Bearer my-secret"},
+        }
+    }
+    assert spec.allowed_tools == [
+        "Read",
+        "Grep",
+        "Glob",
+        "Bash",
+        "Task",
+        "WebFetch",
+        "mcp__tally__*",
+    ]
+    assert spec.cwd == "/repos/target"
+    assert spec.timeout_seconds == 3600
+    assert (
+        mock_run.call_args.kwargs["compose_path"]
+        == Path("/data/tally") / COMPOSE_RELATIVE_PATH
     )
 
-    kind = _classify(info.value, billing_method="plan")
-    assert kind is ErrorClass.RATE_LIMIT_PLAN
 
-
-@patch("application.scans.background_launcher.build_child_env")
-def test_timeout_raises_timeout_expired(mock_build_env: MagicMock) -> None:
-    """asyncio timeout surfaces as subprocess.TimeoutExpired."""
-    mock_build_env.return_value = {}
-    sdk = MagicMock()
-
-    class FakeAssistantMessage:
-        pass
-
-    class FakeTextBlock:
-        pass
-
-    class FakeResultMessage:
-        def __init__(self) -> None:
-            self.is_error = False
-
-    class FakeOptions:
-        def __init__(self, **kwargs: object) -> None:
-            pass
-
-    sdk.AssistantMessage = FakeAssistantMessage
-    sdk.TextBlock = FakeTextBlock
-    sdk.ResultMessage = FakeResultMessage
-    sdk.ClaudeAgentOptions = FakeOptions
-
-    import asyncio as _asyncio
-
-    async def hanging_query(prompt: str, options: object) -> object:  # noqa: ARG001
-        await _asyncio.sleep(999)
-        yield FakeResultMessage()  # pragma: no cover
-
-    sdk.query = hanging_query
-
-    sdk_types = MagicMock()
-    sdk_types.McpHttpServerConfig = dict
-
+def _launch_with_relay(
+    fake_relay: type[_FakeRelayClient],
+    events: list[Event],
+    *,
+    status_repo: MagicMock,
+    sink: _CapturingScanSink,
+) -> str:
+    fake_relay.events = events
     with (
-        patch.dict(
-            "sys.modules",
-            {"claude_agent_sdk": sdk, "claude_agent_sdk.types": sdk_types},
+        patch(
+            "application.scans.background_launcher._mint_bearer_token",
+            return_value="tok",
         ),
-        pytest.raises(subprocess.TimeoutExpired) as info,
+        patch(
+            "application.scans.background_launcher.load_active_repos",
+            return_value=[_mk_repo()],
+        ),
     ):
-        _run_sdk_skill(
-            "prompt",
-            billing_method="plan",
-            api_key_source=None,
-            cwd="/tmp",
-            model="x",
-            mcp_server_url="http://127.0.0.1:8765/mcp",
-            mcp_bearer_token="tok",
-            timeout_seconds=1,
+        launcher = ScanBackgroundLauncher(
+            mcp_service=_mk_mcp_service(),
+            availability=_mk_availability(oauth_available=True, api_key_available=True),
+            config=_mk_config(default_billing="plan"),
+            scan_phase_repo=MagicMock(),
+            scan_event_sink=sink,
+            scan_run_status_repo=status_repo,
         )
+        return launcher.launch(**_default_launch_kwargs()).result.result(timeout=5)
 
-    assert info.value.timeout == 1
+
+def test_relay_happy_path_writes_no_status(
+    fake_relay: type[_FakeRelayClient],
+) -> None:
+    status_repo = MagicMock()
+    sink = _CapturingScanSink()
+
+    outcome = _launch_with_relay(
+        fake_relay,
+        [ResultEvent(text="ok", is_error=False), EndEvent()],
+        status_repo=status_repo,
+        sink=sink,
+    )
+
+    assert outcome == "done"
+    status_repo.set_status_if_in.assert_not_called()
+    assert sink.events == []
+
+
+def test_relay_rate_limit_marks_run_and_emits_event(
+    fake_relay: type[_FakeRelayClient],
+) -> None:
+    from domain.pipeline.scan_events import RunRateLimited
+
+    status_repo = MagicMock()
+    sink = _CapturingScanSink()
+
+    outcome = _launch_with_relay(
+        fake_relay,
+        [ErrorEvent(status_code=429, subtype="rate_limit", message="x"), EndEvent()],
+        status_repo=status_repo,
+        sink=sink,
+    )
+
+    assert outcome == "terminated"
+    status_repo.set_status_if_in.assert_called_once_with(
+        1, "rate_limited", allowed_current=("queued", "running")
+    )
+    assert [type(e) for e in sink.events] == [RunRateLimited]
+
+
+def test_relay_auth_failure_marks_run_failed_without_rate_limit_event(
+    fake_relay: type[_FakeRelayClient],
+) -> None:
+    status_repo = MagicMock()
+    sink = _CapturingScanSink()
+
+    outcome = _launch_with_relay(
+        fake_relay,
+        [ErrorEvent(status_code=401, subtype="auth", message="x"), EndEvent()],
+        status_repo=status_repo,
+        sink=sink,
+    )
+
+    assert outcome == "terminated"
+    status_repo.set_status_if_in.assert_called_once_with(
+        1, "failed", allowed_current=("queued", "running")
+    )
+    assert sink.events == []
+
+
+def test_relay_cancel_race_does_not_retry_status_write(
+    fake_relay: type[_FakeRelayClient],
+) -> None:
+    status_repo = MagicMock()
+    status_repo.set_status_if_in.return_value = False
+
+    outcome = _launch_with_relay(
+        fake_relay,
+        [ErrorEvent(status_code=401, subtype="auth", message="x"), EndEvent()],
+        status_repo=status_repo,
+        sink=_CapturingScanSink(),
+    )
+
+    assert outcome == "terminated"
+    status_repo.set_status_if_in.assert_called_once()
+    status_repo.set_status.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
@@ -739,7 +673,7 @@ def test_timeout_raises_timeout_expired(mock_build_env: MagicMock) -> None:
     "application.scans.background_launcher._mint_bearer_token", return_value="tok-abc"
 )
 @patch("application.scans.background_launcher.load_active_repos")
-@patch("application.scans.background_launcher._run_sdk_skill")
+@patch("application.scans.background_launcher._run_scan_via_relay")
 def test_mint_called_with_run_id_and_base_path(
     _mock_run: MagicMock,
     mock_repos: MagicMock,
@@ -758,93 +692,6 @@ def test_mint_called_with_run_id_and_base_path(
 
 
 # ---------------------------------------------------------------------------
-# asyncio.TimeoutError identity (Python 3.10 compatibility)
-# ---------------------------------------------------------------------------
-
-
-@patch("application.scans.background_launcher.build_child_env")
-def test_timeout_error_translated_to_timeout_expired(
-    mock_build_env: MagicMock,
-) -> None:
-    """TimeoutError from asyncio.wait_for surfaces as subprocess.TimeoutExpired."""
-    mock_build_env.return_value = {}
-    sdk = MagicMock()
-
-    class FakeOptions:
-        def __init__(self, **kwargs: object) -> None:
-            pass
-
-    sdk.AssistantMessage = type("Msg", (), {})
-    sdk.TextBlock = type("TB", (), {})
-    sdk.ResultMessage = type("RM", (), {"is_error": False})
-    sdk.ClaudeAgentOptions = FakeOptions
-
-    async def timeout_query(prompt: str, options: object) -> object:  # noqa: ARG001
-        raise TimeoutError
-        yield  # make it an async generator  # pragma: no cover
-
-    sdk.query = timeout_query
-
-    sdk_types = MagicMock()
-    sdk_types.McpHttpServerConfig = dict
-
-    with (
-        patch.dict(
-            "sys.modules",
-            {"claude_agent_sdk": sdk, "claude_agent_sdk.types": sdk_types},
-        ),
-        pytest.raises(subprocess.TimeoutExpired) as info,
-    ):
-        _run_sdk_skill(
-            "prompt",
-            billing_method="plan",
-            api_key_source=None,
-            cwd="/tmp",
-            model="x",
-            mcp_server_url="http://127.0.0.1:8765/mcp",
-            mcp_bearer_token="tok",
-            timeout_seconds=30,
-        )
-
-    assert info.value.timeout == 30
-
-
-# ---------------------------------------------------------------------------
-# Tool allowlist
-# ---------------------------------------------------------------------------
-
-
-@patch("application.scans.background_launcher.build_child_env")
-def test_allowed_tools_restricted_to_scan_set(mock_build_env: MagicMock) -> None:
-    """ClaudeAgentOptions receives the restricted tool allowlist."""
-    mock_build_env.return_value = {}
-    sdk, captured = TestRunSdkSkillWiring._make_sdk_mocks()
-
-    sdk_types = MagicMock()
-    sdk_types.McpHttpServerConfig = dict
-
-    with patch.dict(
-        "sys.modules",
-        {"claude_agent_sdk": sdk, "claude_agent_sdk.types": sdk_types},
-    ):
-        _run_sdk_skill(
-            "Run /tally-scan-external",
-            billing_method="plan",
-            api_key_source=None,
-            cwd="/tmp",
-            model="x",
-            mcp_server_url="http://127.0.0.1:8765/mcp",
-            mcp_bearer_token="tok",
-            timeout_seconds=60,
-        )
-
-    expected = ["Read", "Grep", "Glob", "Bash", "Task", "WebFetch", "mcp__tally__*"]
-    assert captured["allowed_tools"] == expected
-    assert "Write" not in captured["allowed_tools"]
-    assert "Edit" not in captured["allowed_tools"]
-
-
-# ---------------------------------------------------------------------------
 # mark_in_progress_failed cleanup port wiring
 # ---------------------------------------------------------------------------
 
@@ -853,7 +700,7 @@ def test_allowed_tools_restricted_to_scan_set(mock_build_env: MagicMock) -> None
     "application.scans.background_launcher._mint_bearer_token", return_value="tok-abc"
 )
 @patch("application.scans.background_launcher.load_active_repos")
-@patch("application.scans.background_launcher._run_sdk_skill")
+@patch("application.scans.background_launcher._run_scan_via_relay")
 def test_launcher_calls_mark_in_progress_failed_with_error_class(
     mock_run: MagicMock,
     mock_repos: MagicMock,
@@ -897,7 +744,7 @@ class _CapturingScanSink:
     "application.scans.background_launcher._mint_bearer_token", return_value="tok-abc"
 )
 @patch("application.scans.background_launcher.load_active_repos")
-@patch("application.scans.background_launcher._run_sdk_skill")
+@patch("application.scans.background_launcher._run_scan_via_relay")
 def test_worker_emits_run_rate_limited_on_rate_limit_error_class(
     mock_run: MagicMock,
     mock_repos: MagicMock,
@@ -931,7 +778,7 @@ def test_worker_emits_run_rate_limited_on_rate_limit_error_class(
     "application.scans.background_launcher._mint_bearer_token", return_value="tok-abc"
 )
 @patch("application.scans.background_launcher.load_active_repos")
-@patch("application.scans.background_launcher._run_sdk_skill")
+@patch("application.scans.background_launcher._run_scan_via_relay")
 def test_worker_does_not_emit_run_rate_limited_on_other_error_classes(
     mock_run: MagicMock,
     mock_repos: MagicMock,
@@ -966,7 +813,7 @@ def test_worker_does_not_emit_run_rate_limited_on_other_error_classes(
     "application.scans.background_launcher._mint_bearer_token", return_value="tok-abc"
 )
 @patch("application.scans.background_launcher.load_active_repos")
-@patch("application.scans.background_launcher._run_sdk_skill")
+@patch("application.scans.background_launcher._run_scan_via_relay")
 def test_worker_marks_run_rate_limited_on_rate_limit_error(
     mock_run: MagicMock,
     mock_repos: MagicMock,
@@ -996,7 +843,7 @@ def test_worker_marks_run_rate_limited_on_rate_limit_error(
     "application.scans.background_launcher._mint_bearer_token", return_value="tok-abc"
 )
 @patch("application.scans.background_launcher.load_active_repos")
-@patch("application.scans.background_launcher._run_sdk_skill")
+@patch("application.scans.background_launcher._run_scan_via_relay")
 def test_worker_marks_run_failed_on_unknown_error(
     mock_run: MagicMock,
     mock_repos: MagicMock,

@@ -7,6 +7,9 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import Any
+from unittest.mock import patch
+
+from infrastructure.anthropic.claude_sdk_triage_agent import _SDKRuntimeError
 
 
 @dataclass
@@ -18,10 +21,10 @@ class _ScriptedCall:
 
 @dataclass
 class FakeSdkController:
-    """Scripts outcomes for successive _run_sdk_once calls.
+    """Scripts outcomes for successive relay submit calls.
 
     Tracks the ordered list of scripted outcomes and the real call index.
-    The active() context manager monkeypatches _run_sdk_once in-place and
+    The active() context manager monkeypatches the relay submit in-place and
     restores it on exit.
     """
 
@@ -36,28 +39,36 @@ class FakeSdkController:
 
     @contextmanager
     def active(self) -> Iterator[FakeSdkController]:
-        import infrastructure.anthropic.claude_sdk_triage_agent as adapter
+        from infrastructure.anthropic.claude_sdk_triage_agent import (
+            AgentSDKTriageAgent,
+        )
+        from infrastructure.anthropic.sdk_relay.client import SDKRelayClient
+        from infrastructure.anthropic.sdk_relay.events import (
+            EndEvent,
+            ErrorEvent,
+            ResultEvent,
+        )
 
-        original = adapter._run_sdk_once
+        original_run_triage = AgentSDKTriageAgent.run_triage
+        billing_method = {"current": ""}
 
-        def fake(
-            instructions: str,
-            finding_data: str,
-            model: str,
-            billing_method: str,
-            api_key_source: str | None,
-            cwd: str,
-            timeout_seconds: int,
-        ) -> str:
+        # The relay job spec carries no billing info, so capture it from the
+        # adapter to keep the plan-to-api failover assertions meaningful.
+        def run_triage_spy(
+            agent: AgentSDKTriageAgent, *args: Any, **kwargs: Any
+        ) -> Any:
+            billing_method["current"] = agent._billing_method
+            return original_run_triage(agent, *args, **kwargs)
+
+        def fake_submit(client: SDKRelayClient, spec: Any) -> Iterator[Any]:
             self.calls.append(
                 {
-                    "instructions": instructions,
-                    "finding_data": finding_data,
-                    "model": model,
-                    "billing_method": billing_method,
-                    "api_key_source": api_key_source,
-                    "cwd": cwd,
-                    "timeout_seconds": timeout_seconds,
+                    "instructions": spec.system_prompt,
+                    "finding_data": spec.user_prompt,
+                    "model": spec.model,
+                    "billing_method": billing_method["current"],
+                    "cwd": spec.cwd,
+                    "timeout_seconds": spec.timeout_seconds,
                 }
             )
             index = len(self.calls) - 1
@@ -68,20 +79,33 @@ class FakeSdkController:
                 )
             scripted = self._script[index]
             if scripted.kind == "raise":
-                assert scripted.exc is not None
-                raise scripted.exc
+                assert isinstance(scripted.exc, _SDKRuntimeError)
+                return iter(
+                    [
+                        ErrorEvent(
+                            status_code=scripted.exc.status_code,
+                            subtype="api_error",
+                            message=str(scripted.exc),
+                        ),
+                        EndEvent(),
+                    ]
+                )
             if scripted.verdict_text is None:
                 raise AssertionError(
                     f"FakeSdkController: call {index + 1} not scripted;"
                     f" use on_call({index + 1}).return_valid_verdict(...)"
                 )
-            return scripted.verdict_text
+            return iter(
+                [ResultEvent(text=scripted.verdict_text, is_error=False), EndEvent()]
+            )
 
-        adapter._run_sdk_once = fake  # type: ignore[assignment]
-        try:
+        with (
+            patch.object(AgentSDKTriageAgent, "run_triage", run_triage_spy),
+            patch.object(SDKRelayClient, "submit", fake_submit),
+            patch.object(SDKRelayClient, "start", lambda self: None),
+            patch.object(SDKRelayClient, "stop", lambda self: None),
+        ):
             yield self
-        finally:
-            adapter._run_sdk_once = original  # type: ignore[assignment]
 
 
 @dataclass
@@ -94,10 +118,6 @@ class _CallBuilder:
         message: str = "Rate limit exceeded for your Claude plan",
     ) -> None:
         """Script a 429 that classifies as RATE_LIMIT_PLAN under plan billing."""
-        from infrastructure.anthropic.claude_sdk_triage_agent import (
-            _SDKRuntimeError,
-        )
-
         self.controller._script[self.index] = _ScriptedCall(
             kind="raise",
             exc=_SDKRuntimeError(message, status_code=429),
