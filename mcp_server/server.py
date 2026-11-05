@@ -44,6 +44,7 @@ if TYPE_CHECKING:
     from application.ports.mcp_token_repository import (
         McpTokenRepositoryPort,
     )
+    from application.ports.project_repo_repository import ProjectRepoRepositoryPort
     from application.ports.run_repository import RunRepositoryPort
     from application.project.registry_service import (
         ProjectRegistryService,
@@ -80,6 +81,11 @@ def create_mcp_server(
         conn_factory = ConnectionFactory(Path(db_path))
         conn_factory.init_schema()
         return RunRepository(conn_factory)
+
+    def _repo_repo_factory(db_path: str) -> ProjectRepoRepositoryPort:
+        conn_factory = ConnectionFactory(Path(db_path))
+        conn_factory.init_schema()
+        return RepositoryRepository(conn_factory)
 
     def _get_service(
         project_name: str,
@@ -123,6 +129,7 @@ def create_mcp_server(
         return McpIngestService(
             finding_repo=finding_repo,
             run_repo=run_repo,
+            repo_repo=RepositoryRepository(conn_factory),
             indexer=indexer,
             knowledge_base=kb,
         )
@@ -157,8 +164,10 @@ def create_mcp_server(
 
     @server.tool()
     def list_projects() -> list[dict[str, Any]]:
-        """Enumerate every active project with its latest run id."""
-        return list_active_projects(project_registry, _run_repo_factory)
+        """Enumerate every active project with its latest run id and active repos."""
+        return list_active_projects(
+            project_registry, _run_repo_factory, _repo_repo_factory
+        )
 
     @server.tool()
     def create_scan_run(
@@ -174,13 +183,13 @@ def create_mcp_server(
     def submit_finding(
         project: str,
         project_id: int,
-        repo_id: int,
+        repo_id: int | None,
         run_id: int,
         finding: dict[str, Any],
     ) -> dict[str, Any]:
         """Submit a single finding under an MCP scan_run."""
         service = _get_ingest_service(project)
-        return service.submit_finding(run_id, finding)
+        return service.submit_finding(run_id, finding, repo_id=repo_id)
 
     @server.tool()
     def get_duplicate_candidates(

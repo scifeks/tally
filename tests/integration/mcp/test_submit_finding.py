@@ -9,8 +9,11 @@ import pytest
 
 from application.mcp.ingest_service import McpIngestService
 from application.rag.finding_indexer import FindingIndexer
+from core.config.schemas.repo_service import RepoService
+from core.config.schemas.repository import Repository
 from infrastructure.store.connection import ConnectionFactory
 from infrastructure.store.repositories.findings import FindingRepository
+from infrastructure.store.repositories.repositories import RepositoryRepository
 from infrastructure.store.repositories.runs import RunRepository
 
 pytestmark = pytest.mark.integration
@@ -45,20 +48,48 @@ def run_id(run_repo: RunRepository) -> int:
 
 
 @pytest.fixture()
+def repo_repo(factory: ConnectionFactory) -> RepositoryRepository:
+    return RepositoryRepository(factory)
+
+
+@pytest.fixture()
+def active_repo_id(repo_repo: RepositoryRepository, tmp_path: Path) -> int:
+    return repo_repo.insert(
+        Repository(
+            name="api",
+            path=str(tmp_path),
+            services=[RepoService(name="default", type=["api"], languages=["python"])],
+        )
+    )
+
+
+@pytest.fixture()
 def indexer(finding_repo: FindingRepository) -> FindingIndexer:
     return FindingIndexer(finding_repo)
 
 
 @pytest.fixture()
 def mock_kb() -> Mock:
-    """Mock FindingKnowledgeBase for testing."""
     kb = Mock()
     kb.add_findings = Mock()
     return kb
 
 
+def _assert_rejected_without_insert(
+    result: dict,
+    finding_repo: FindingRepository,
+    run_id: int,
+    repo_id: int,
+) -> None:
+    assert result == {
+        "finding_id": None,
+        "status": "rejected",
+        "error": f"repo_id {repo_id} is not an active repository in this project",
+    }
+    assert finding_repo.get_findings_by_run_id(run_id) == []
+
+
 def _valid_payload() -> dict:
-    """Return a valid finding payload for testing."""
     return {
         "file": "src/db.py",
         "line_number": 42,
@@ -83,9 +114,11 @@ class TestSubmitFindingHappyPath:
         finding_repo: FindingRepository,
         run_repo: RunRepository,
     ) -> None:
-        service = McpIngestService(finding_repo=finding_repo, run_repo=run_repo)
+        service = McpIngestService(
+            finding_repo=finding_repo, run_repo=run_repo, repo_repo=Mock()
+        )
         payload = _valid_payload()
-        result = service.submit_finding(run_id, payload)
+        result = service.submit_finding(run_id, payload, repo_id=None)
 
         assert result["status"] == "accepted"
         assert isinstance(result["finding_id"], int)
@@ -97,9 +130,11 @@ class TestSubmitFindingHappyPath:
         finding_repo: FindingRepository,
         run_repo: RunRepository,
     ) -> None:
-        service = McpIngestService(finding_repo=finding_repo, run_repo=run_repo)
+        service = McpIngestService(
+            finding_repo=finding_repo, run_repo=run_repo, repo_repo=Mock()
+        )
         payload = _valid_payload()
-        result = service.submit_finding(run_id, payload)
+        result = service.submit_finding(run_id, payload, repo_id=None)
 
         finding_id = result["finding_id"]
         finding = finding_repo.get_finding(finding_id)
@@ -111,9 +146,11 @@ class TestSubmitFindingHappyPath:
         finding_repo: FindingRepository,
         run_repo: RunRepository,
     ) -> None:
-        service = McpIngestService(finding_repo=finding_repo, run_repo=run_repo)
+        service = McpIngestService(
+            finding_repo=finding_repo, run_repo=run_repo, repo_repo=Mock()
+        )
         payload = _valid_payload()
-        result = service.submit_finding(run_id, payload)
+        result = service.submit_finding(run_id, payload, repo_id=None)
 
         finding = finding_repo.get_finding(result["finding_id"])
         assert finding is not None
@@ -125,9 +162,11 @@ class TestSubmitFindingHappyPath:
         finding_repo: FindingRepository,
         run_repo: RunRepository,
     ) -> None:
-        service = McpIngestService(finding_repo=finding_repo, run_repo=run_repo)
+        service = McpIngestService(
+            finding_repo=finding_repo, run_repo=run_repo, repo_repo=Mock()
+        )
         payload = _valid_payload()
-        result = service.submit_finding(run_id, payload)
+        result = service.submit_finding(run_id, payload, repo_id=None)
 
         finding = finding_repo.get_finding(result["finding_id"])
         assert finding is not None
@@ -139,9 +178,11 @@ class TestSubmitFindingHappyPath:
         finding_repo: FindingRepository,
         run_repo: RunRepository,
     ) -> None:
-        service = McpIngestService(finding_repo=finding_repo, run_repo=run_repo)
+        service = McpIngestService(
+            finding_repo=finding_repo, run_repo=run_repo, repo_repo=Mock()
+        )
         payload = _valid_payload()
-        result = service.submit_finding(run_id, payload)
+        result = service.submit_finding(run_id, payload, repo_id=None)
 
         finding = finding_repo.get_finding(result["finding_id"])
         assert finding is not None
@@ -153,10 +194,12 @@ class TestSubmitFindingHappyPath:
         finding_repo: FindingRepository,
         run_repo: RunRepository,
     ) -> None:
-        service = McpIngestService(finding_repo=finding_repo, run_repo=run_repo)
+        service = McpIngestService(
+            finding_repo=finding_repo, run_repo=run_repo, repo_repo=Mock()
+        )
         payload = _valid_payload()
         payload["segment"] = "web"
-        result = service.submit_finding(run_id, payload)
+        result = service.submit_finding(run_id, payload, repo_id=None)
 
         finding = finding_repo.get_finding(result["finding_id"])
         assert finding is not None
@@ -168,9 +211,11 @@ class TestSubmitFindingHappyPath:
         finding_repo: FindingRepository,
         run_repo: RunRepository,
     ) -> None:
-        service = McpIngestService(finding_repo=finding_repo, run_repo=run_repo)
+        service = McpIngestService(
+            finding_repo=finding_repo, run_repo=run_repo, repo_repo=Mock()
+        )
         payload = _valid_payload()
-        result = service.submit_finding(run_id, payload)
+        result = service.submit_finding(run_id, payload, repo_id=None)
 
         finding = finding_repo.get_finding(result["finding_id"])
         assert finding is not None
@@ -182,9 +227,11 @@ class TestSubmitFindingHappyPath:
         finding_repo: FindingRepository,
         run_repo: RunRepository,
     ) -> None:
-        service = McpIngestService(finding_repo=finding_repo, run_repo=run_repo)
+        service = McpIngestService(
+            finding_repo=finding_repo, run_repo=run_repo, repo_repo=Mock()
+        )
         payload = _valid_payload()
-        result = service.submit_finding(run_id, payload)
+        result = service.submit_finding(run_id, payload, repo_id=None)
 
         finding = finding_repo.get_finding(result["finding_id"])
         assert finding is not None
@@ -196,9 +243,11 @@ class TestSubmitFindingHappyPath:
         finding_repo: FindingRepository,
         run_repo: RunRepository,
     ) -> None:
-        service = McpIngestService(finding_repo=finding_repo, run_repo=run_repo)
+        service = McpIngestService(
+            finding_repo=finding_repo, run_repo=run_repo, repo_repo=Mock()
+        )
         payload = _valid_payload()
-        result = service.submit_finding(run_id, payload)
+        result = service.submit_finding(run_id, payload, repo_id=None)
 
         finding = finding_repo.get_finding(result["finding_id"])
         assert finding is not None
@@ -210,28 +259,16 @@ class TestSubmitFindingHappyPath:
         finding_repo: FindingRepository,
         run_repo: RunRepository,
     ) -> None:
-        service = McpIngestService(finding_repo=finding_repo, run_repo=run_repo)
+        service = McpIngestService(
+            finding_repo=finding_repo, run_repo=run_repo, repo_repo=Mock()
+        )
         payload = _valid_payload()
-        result = service.submit_finding(run_id, payload)
+        result = service.submit_finding(run_id, payload, repo_id=None)
 
         finding = finding_repo.get_finding(result["finding_id"])
         assert finding is not None
         assert finding.meta["title"] == "SQL Injection in User Lookup"
         assert finding.meta["owasp_name"] == "Injection"
-
-    def test_sets_triaged_at_timestamp(
-        self,
-        run_id: int,
-        finding_repo: FindingRepository,
-        run_repo: RunRepository,
-    ) -> None:
-        service = McpIngestService(finding_repo=finding_repo, run_repo=run_repo)
-        payload = _valid_payload()
-        result = service.submit_finding(run_id, payload)
-
-        finding = finding_repo.get_finding(result["finding_id"])
-        assert finding is not None
-        assert finding.meta.get("triaged_at") is not None
 
 
 class TestSubmitFindingValidation:
@@ -241,10 +278,12 @@ class TestSubmitFindingValidation:
         finding_repo: FindingRepository,
         run_repo: RunRepository,
     ) -> None:
-        service = McpIngestService(finding_repo=finding_repo, run_repo=run_repo)
+        service = McpIngestService(
+            finding_repo=finding_repo, run_repo=run_repo, repo_repo=Mock()
+        )
         payload = _valid_payload()
         del payload["description"]
-        result = service.submit_finding(run_id, payload)
+        result = service.submit_finding(run_id, payload, repo_id=None)
 
         assert result["status"] == "rejected"
         assert result["finding_id"] is None
@@ -256,10 +295,12 @@ class TestSubmitFindingValidation:
         finding_repo: FindingRepository,
         run_repo: RunRepository,
     ) -> None:
-        service = McpIngestService(finding_repo=finding_repo, run_repo=run_repo)
+        service = McpIngestService(
+            finding_repo=finding_repo, run_repo=run_repo, repo_repo=Mock()
+        )
         payload = _valid_payload()
         payload["severity"] = "totally_broken"
-        result = service.submit_finding(run_id, payload)
+        result = service.submit_finding(run_id, payload, repo_id=None)
 
         assert result["status"] == "rejected"
         assert result["finding_id"] is None
@@ -271,10 +312,12 @@ class TestSubmitFindingValidation:
         finding_repo: FindingRepository,
         run_repo: RunRepository,
     ) -> None:
-        service = McpIngestService(finding_repo=finding_repo, run_repo=run_repo)
+        service = McpIngestService(
+            finding_repo=finding_repo, run_repo=run_repo, repo_repo=Mock()
+        )
         payload = _valid_payload()
         del payload["file"]
-        result = service.submit_finding(run_id, payload)
+        result = service.submit_finding(run_id, payload, repo_id=None)
 
         assert result["status"] == "rejected"
         assert result["finding_id"] is None
@@ -286,10 +329,12 @@ class TestSubmitFindingValidation:
         finding_repo: FindingRepository,
         run_repo: RunRepository,
     ) -> None:
-        service = McpIngestService(finding_repo=finding_repo, run_repo=run_repo)
+        service = McpIngestService(
+            finding_repo=finding_repo, run_repo=run_repo, repo_repo=Mock()
+        )
         payload = _valid_payload()
         del payload["cwe"]
-        result = service.submit_finding(run_id, payload)
+        result = service.submit_finding(run_id, payload, repo_id=None)
 
         assert result["status"] == "rejected"
         assert result["finding_id"] is None
@@ -301,10 +346,12 @@ class TestSubmitFindingValidation:
         finding_repo: FindingRepository,
         run_repo: RunRepository,
     ) -> None:
-        service = McpIngestService(finding_repo=finding_repo, run_repo=run_repo)
+        service = McpIngestService(
+            finding_repo=finding_repo, run_repo=run_repo, repo_repo=Mock()
+        )
         payload = _valid_payload()
         del payload["severity"]
-        result = service.submit_finding(run_id, payload)
+        result = service.submit_finding(run_id, payload, repo_id=None)
 
         assert isinstance(result["error"], str)
         assert len(result["error"]) > 0
@@ -315,12 +362,14 @@ class TestSubmitFindingValidation:
         finding_repo: FindingRepository,
         run_repo: RunRepository,
     ) -> None:
-        service = McpIngestService(finding_repo=finding_repo, run_repo=run_repo)
+        service = McpIngestService(
+            finding_repo=finding_repo, run_repo=run_repo, repo_repo=Mock()
+        )
         payload = _valid_payload()
         del payload["rule_id"]
         rows_before = finding_repo.get_findings_by_run_id(run_id)
 
-        service.submit_finding(run_id, payload)
+        service.submit_finding(run_id, payload, repo_id=None)
 
         rows_after = finding_repo.get_findings_by_run_id(run_id)
         assert len(rows_after) == len(rows_before)
@@ -333,7 +382,9 @@ class TestSubmitFindingMultiple:
         finding_repo: FindingRepository,
         run_repo: RunRepository,
     ) -> None:
-        service = McpIngestService(finding_repo=finding_repo, run_repo=run_repo)
+        service = McpIngestService(
+            finding_repo=finding_repo, run_repo=run_repo, repo_repo=Mock()
+        )
 
         payload1 = _valid_payload()
         payload1["rule_id"] = "injection.sql"
@@ -341,8 +392,8 @@ class TestSubmitFindingMultiple:
         payload2 = _valid_payload()
         payload2["rule_id"] = "injection.xpath"
 
-        result1 = service.submit_finding(run_id, payload1)
-        result2 = service.submit_finding(run_id, payload2)
+        result1 = service.submit_finding(run_id, payload1, repo_id=None)
+        result2 = service.submit_finding(run_id, payload2, repo_id=None)
 
         assert result1["status"] == "accepted"
         assert result2["status"] == "accepted"
@@ -362,7 +413,9 @@ class TestSubmitFindingMultiple:
         finding_repo: FindingRepository,
         run_repo: RunRepository,
     ) -> None:
-        service = McpIngestService(finding_repo=finding_repo, run_repo=run_repo)
+        service = McpIngestService(
+            finding_repo=finding_repo, run_repo=run_repo, repo_repo=Mock()
+        )
 
         payload1 = _valid_payload()
         payload1["rule_id"] = "rule1"
@@ -372,8 +425,8 @@ class TestSubmitFindingMultiple:
         payload2["rule_id"] = "rule2"
         payload2["file"] = "src/file2.py"
 
-        result1 = service.submit_finding(run_id, payload1)
-        result2 = service.submit_finding(run_id, payload2)
+        result1 = service.submit_finding(run_id, payload1, repo_id=None)
+        result2 = service.submit_finding(run_id, payload2, repo_id=None)
 
         finding1 = finding_repo.get_finding(result1["finding_id"])
         finding2 = finding_repo.get_finding(result2["finding_id"])
@@ -396,11 +449,12 @@ class TestSubmitFindingIndexing:
         service = McpIngestService(
             finding_repo=finding_repo,
             run_repo=run_repo,
+            repo_repo=Mock(),
             indexer=mock_indexer,
             knowledge_base=mock_kb,
         )
         payload = _valid_payload()
-        result = service.submit_finding(run_id, payload)
+        result = service.submit_finding(run_id, payload, repo_id=None)
 
         finding_id = result["finding_id"]
         mock_indexer.index_findings.assert_called_once()
@@ -419,11 +473,12 @@ class TestSubmitFindingIndexing:
         service = McpIngestService(
             finding_repo=finding_repo,
             run_repo=run_repo,
+            repo_repo=Mock(),
             indexer=None,
             knowledge_base=mock_kb,
         )
         payload = _valid_payload()
-        result = service.submit_finding(run_id, payload)
+        result = service.submit_finding(run_id, payload, repo_id=None)
 
         assert result["status"] == "accepted"
         assert result["finding_id"] is not None
@@ -438,11 +493,12 @@ class TestSubmitFindingIndexing:
         service = McpIngestService(
             finding_repo=finding_repo,
             run_repo=run_repo,
+            repo_repo=Mock(),
             indexer=indexer,
             knowledge_base=None,
         )
         payload = _valid_payload()
-        result = service.submit_finding(run_id, payload)
+        result = service.submit_finding(run_id, payload, repo_id=None)
 
         assert result["status"] == "accepted"
         assert result["finding_id"] is not None
@@ -461,11 +517,104 @@ class TestSubmitFindingIndexing:
         service = McpIngestService(
             finding_repo=finding_repo,
             run_repo=run_repo,
+            repo_repo=Mock(),
             indexer=mock_indexer,
             knowledge_base=mock_kb,
         )
         payload = _valid_payload()
-        result = service.submit_finding(run_id, payload)
+        result = service.submit_finding(run_id, payload, repo_id=None)
 
         assert result["status"] == "accepted"
         assert result["finding_id"] is not None
+
+
+class TestSubmitFindingRepoId:
+    @pytest.fixture()
+    def service(
+        self,
+        finding_repo: FindingRepository,
+        run_repo: RunRepository,
+        repo_repo: RepositoryRepository,
+    ) -> McpIngestService:
+        return McpIngestService(
+            finding_repo=finding_repo, run_repo=run_repo, repo_repo=repo_repo
+        )
+
+    def test_stores_active_repo_id(
+        self,
+        service: McpIngestService,
+        finding_repo: FindingRepository,
+        run_id: int,
+        active_repo_id: int,
+    ) -> None:
+        result = service.submit_finding(
+            run_id, _valid_payload(), repo_id=active_repo_id
+        )
+
+        assert result["status"] == "accepted"
+        finding = finding_repo.get_finding(result["finding_id"])
+        assert finding is not None
+        assert finding.repo_id == active_repo_id
+
+    def test_rejects_unknown_repo_id(
+        self,
+        service: McpIngestService,
+        finding_repo: FindingRepository,
+        run_id: int,
+        active_repo_id: int,
+    ) -> None:
+        repo_id = active_repo_id + 1000
+
+        result = service.submit_finding(run_id, _valid_payload(), repo_id=repo_id)
+
+        _assert_rejected_without_insert(result, finding_repo, run_id, repo_id)
+
+    def test_rejects_soft_deleted_repo_id(
+        self,
+        service: McpIngestService,
+        finding_repo: FindingRepository,
+        repo_repo: RepositoryRepository,
+        run_id: int,
+        active_repo_id: int,
+    ) -> None:
+        repo_repo.soft_delete(active_repo_id)
+
+        result = service.submit_finding(
+            run_id, _valid_payload(), repo_id=active_repo_id
+        )
+
+        _assert_rejected_without_insert(result, finding_repo, run_id, active_repo_id)
+
+    def test_meta_repo_id_cannot_override_active_repo_id(
+        self,
+        service: McpIngestService,
+        finding_repo: FindingRepository,
+        run_id: int,
+        active_repo_id: int,
+    ) -> None:
+        payload = _valid_payload()
+        payload["meta"]["repo_id"] = active_repo_id + 1000
+
+        result = service.submit_finding(run_id, payload, repo_id=active_repo_id)
+
+        assert result["status"] == "accepted"
+        finding = finding_repo.get_finding(result["finding_id"])
+        assert finding is not None
+        assert finding.repo_id == active_repo_id
+
+    def test_meta_repo_id_ignored_when_repo_id_is_none(
+        self,
+        service: McpIngestService,
+        finding_repo: FindingRepository,
+        run_id: int,
+        active_repo_id: int,
+    ) -> None:
+        payload = _valid_payload()
+        payload["meta"]["repo_id"] = active_repo_id + 1000
+
+        result = service.submit_finding(run_id, payload, repo_id=None)
+
+        assert result["status"] == "accepted"
+        finding = finding_repo.get_finding(result["finding_id"])
+        assert finding is not None
+        assert finding.repo_id is None

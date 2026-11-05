@@ -33,8 +33,9 @@ findings to the MCP tools, and drives the lifecycle.
 
 - **Project name** (required). The Tally project to scan. If not
   given, use `list_projects` and prompt the developer to pick.
-- **Repo IDs** (optional). Which of the project's repos to scan.
-  Default: every repo the project has.
+- **Repos** (optional). Selected by name from the `repos` list
+  `list_projects` returns, with `repo_id`s taken from that list.
+  Default: every repo.
 - **Auth token** (required). The developer's MCP bearer token
   from their environment. Never log this value.
 
@@ -88,13 +89,18 @@ from `ProjectPaths.agentic_dir` before writing.
 ### Step 2: Pick the project and repos
 
 Call `list_projects(auth_token=<token>)`. The response is a list
-of `{project_id, project_name, path, latest_run_id}` entries.
+of `{project_id, project_name, path, latest_run_id, repos}`
+entries, where `repos` is a list of `{repo_id, name}` for the
+project's active repositories.
 Present the project names to the developer and ask which one to
-scan. Use `AskUserQuestion`. Then ask which repos to include;
-default to every repo the project has.
+scan. Use `AskUserQuestion`. Then ask which repos to include by
+presenting the names in that project's `repos`; default to all of
+them.
 
-Record `project_name`, `project_id`, `repo_ids`, `repo_paths`,
-and `latest_run_id` for later steps.
+Record `project_name`, `project_id`, `repo_names`, `repo_paths`,
+and `latest_run_id` for later steps. Also record each selected
+repo's `repo_id` and `name` together, so step 9 can attribute
+findings.
 
 ### Step 3: Continue-mode or new-mode
 
@@ -113,10 +119,12 @@ For new-mode, call:
 create_scan_run(
   project=<project_name>,
   project_id=<project_id>,
-  repo_ids=<repo_ids>,
+  repo_ids=<repo_names>,
   auth_token=<token>,
 )
 ```
+
+`create_scan_run` takes repo names, not `repo_id`s.
 
 Record the returned `run_id`. This `run_id` MUST be reused for
 every submit, dedup, and end_scan call in this invocation.
@@ -394,12 +402,16 @@ For each finding in the (possibly filtered) batch, call:
 submit_finding(
   project=<project_name>,
   project_id=<project_id>,
-  repo_id=<repo_id_for_this_finding>,
+  repo_id=<repo_id or null>,
   run_id=<run_id>,
   finding=<finding_payload>,
   auth_token=<token>,
 )
 ```
+
+Use the `repo_id` recorded in step 2 for the repo containing the
+finding's file. Pass `null` when the finding is not attributable
+to one of those repos. Never invent a `repo_id`.
 
 The `finding_payload` must conform to `mcp-payload-shape.md`.
 Domain agents set `meta.auth_phase` on each finding (see step
@@ -409,7 +421,10 @@ Track accepted and rejected counts by `rule_id`.
 On per-finding rejection, log the returned error string and
 continue. Do NOT retry the payload verbatim; the validator is
 deterministic. If a family's payloads systematically fail, that
-is a prompt bug to report.
+is a prompt bug to report. A rejection naming `repo_id` means the
+id was not one recorded in step 2; fix the id and resubmit that
+finding once. If no recorded id fits, resubmit with `repo_id`
+null.
 
 Never log:
 
