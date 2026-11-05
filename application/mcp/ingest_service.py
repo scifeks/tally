@@ -1,4 +1,4 @@
-"""MCP ingest service for external Claude Code scans (TAL-148).
+"""MCP ingest service for external Claude Code scans.
 
 The service persists a submitted finding and syncs it to the vector
 index inline rather than dispatching through the scan pipeline bus;
@@ -31,6 +31,7 @@ from domain.findings.normalization import normalise_finding_for_insert
 
 if TYPE_CHECKING:
     from application.ports.finding_repository import FindingRepositoryPort
+    from application.ports.project_repo_repository import ProjectRepoRepositoryPort
     from application.ports.run_repository import RunRepositoryPort
     from application.project.registry_service import ProjectRegistryService
     from application.rag.finding_indexer import FindingIndexer
@@ -44,10 +45,12 @@ logger = logging.getLogger(__name__)
 def list_active_projects(
     project_registry: ProjectRegistryService,
     run_repo_factory: Callable[[str], Any],
+    repo_repo_factory: Callable[[str], ProjectRepoRepositoryPort],
 ) -> list[dict[str, Any]]:
-    """Return every non-archived project with its latest run id.
+    """Return every non-archived project with its latest run id and active repos.
 
-    Each entry: {"project_id", "project_name", "path", "latest_run_id"}.
+    Each entry: {"project_id", "project_name", "path", "latest_run_id",
+    "repos": [{"repo_id", "name"}, ...]}.
     """
     rows = project_registry.list_active()
     result: list[dict[str, Any]] = []
@@ -55,12 +58,14 @@ def list_active_projects(
         paths = ProjectPaths.from_registry_row(row)
         run_repo = run_repo_factory(str(paths.findings_db))
         latest = run_repo.latest_run_id()
+        repos = repo_repo_factory(str(paths.findings_db)).list_active()
         result.append(
             {
                 "project_id": row.id,
                 "project_name": row.name,
                 "path": row.path,
                 "latest_run_id": latest,
+                "repos": [{"repo_id": repo.id, "name": repo.name} for repo in repos],
             }
         )
     return result
@@ -74,11 +79,13 @@ class McpIngestService:
         *,
         finding_repo: FindingRepositoryPort,
         run_repo: RunRepositoryPort,
+        repo_repo: ProjectRepoRepositoryPort,
         indexer: FindingIndexer | None = None,
         knowledge_base: FindingKnowledgeBase | None = None,
     ) -> None:
         self._findings = finding_repo
         self._runs = run_repo
+        self._repos = repo_repo
         self._indexer = indexer
         self._kb = knowledge_base
 
@@ -116,13 +123,13 @@ class McpIngestService:
         run_id: int,
         payload: dict[str, Any],
         *,
+        repo_id: int | None,
         tool: str = "claudecode",
         domain: str = "llm",
     ) -> dict[str, Any]:
-        """Submit an MCP finding and sync to vector index.
+        """Persist one MCP finding and sync it to the vector index.
 
-        Validates the payload, normalizes and fingerprints it, inserts it
-        into the database, and syncs to the vector index if configured.
+        ``repo_id=None`` stores the finding without a repository.
 
         Returns {"finding_id": <int>, "status": "accepted"} on success, or
         {"finding_id": None, "status": "rejected", "error": <message>} on
@@ -132,6 +139,14 @@ class McpIngestService:
             validated = validate_finding_payload(payload)
         except FindingPayloadError as exc:
             return {"finding_id": None, "status": "rejected", "error": str(exc)}
+
+        if repo_id is not None and self._repos.get_active_by_id(repo_id) is None:
+            return {
+                "finding_id": None,
+                "status": "rejected",
+                "error": f"repo_id {repo_id} is not an active repository "
+                "in this project",
+            }
 
         raw_row: dict[str, Any] = {
             "tool": tool,
@@ -148,6 +163,8 @@ class McpIngestService:
             "finding_type": validated["finding_type"],
             "rule_id": validated["rule_id"],
             "status": "active",
+            # Set even when None so meta.repo_id cannot slip past validation.
+            "repo_id": repo_id,
         }
 
         optional_fields = [

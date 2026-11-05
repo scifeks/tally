@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from unittest.mock import Mock
 
 import pytest
 
@@ -35,7 +36,9 @@ class TestCreateScanRun:
     def test_returns_run_id(
         self, run_repo: RunRepository, finding_repo: FindingRepository
     ) -> None:
-        service = McpIngestService(finding_repo=finding_repo, run_repo=run_repo)
+        service = McpIngestService(
+            finding_repo=finding_repo, run_repo=run_repo, repo_repo=Mock()
+        )
         result = service.create_scan_run(project_id=1, repo_ids=["repo1"])
 
         assert isinstance(result, dict)
@@ -45,7 +48,9 @@ class TestCreateScanRun:
     def test_creates_run_with_claude_tool(
         self, run_repo: RunRepository, finding_repo: FindingRepository
     ) -> None:
-        service = McpIngestService(finding_repo=finding_repo, run_repo=run_repo)
+        service = McpIngestService(
+            finding_repo=finding_repo, run_repo=run_repo, repo_repo=Mock()
+        )
         result = service.create_scan_run(project_id=1, repo_ids=["repo1"])
 
         run_id = result["run_id"]
@@ -56,7 +61,9 @@ class TestCreateScanRun:
     def test_creates_run_with_llm_domain(
         self, run_repo: RunRepository, finding_repo: FindingRepository
     ) -> None:
-        service = McpIngestService(finding_repo=finding_repo, run_repo=run_repo)
+        service = McpIngestService(
+            finding_repo=finding_repo, run_repo=run_repo, repo_repo=Mock()
+        )
         result = service.create_scan_run(project_id=1, repo_ids=["repo1"])
 
         run_id = result["run_id"]
@@ -67,7 +74,9 @@ class TestCreateScanRun:
     def test_creates_run_with_skip_enrichment_true(
         self, run_repo: RunRepository, finding_repo: FindingRepository
     ) -> None:
-        service = McpIngestService(finding_repo=finding_repo, run_repo=run_repo)
+        service = McpIngestService(
+            finding_repo=finding_repo, run_repo=run_repo, repo_repo=Mock()
+        )
         result = service.create_scan_run(project_id=1, repo_ids=["repo1"])
 
         run_id = result["run_id"]
@@ -78,7 +87,9 @@ class TestCreateScanRun:
     def test_creates_run_with_running_status(
         self, run_repo: RunRepository, finding_repo: FindingRepository
     ) -> None:
-        service = McpIngestService(finding_repo=finding_repo, run_repo=run_repo)
+        service = McpIngestService(
+            finding_repo=finding_repo, run_repo=run_repo, repo_repo=Mock()
+        )
         result = service.create_scan_run(project_id=1, repo_ids=["repo1"])
 
         run_id = result["run_id"]
@@ -99,7 +110,9 @@ class TestEndScan:
             skip_enrichment=False,
         )
 
-        service = McpIngestService(finding_repo=finding_repo, run_repo=run_repo)
+        service = McpIngestService(
+            finding_repo=finding_repo, run_repo=run_repo, repo_repo=Mock()
+        )
         result = service.end_scan(project_id=1, run_id=run_id)
 
         assert result == {"status": "done"}
@@ -118,7 +131,9 @@ class TestEndScan:
             skip_enrichment=False,
         )
 
-        service = McpIngestService(finding_repo=finding_repo, run_repo=run_repo)
+        service = McpIngestService(
+            finding_repo=finding_repo, run_repo=run_repo, repo_repo=Mock()
+        )
         service.end_scan(project_id=1, run_id=run_id)
 
         row = run_repo.get(run_id)
@@ -136,7 +151,9 @@ class TestEndScan:
             skip_enrichment=False,
         )
 
-        service = McpIngestService(finding_repo=finding_repo, run_repo=run_repo)
+        service = McpIngestService(
+            finding_repo=finding_repo, run_repo=run_repo, repo_repo=Mock()
+        )
         result = service.end_scan(project_id=1, run_id=run_id)
 
         assert isinstance(result, dict)

@@ -261,9 +261,9 @@ detection patterns.
 
 | Tool | Parameters | Returns | Purpose |
 |---|---|---|---|
-| `list_projects` | (none) | `[{project_id, project_name, path, latest_run_id}]` | Enumerate active projects |
+| `list_projects` | (none) | `[{project_id, project_name, path, latest_run_id, repos: [{repo_id, name}]}]` | Enumerate active projects |
 | `create_scan_run` | `project, project_id, repo_ids` | `{run_id}` | Open a new scan run |
-| `submit_finding` | `project, project_id, repo_id, run_id, finding` | `{finding_id, status}` | Submit one finding |
+| `submit_finding` | `project, project_id, repo_id, run_id, finding` | `{finding_id, status}` | Submit one finding. `repo_id` must be an active repository from `list_projects`, or null |
 | `get_duplicate_candidates` | `project, run_id` | `{groups: [[id, ...]]}` | Find candidate duplicate groups |
 | `resolve_duplicates` | `project, run_id, survivor_id, removed_ids` | `{status, count}` | Mark losers as duplicates |
 | `end_scan` | `project, project_id, run_id` | `{status}` | Close a scan run |

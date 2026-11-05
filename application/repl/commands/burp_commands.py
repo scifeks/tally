@@ -91,6 +91,7 @@ class BurpCommands:
         ingest = McpIngestService(
             finding_repo=finding_repo,
             run_repo=run_repo,
+            repo_repo=repo_repo,
         )
 
         enrichment: NoteEnrichment | None = None
