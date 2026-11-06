@@ -56,6 +56,7 @@ if TYPE_CHECKING:
 
     from application.chat.session_service import ChatSessionService
     from application.findings.findings_service import FindingsService
+    from application.mcp.ingest_service import McpIngestService
     from application.ports.audit_repository import AuditRepositoryPort
     from application.ports.chat_session_repository import (
         ChatSessionRepositoryPort,
@@ -198,6 +199,18 @@ def create_finding_repo(
     return FindingRepository(_init_factory(db_path))
 
 
+def create_ingest_service(db_path: Path) -> McpIngestService:
+    """Create an McpIngestService for the given project DB."""
+    from application.mcp.ingest_service import McpIngestService
+
+    factory = _init_factory(db_path)
+    return McpIngestService(
+        finding_repo=FindingRepository(factory),
+        run_repo=RunRepository(factory),
+        repo_repo=RepositoryRepository(factory),
+    )
+
+
 def create_url_finding_repo(
     db_path: Path,
 ) -> UrlFindingRepositoryPort:
@@ -275,7 +288,7 @@ def build_url_repo_factory() -> Callable[[Path], UrlFindingRepositoryPort]:
 
 
 # ------------------------------------------------------------------
-# Service factories (replace for_project classmethods)
+# Service factories
 # ------------------------------------------------------------------
 
 

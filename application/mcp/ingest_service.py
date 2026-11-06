@@ -27,7 +27,9 @@ from application.mcp.finding_payload import (
 )
 from application.pipeline.fingerprint import compute_fingerprint
 from core.project_paths import ProjectPaths
+from domain.findings.manual import derive_domain
 from domain.findings.normalization import normalise_finding_for_insert
+from domain.tools.constants import STATUS_LEVELS
 
 if TYPE_CHECKING:
     from application.ports.finding_repository import FindingRepositoryPort
@@ -40,6 +42,10 @@ if TYPE_CHECKING:
     RunRepoFactory = Callable[[str], RunRepositoryPort]
 
 logger = logging.getLogger(__name__)
+
+
+class UnknownRepositoryError(LookupError):
+    """Raised when a repository name is not an active repo in the project."""
 
 
 def list_active_projects(
@@ -148,6 +154,74 @@ class McpIngestService:
                 "in this project",
             }
 
+        raw_row = self._build_raw_row(
+            validated, tool=tool, domain=domain, repo_id=repo_id
+        )
+        # Kept in the raw row so MCP fingerprints stay identical to earlier runs.
+        raw_row["status"] = "active"
+
+        normalized = normalise_finding_for_insert(raw_row)
+        fingerprint = compute_fingerprint(raw_row)
+        normalized_with_fp = normalized._replace(fingerprint=fingerprint)
+
+        self._findings.insert_findings(run_id, [normalized_with_fp], should_report=True)
+
+        ids = self._findings.get_ids_by_fingerprints([fingerprint], run_id=run_id)
+        finding_id = ids[0] if ids else None
+
+        if finding_id:
+            self._sync_to_vector_index(finding_id)
+
+        return {"finding_id": finding_id, "status": "accepted"}
+
+    def record_manual_finding(
+        self,
+        payload: dict[str, Any],
+        *,
+        repo_name: str,
+        status: str = "active",
+    ) -> int:
+        """Store a reviewed one-off finding outside any scan run.
+
+        Raises ``FindingPayloadError`` for an invalid payload or status and
+        ``UnknownRepositoryError`` when ``repo_name`` is not an active repo.
+        """
+        validated = validate_finding_payload(payload)
+        if status not in STATUS_LEVELS:
+            raise FindingPayloadError(
+                f"status {status!r} is invalid; valid statuses: "
+                f"{', '.join(sorted(STATUS_LEVELS))}"
+            )
+        repo_id = self._repos.find_id_by_name(repo_name)
+        if repo_id is None:
+            raise UnknownRepositoryError(
+                f"repository {repo_name!r} is not an active repository in this project"
+            )
+
+        raw_row = self._build_raw_row(
+            validated,
+            tool="manual",
+            domain=derive_domain(validated.get("segment", "sast")),
+            repo_id=repo_id,
+        )
+        normalized = normalise_finding_for_insert(raw_row)
+        finding_id = self._findings.insert_manual_finding(
+            {**normalized.columns, "status": status},
+            normalized.meta,
+            compute_fingerprint(raw_row),
+            should_report=True,
+        )
+        self._sync_to_vector_index(finding_id)
+        return finding_id
+
+    def _build_raw_row(
+        self,
+        validated: dict[str, Any],
+        *,
+        tool: str,
+        domain: str,
+        repo_id: int | None,
+    ) -> dict[str, Any]:
         raw_row: dict[str, Any] = {
             "tool": tool,
             "domain": domain,
@@ -162,7 +236,6 @@ class McpIngestService:
             "cwe": validated["cwe"],
             "finding_type": validated["finding_type"],
             "rule_id": validated["rule_id"],
-            "status": "active",
             # Set even when None so meta.repo_id cannot slip past validation.
             "repo_id": repo_id,
         }
@@ -182,29 +255,21 @@ class McpIngestService:
         for key, val in meta.items():
             if key not in raw_row:
                 raw_row[key] = val
+        return raw_row
 
-        normalized = normalise_finding_for_insert(raw_row)
-        fingerprint = compute_fingerprint(raw_row)
-        normalized_with_fp = normalized._replace(fingerprint=fingerprint)
-
-        self._findings.insert_findings(run_id, [normalized_with_fp], should_report=True)
-
-        ids = self._findings.get_ids_by_fingerprints([fingerprint], run_id=run_id)
-        finding_id = ids[0] if ids else None
-
-        if finding_id and self._indexer and self._kb:
-            try:
-                self._indexer.index_findings(
-                    self._kb, [finding_id], caller_label="McpIngestService"
-                )
-            except Exception as exc:
-                logger.exception(
-                    "McpIngestService: vector index sync failed for finding_id=%s: %s",
-                    finding_id,
-                    exc,
-                )
-
-        return {"finding_id": finding_id, "status": "accepted"}
+    def _sync_to_vector_index(self, finding_id: int) -> None:
+        if not (self._indexer and self._kb):
+            return
+        try:
+            self._indexer.index_findings(
+                self._kb, [finding_id], caller_label="McpIngestService"
+            )
+        except Exception as exc:
+            logger.exception(
+                "McpIngestService: vector index sync failed for finding_id=%s: %s",
+                finding_id,
+                exc,
+            )
 
     def get_duplicate_candidates(self, run_id: int) -> dict[str, Any]:
         """Return candidate duplicate groups for a run.
