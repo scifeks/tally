@@ -138,7 +138,7 @@ class FindingRepository(FindingRepositoryPort):
         placeholders = ",".join("?" * len(tools))
 
         with self._factory.connect() as conn:
-            # Collect finding IDs being deleted (for triage_batch cleanup)
+            # IDs must be captured before the delete to find orphaned batches
             rows = conn.execute(
                 f"SELECT id FROM findings WHERE tool IN ({placeholders})",
                 tools,
@@ -150,7 +150,7 @@ class FindingRepository(FindingRepositoryPort):
                 tools,
             )
 
-            # Delete triage_batches where ALL finding_ids are in the deleted set
+            # Batches that also hold surviving findings must be kept
             all_batches = conn.execute(
                 "SELECT id, finding_ids FROM triage_batches"
             ).fetchall()
@@ -546,11 +546,8 @@ class FindingRepository(FindingRepositoryPort):
         """Return SQLite findings.id values for the given fingerprints.
 
         When ``run_id`` is provided, only rows from that run are considered.
-        Fingerprints are non-unique across runs, so multiple rows may share
-        the same fingerprint value.
-
-        All matching ids are returned (there may be more than one per
-        fingerprint). Missing fingerprints are silently omitted.
+        Fingerprints are non-unique across runs, so every matching id is
+        returned. Missing fingerprints are silently omitted.
         """
         if not fingerprints:
             return []
@@ -946,6 +943,8 @@ class FindingRepository(FindingRepositoryPort):
         columns: dict[str, Any],
         meta: dict[str, Any],
         fingerprint: str,
+        *,
+        should_report: bool = False,
     ) -> int:
         """Insert a single manually-created finding. Returns the new row id."""
         from datetime import UTC, datetime
@@ -953,7 +952,7 @@ class FindingRepository(FindingRepositoryPort):
         now = datetime.now(UTC).isoformat()
         row = (
             fingerprint,
-            None,  # run_id
+            None,  # manual findings belong to no scan run
             columns.get("tool"),
             columns.get("domain"),
             columns.get("segment"),
@@ -970,13 +969,13 @@ class FindingRepository(FindingRepositoryPort):
             columns.get("description"),
             columns.get("package_version"),
             columns.get("cwe"),
-            0,  # enriched
+            0,
             json.dumps(meta),
-            now,  # first_seen
-            now,  # last_seen
-            1,  # seen_count
+            now,
+            now,
+            1,
             columns.get("status", "active"),
-            0,  # should_report
+            1 if should_report else 0,
         )
         sql = """
             INSERT INTO findings (

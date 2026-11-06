@@ -43,7 +43,9 @@ def build_parser() -> argparse.ArgumentParser:
             "  tally --project myapp --command repo-edit"
             " --repo-name backend --languages python,go\n"
             "  tally --project myapp --command repo-delete"
-            " --repo-name backend"
+            " --repo-name backend\n"
+            "  tally --project myapp --command finding-add"
+            " --repo backend --finding-file finding.json"
         ),
     )
 
@@ -78,6 +80,7 @@ def build_parser() -> argparse.ArgumentParser:
             "repo-list",
             "repo-edit",
             "repo-delete",
+            "finding-add",
         ],
         help="Command to execute",
     )
@@ -103,7 +106,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--repo",
         type=str,
         metavar="REPOS",
-        help="Comma-separated repository names to scan",
+        help="Comma-separated repository names to scan; one name for finding-add",
     )
     parser.add_argument(
         "--domain",
@@ -250,6 +253,19 @@ def build_parser() -> argparse.ArgumentParser:
         type=str,
         metavar="NAME",
         help="Repository name (repo-add, repo-edit, repo-delete)",
+    )
+    parser.add_argument(
+        "--finding-file",
+        type=str,
+        metavar="PATH",
+        help="Finding payload JSON file, or - for stdin (finding-add)",
+    )
+    parser.add_argument(
+        "--status",
+        type=str,
+        default="active",
+        metavar="STATUS",
+        help="Finding status (finding-add, default: active)",
     )
     parser.add_argument(
         "--repo-path",
