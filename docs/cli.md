@@ -16,7 +16,7 @@ You also need at least one project created through the REPL or web UI before the
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
-| `--command COMMAND` | string | *(required)* | Command to execute: `scan`, `run`, `report`, `triage`, `purge`, `stats`, `integration-sync`, `ui`, `project-create`, `project-list`, `repo-add`, `repo-list`, `repo-edit`, `repo-delete`, `finding-add` |
+| `--command COMMAND` | string | *(required)* | Command to execute: `scan`, `run`, `report`, `triage`, `purge`, `stats`, `integration-sync`, `ui`, `project-create`, `project-list`, `repo-add`, `repo-list`, `repo-edit`, `repo-delete`, `finding-add`, `finding-update` |
 | `--base-path DIR` | string | `.` | Base directory for projects |
 | `--project NAME` | string | *(required)* | Target project name |
 
@@ -409,6 +409,41 @@ cat finding.json | python3 tally-cli.py --project myapp --command finding-add \
   --repo backend --finding-file - --status false_positive
 ```
 
+### finding-update
+
+Update the status or description of an existing finding.
+
+```
+tally --project NAME --command finding-update --finding-id ID
+      [--status STATUS] [--description TEXT]
+```
+
+| Flag | Description |
+|------|-------------|
+| `--finding-id ID` | Numeric ID of the finding to update (required) |
+| `--status STATUS` | `active`, `false_positive`, `fixed`, or `wont_fix` |
+| `--description TEXT` | New description text for the finding |
+
+At least one of `--status` or `--description` must be provided. Fields you omit stay unchanged.
+
+On success the command prints the updated finding ID:
+
+```json
+{
+  "finding_id": 42
+}
+```
+
+An invalid status exits with code 2. A finding ID that does not exist exits with code 1.
+
+```bash
+python3 tally-cli.py --project myapp --command finding-update \
+  --finding-id 42 --status fixed
+
+python3 tally-cli.py --project myapp --command finding-update \
+  --finding-id 42 --description "Confirmed after manual review"
+```
+
 ---
 
 ## Exit Codes
@@ -430,7 +465,7 @@ Ctrl+C produces exit code 130.
 
 **Exit 1.** Covers runtime failures that are not argument or project errors: RAG engine unavailable, scan already in progress, Docker not available, PDF rendering failure, or unexpected exceptions.
 
-**Exit 2.** The arguments are syntactically valid but semantically wrong: `--tool` and `--skip-tools` both specified on `scan`, unknown tool/repo/domain names, or a `finding-add` payload or status that fails validation.
+**Exit 2.** The arguments are syntactically valid but semantically wrong: `--tool` and `--skip-tools` both specified on `scan`, unknown tool/repo/domain names, a `finding-add` payload or status that fails validation, or a `finding-update` with an invalid status or no fields specified.
 
 **Exit 3.** The `--project` flag was omitted on a command that requires it, the project does not exist, or the project has been archived.
 
