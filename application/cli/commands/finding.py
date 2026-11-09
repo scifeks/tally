@@ -70,7 +70,7 @@ def cmd_finding_add(
     try:
         service = create_ingest_service(ProjectPaths.from_registry_row(row).findings_db)
         finding_id = service.record_manual_finding(
-            payload, repo_name=args.repo, status=args.status
+            payload, repo_name=args.repo, status=args.status or "active"
         )
     except (FindingPayloadError, UnknownRepositoryError) as exc:
         print(f"Invalid finding: {exc}", file=sys.stderr)
@@ -80,4 +80,52 @@ def cmd_finding_add(
         return GENERAL_ERROR
 
     print(json.dumps({"finding_id": finding_id}, indent=2))
+    return SUCCESS
+
+
+def cmd_finding_update(
+    args: Namespace,
+    project_registry: ProjectRegistryService,
+    tool_registry: ToolRegistry,
+    base_path: Path,
+) -> int:
+    """Update status and/or description on an existing finding."""
+    del tool_registry, base_path
+
+    if not args.finding_id:
+        print("Error: --finding-id is required", file=sys.stderr)
+        return INVALID_ARGS
+
+    if args.status is None and args.description is None:
+        print(
+            "Error: at least one of --status or --description is required",
+            file=sys.stderr,
+        )
+        return INVALID_ARGS
+
+    try:
+        _, row = resolve_project(project_registry, args.project)
+    except ProjectResolutionError as exc:
+        print(str(exc), file=sys.stderr)
+        return PROJECT_NOT_FOUND
+
+    try:
+        service = create_ingest_service(ProjectPaths.from_registry_row(row).findings_db)
+        updated = service.update_finding_fields(
+            args.finding_id,
+            status=args.status,
+            description=args.description,
+        )
+    except FindingPayloadError as exc:
+        print(f"Invalid update: {exc}", file=sys.stderr)
+        return INVALID_ARGS
+    except Exception as exc:
+        print(f"Error updating finding: {exc}", file=sys.stderr)
+        return GENERAL_ERROR
+
+    if not updated:
+        print(f"Error: finding {args.finding_id} not found", file=sys.stderr)
+        return GENERAL_ERROR
+
+    print(json.dumps({"finding_id": args.finding_id}, indent=2))
     return SUCCESS

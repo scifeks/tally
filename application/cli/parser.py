@@ -45,7 +45,9 @@ def build_parser() -> argparse.ArgumentParser:
             "  tally --project myapp --command repo-delete"
             " --repo-name backend\n"
             "  tally --project myapp --command finding-add"
-            " --repo backend --finding-file finding.json"
+            " --repo backend --finding-file finding.json\n"
+            "  tally --project myapp --command finding-update"
+            " --finding-id 42 --status fixed"
         ),
     )
 
@@ -81,6 +83,7 @@ def build_parser() -> argparse.ArgumentParser:
             "repo-edit",
             "repo-delete",
             "finding-add",
+            "finding-update",
         ],
         help="Command to execute",
     )
@@ -263,9 +266,26 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--status",
         type=str,
-        default="active",
+        default=None,
         metavar="STATUS",
-        help="Finding status (finding-add, default: active)",
+        help=(
+            "Finding status (finding-add default: active,"
+            " finding-update: unchanged if omitted)"
+        ),
+    )
+    parser.add_argument(
+        "--finding-id",
+        type=int,
+        default=None,
+        metavar="ID",
+        help="Finding ID to update (finding-update only)",
+    )
+    parser.add_argument(
+        "--description",
+        type=str,
+        default=None,
+        metavar="TEXT",
+        help="Finding description (finding-update only)",
     )
     parser.add_argument(
         "--repo-path",

@@ -69,7 +69,10 @@ def _dispatch(
     base_path: str,
 ) -> int:
     """Route to the appropriate command handler."""
-    from application.cli.commands.finding import cmd_finding_add
+    from application.cli.commands.finding import (
+        cmd_finding_add,
+        cmd_finding_update,
+    )
     from application.cli.commands.integration_sync import (
         cmd_integration_sync,
     )
@@ -112,6 +115,7 @@ def _dispatch(
         "repo-edit": cmd_repo_edit,
         "repo-delete": cmd_repo_delete,
         "finding-add": cmd_finding_add,
+        "finding-update": cmd_finding_update,
     }
 
     handler = handlers.get(args.command)
@@ -131,6 +135,7 @@ def main() -> int:
         "repo-edit",
         "repo-delete",
         "finding-add",
+        "finding-update",
         "mcp",
     }
 

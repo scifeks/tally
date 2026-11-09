@@ -214,6 +214,32 @@ class McpIngestService:
         self._sync_to_vector_index(finding_id)
         return finding_id
 
+    def update_finding_fields(
+        self,
+        finding_id: int,
+        *,
+        status: str | None = None,
+        description: str | None = None,
+    ) -> bool:
+        """Update status and/or description on an existing finding.
+
+        Raises ``FindingPayloadError`` for an invalid status value.
+        Returns True if the finding was updated, False if not found.
+        """
+        if status is not None and status not in STATUS_LEVELS:
+            raise FindingPayloadError(
+                f"status {status!r} is invalid; "
+                f"valid statuses: {', '.join(sorted(STATUS_LEVELS))}"
+            )
+        columns: dict[str, Any] = {}
+        if status is not None:
+            columns["status"] = status
+        if description is not None:
+            columns["description"] = description
+        return self._findings.update_analyst_fields(
+            finding_id, columns, {}, source="cli"
+        )
+
     def _build_raw_row(
         self,
         validated: dict[str, Any],
