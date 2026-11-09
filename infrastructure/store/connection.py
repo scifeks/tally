@@ -121,7 +121,8 @@ def _migrate_finding_history_source(conn: sqlite3.Connection) -> None:
                                 'auto_triage',
                                 'web_ui',
                                 'repl',
-                                'mcp_triage'
+                                'mcp_triage',
+                                'cli'
                               ))
         );
         INSERT INTO finding_history_new
@@ -339,7 +340,8 @@ class ConnectionFactory:
                                         'auto_triage',
                                         'web_ui',
                                         'repl',
-                                        'mcp_triage'
+                                        'mcp_triage',
+                                        'cli'
                                       ))
                 );
 
