@@ -13,8 +13,8 @@ from infrastructure.store.migrations import (
     m0005_chat_session_mode,
     m0006_triage_provider,
     m0007_findings_duplicate_of,
-    m0008_triage_batch_executions,
-    m0009_scan_phase_executions,
+    m0009_triage_batch_executions,
+    m0010_scan_phase_executions,
 )
 from infrastructure.store.migrations._helpers import (
     add_column_if_missing,
@@ -35,8 +35,8 @@ MIGRATIONS: list[ModuleType] = [
     m0005_chat_session_mode,
     m0006_triage_provider,
     m0007_findings_duplicate_of,
-    m0008_triage_batch_executions,
-    m0009_scan_phase_executions,
+    m0009_triage_batch_executions,
+    m0010_scan_phase_executions,
 ]
 
 

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import sqlite3
 
-VERSION = 8
+VERSION = 9
 
 
 def upgrade(conn: sqlite3.Connection) -> None:

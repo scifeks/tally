@@ -1,4 +1,4 @@
-"""Integration tests for m0009: scan_phase_executions and scan_configs."""
+"""Integration tests for m0010: scan_phase_executions and scan_configs."""
 
 from __future__ import annotations
 

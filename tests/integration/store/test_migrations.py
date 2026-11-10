@@ -107,7 +107,7 @@ class TestMigrationRunnerOnOldDB:
         factory.init_schema()
 
         with factory.connect() as conn:
-            assert _current_version(conn) == 9
+            assert _current_version(conn) == 10
 
     def test_preserves_existing_data(self, tmp_path: Path) -> None:
         db_path = tmp_path / "old.db"
@@ -141,7 +141,7 @@ class TestMigrationIdempotency:
         with factory.connect() as conn:
             versions = conn.execute("SELECT version FROM schema_version").fetchall()
         assert len(versions) == 9
-        assert versions[-1][0] == 9
+        assert versions[-1][0] == 10
 
     def test_skips_already_applied(self, tmp_path: Path) -> None:
         factory = ConnectionFactory(tmp_path / "skip.db")

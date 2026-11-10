@@ -1,4 +1,4 @@
-"""Integration tests for m0008: triage_batch_executions migration."""
+"""Integration tests for m0009: triage_batch_executions migration."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ _TALLY_ROOT = Path(__file__).resolve().parents[3]
 if str(_TALLY_ROOT) not in sys.path:
     sys.path.insert(0, str(_TALLY_ROOT))
 
-from infrastructure.store.migrations import m0008_triage_batch_executions  # noqa: E402
+from infrastructure.store.migrations import m0009_triage_batch_executions  # noqa: E402
 from tests.integration.store._helpers import (  # noqa: E402
     make_connection,
     seed_triage_batches,
@@ -20,8 +20,8 @@ from tests.integration.store._helpers import (  # noqa: E402
 
 pytestmark = pytest.mark.integration
 
-# Minimal DDL for a pre-m0008 database (only what the migration needs).
-_PRE_M0008_DDL = """\
+# Minimal DDL for a pre-m0009 database (only what the migration needs).
+_PRE_M0009_DDL = """\
 CREATE TABLE IF NOT EXISTS triage_batches (
     id           INTEGER PRIMARY KEY AUTOINCREMENT,
     run_id       INTEGER,
@@ -36,12 +36,12 @@ CREATE TABLE IF NOT EXISTS triage_batches (
 """
 
 
-def _make_pre_m0008_db(db_path: Path) -> sqlite3.Connection:
-    """Create a database with only the triage_batches table (pre-m0008)."""
+def _make_pre_m0009_db(db_path: Path) -> sqlite3.Connection:
+    """Create a database with only the triage_batches table (pre-m0009)."""
     db_path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(str(db_path))
     conn.execute("PRAGMA foreign_keys=ON")
-    conn.executescript(_PRE_M0008_DDL)
+    conn.executescript(_PRE_M0009_DDL)
     return conn
 
 
@@ -59,7 +59,7 @@ def test_executions_table_created(tmp_path: Path) -> None:
 
 
 def test_backfill_creates_one_execution_per_existing_batch(tmp_path: Path) -> None:
-    db = _make_pre_m0008_db(tmp_path / "t.db")
+    db = _make_pre_m0009_db(tmp_path / "t.db")
     db.execute(
         "INSERT INTO triage_batches (id, run_id, finding_ids, batch_data, status)"
         " VALUES (1, 1, '[]', '[]', 'completed')"
@@ -70,7 +70,7 @@ def test_backfill_creates_one_execution_per_existing_batch(tmp_path: Path) -> No
     )
     db.commit()
 
-    m0008_triage_batch_executions.upgrade(db)
+    m0009_triage_batch_executions.upgrade(db)
     db.commit()
 
     cur = db.execute(
@@ -81,7 +81,7 @@ def test_backfill_creates_one_execution_per_existing_batch(tmp_path: Path) -> No
 
 
 def test_backfill_copies_status_and_timestamps(tmp_path: Path) -> None:
-    db = _make_pre_m0008_db(tmp_path / "t.db")
+    db = _make_pre_m0009_db(tmp_path / "t.db")
     db.execute(
         "INSERT INTO triage_batches"
         " (id, run_id, finding_ids, batch_data, status,"
@@ -91,7 +91,7 @@ def test_backfill_copies_status_and_timestamps(tmp_path: Path) -> None:
     )
     db.commit()
 
-    m0008_triage_batch_executions.upgrade(db)
+    m0009_triage_batch_executions.upgrade(db)
     db.commit()
 
     cur = db.execute(
@@ -106,17 +106,17 @@ def test_backfill_copies_status_and_timestamps(tmp_path: Path) -> None:
 
 
 def test_backfill_is_idempotent(tmp_path: Path) -> None:
-    db = _make_pre_m0008_db(tmp_path / "t.db")
+    db = _make_pre_m0009_db(tmp_path / "t.db")
     db.execute(
         "INSERT INTO triage_batches (id, run_id, finding_ids, batch_data, status)"
         " VALUES (1, 1, '[]', '[]', 'pending')"
     )
     db.commit()
 
-    m0008_triage_batch_executions.upgrade(db)
+    m0009_triage_batch_executions.upgrade(db)
     db.commit()
     # Running the upgrade again should not duplicate execution rows.
-    m0008_triage_batch_executions.upgrade(db)
+    m0009_triage_batch_executions.upgrade(db)
     db.commit()
 
     cur = db.execute("SELECT COUNT(*) FROM triage_batch_executions WHERE batch_id = 1")
