@@ -253,7 +253,8 @@ def test_build_triage_runner_claude_triaged_by(
             repo_paths={},
         )
 
-    assert runner._triaged_by == "claudecode"
+    assert runner._triage_provider == "anthropic"
+    assert runner._triaged_by == "auto_triage"
 
 
 def test_build_triage_runner_wires_finding_repo(

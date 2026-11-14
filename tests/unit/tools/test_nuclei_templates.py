@@ -86,6 +86,18 @@ class TestNucleiTemplates:
         )
         assert "-t" not in cmd
 
+    def test_build_command_default_only(self) -> None:
+        tool = self._make_tool()
+        cmd = tool.build_command(
+            base_url="https://example.com",
+            pass_type="automatic",
+            output_file="/tmp/out.json",
+            default_template_dir="/home/user/nuclei-templates",
+        )
+        assert "-t" in cmd
+        idx = cmd.index("-t")
+        assert cmd[idx + 1] == "/home/user/nuclei-templates"
+
     def test_build_command_custom_only(self) -> None:
         tool = self._make_tool()
         cmd = tool.build_command(

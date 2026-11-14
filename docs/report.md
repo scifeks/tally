@@ -4,7 +4,7 @@ Tally's report pipeline generates professional security audit reports in two mod
 
 The `report` command defaults to PDF assembly, the full client-deliverable report.
 
-Reports can also be generated from the web UI. The Reports page lets you generate drafts, select output format, and download completed reports without leaving the browser. See [docs/ui.md](ui.md) for the UI walkthrough.
+Reports can also be generated from the web UI. The Reports page lets you generate drafts, select output format, and download completed reports without leaving the browser. See [docs/web-ui.md](web-ui.md) for the UI walkthrough.
 
 ---
 

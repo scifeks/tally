@@ -1,130 +1,196 @@
-"""One-shot prompt renderer for ZAP/dynamic-analysis findings."""
+"""One-shot prompt renderer for web security findings."""
 
 from __future__ import annotations
 
 from typing import Any
 
 from application.triage.prompts._fencing import (
+    DECISION_REMINDER,
     FENCING_PREAMBLE,
-    POST_DATA_REMINDER,
     fence,
 )
 from application.triage.prompts._severity import format_severity
+from application.triage.prompts.triage_prompt import TriagePrompt
 
 
-def render(
+def compose(
     finding: dict[str, Any],
     *,
     project: str,
-) -> str:
-    """Build a self-contained one-shot triage prompt."""
-    finding_id = finding["id"]
-
-    task = f"## Task\n\nTriage the following ZAP/dynamic-analysis \
-finding for project `{project}`."
-    metadata_fenced = "## Finding Record\n\n" + fence(
-        _format_metadata(finding), "finding_metadata"
-    )
-
-    sections: list[str] = [
+) -> TriagePrompt:
+    """Build a one-shot triage prompt for a web security finding."""
+    preamble = [
         _PREAMBLE,
         FENCING_PREAMBLE,
-        task,
-        metadata_fenced,
-        POST_DATA_REMINDER,
+        "## Task\n\nTriage the web security finding in the Finding Record "
+        f"for project `{project}`.",
+    ]
+    guidance = [
+        _SOURCE_INVESTIGATION,
         _EPISTEMIC_CONSERVATISM,
         _CONFIDENCE_GUIDANCE,
         _PREDICATE_GUIDANCE,
-        _output_schema(finding_id),
+        DECISION_REMINDER,
+        _output_schema(finding["id"]),
     ]
-    return "\n\n".join(sections)
+    return TriagePrompt(
+        preamble="\n\n".join(preamble),
+        finding_data="## Finding Record\n\n"
+        + fence(_metadata(finding), "finding_metadata"),
+        guidance="\n\n".join(guidance),
+    )
 
 
-# -- private helpers --------------------------------------------------
+def render(finding: dict[str, Any], *, project: str) -> str:
+    """Build the prompt as a single message."""
+    return compose(finding, project=project).combined()
 
 
-def _format_metadata(finding: dict[str, Any]) -> str:
-    sev = format_severity(finding.get("severity"))
-    fid = finding["id"]
-    lines: list[str] = [
-        f"- finding_id   : {fid}",
-        f"- tool         : {_val(finding, 'tool')}",
-        f"- alert_name   : {_val(finding, 'alert_name')}",
-        f"- severity     : {sev}",
-        f"- method       : {_val(finding, 'method')}",
-        f"- url          : {_val(finding, 'url')}",
-        f"- param        : {_val(finding, 'param')}",
-        f"- evidence     : {_val(finding, 'evidence')}",
-        f"- cwe_id       : {_val(finding, 'cwe_id')}",
-        f"- risk_type    : {_val(finding, 'risk_type')}",
-        f"- description  : {_val(finding, 'description')}",
-        f"- remediation  : {_val(finding, 'remediation')}",
-    ]
-    return "\n".join(lines)
+# Private helpers
 
 
-def _val(d: dict[str, Any], key: str) -> str:
-    v = d.get(key)
-    if v is None:
-        return "n/a"
-    return str(v)
+def _metadata(finding: dict[str, Any]) -> dict[str, object]:
+    return {
+        "finding_id": finding["id"],
+        "tool": finding.get("tool"),
+        "alert_name": finding.get("alert_name"),
+        "severity": format_severity(finding.get("severity")),
+        "method": finding.get("method"),
+        "url": finding.get("url"),
+        "param": finding.get("param"),
+        "evidence": finding.get("evidence"),
+        "cwe_id": finding.get("cwe_id"),
+        "risk_type": finding.get("risk_type"),
+        "description": finding.get("description"),
+        "remediation": finding.get("remediation"),
+    }
 
 
-# -- static prompt text -----------------------------------------------
+# Static prompt text
+
+_SOURCE_INVESTIGATION = """\
+## Source Investigation
+
+The endpoint under test is the `method` and `url` in the Finding Record
+(assume GET when `method` is null).
+
+You MUST complete these steps before issuing a verdict:
+
+1. Locate the endpoint: search `/workspace/repos/` for route definitions,
+   URL patterns, or framework entry points that match the URL path.
+2. Read the handler: open the controller, resolver, or handler function
+   that processes requests to this endpoint. Understand what the code
+   actually does with user input.
+3. Identify the behavior the scanner flagged: find the specific code or
+   configuration that produces the behavior the scanner reported. For
+   configuration findings (introspection, batch limits, security headers),
+   locate the config that controls it.
+4. Assess exploitability: determine what a bad actor could actually gain.
+   A scanner reporting a behavior is not evidence of a vulnerability. You
+   must explain the concrete attack scenario against this specific code.
+
+When the flagged behavior is controlled by a third-party library's defaults
+(query depth, alias limits, batch limits, complexity caps, introspection,
+security headers, CORS), the question is whether the application configures
+an override at the point it constructs the library. Locate that construction
+site in the application's own source (typically a Server, ServerConfig,
+middleware wire-up, or bootstrap file) and inspect the options passed. Do NOT
+read the library's implementation under `vendor/` to understand its
+internals; treat the library's documented defaults as the baseline and answer
+from what the application does or does not override.
+
+If you cannot complete steps 1-3, return a source_not_examined error instead
+of a verdict."""
 
 _PREAMBLE = """\
-You are a web application security analyst performing automated triage.
-This session is NON-INTERACTIVE. You must complete all work and exit.
-Do NOT ask questions. Do NOT wait for input. Finish and exit."""
+You are a web application security analyst performing \
+automated triage.
+You have read-only access to the full source tree \
+under /workspace/repos/.
+Use your read, grep, and glob tools to examine source \
+files as needed.
+This session is NON-INTERACTIVE. You must complete all \
+work and exit.
+Do NOT ask questions. Do NOT wait for input. Finish \
+and exit."""
 
 _EPISTEMIC_CONSERVATISM = """\
 ## Epistemic Conservatism
 
-This is the most important section. Read it carefully before assigning
-any confidence level.
+This is the most important section. Read it carefully \
+before assigning any confidence level.
 
-- Do NOT upgrade a finding's severity or confidence without concrete
-  evidence of exploitability.
-- Do NOT mark a finding `confirmed` unless the ZAP evidence clearly
-  demonstrates a real vulnerability (e.g., SQL error in response,
-  unencoded reflected script tag).
-- When uncertain, prefer `potential` over `probable`, and `probable`
-  over `confirmed`.
+A scanner reporting a behavior is not evidence of a \
+vulnerability. Before assigning any verdict, you must \
+locate the application code that produces the reported \
+behavior and determine whether an attacker could \
+exploit it for any gain.
 
-ZAP alerts match dynamic scan patterns. The alert name (e.g. `SQL
-Injection`, `Cross Site Scripting`) reflects the test category, not
-a confirmed vulnerability class. You must independently determine the
-actual risk.
+Complete the Source Investigation steps above BEFORE \
+reading further. If you could not locate the relevant \
+source code, return the source_not_examined error now.
 
-For any finding, explicitly answer each question in your `reasoning`
-field:
+- Do NOT upgrade severity or confidence without \
+identifying the specific code or configuration that \
+causes the reported behavior.
+- Do NOT mark a finding `confirmed` unless you can \
+describe a concrete attack scenario against the code \
+you examined (scanner output alone is NOT sufficient).
+- When uncertain, prefer `potential` over `probable`, \
+and `probable` over `confirmed`.
+- If the source code could not be examined (no files \
+at /workspace/repos/ or you could not locate the \
+handler), you MUST return an error object instead of \
+a verdict:
+  {"error": "source_not_examined", "finding_id": <id>, \
+"reason": "<why>"}
+  Do NOT return a verdict when the source was not \
+examined.
 
-**1. Is the ZAP evidence a true positive or a scanner artifact?**
-   For example, reflected text that is HTML-encoded is not XSS. Check
-   whether the evidence string represents actual exploitation or a
-   scanner-generated test artifact.
+For every finding, answer each question in your \
+`reasoning` field:
 
-**2. Does the URL pattern and parameter suggest a real attack surface?**
-   Is the parameter user-controllable? Is it processed by the backend?
-   Or is it a static value, a configuration parameter, or not consumed?
+**1. What code produces the reported behavior?**
+   Name the file, function, or configuration setting \
+you found. If the scanner reported a misconfiguration \
+(introspection enabled, missing headers, batch \
+queries allowed), identify where it is configured \
+and whether the setting is intentional, environment-\
+specific, or a default.
 
-**3. Does the application framework likely provide automatic protection?**
-   For example, parameterized queries by default, CSRF middleware, or
-   automatic encoding of output. Many frameworks provide layers of
-   defense that ZAP cannot detect.
+**2. What could an attacker actually do?**
+   Describe the concrete attack scenario. What input \
+would the attacker send? What response or side effect \
+would they observe? What do they gain? "The scanner \
+found X" is not an attack scenario. If you cannot \
+describe a specific exploit path, the finding is \
+potential at best.
 
-**4. Is there a meaningful, attacker-observable outcome?**
-   Can the attacker tell the difference between success and failure?
-   If the exploit path and normal path produce identical responses,
-   there is no practical vulnerability."""
+**3. Are there mitigations the scanner cannot see?**
+   Check for framework-level protections, middleware, \
+WAF rules, authentication requirements, rate limits, \
+input validation, or output encoding that the dynamic \
+scanner could not observe. These are only visible in \
+the source.
+
+**4. Is the attack surface real or theoretical?**
+   Is this a production endpoint or a dev/test route? \
+Is the vulnerable parameter actually user-controllable \
+or is it server-generated? Does the endpoint require \
+authentication or privileges that limit the attack \
+surface?"""
 
 
 def _output_schema(finding_id: int) -> str:
     return f"""\
 ## Output
 
-Emit ONE strict JSON object on a single line. No code fences. No prose
-before or after. No markdown. No leading whitespace. Schema:
+When your verdict is ready, use the write tool to write the JSON object to
+`/workspace/out/verdict.json`. The file MUST contain only the JSON object -
+no markdown fences, no commentary, no leading or trailing whitespace.
+Anything you say in chat is ignored; only the file contents are read.
+
+Schema for verdict.json:
 
 {{"finding_id": {finding_id}, "confidence": "<confirmed|probable\
 |potential|false_positive>", "finding_type": "<vulnerability|weakness\
@@ -156,22 +222,25 @@ Constraints:
 _CONFIDENCE_GUIDANCE = """\
 ## Confidence Guidance
 
-- confirmed: The ZAP evidence clearly demonstrates exploitability
-  (e.g., SQL error in response, reflected unencoded script tag in HTML
-  output). The parameter is controllable, the code is vulnerable, and
-  the attacker can observe a meaningful outcome.
-- probable: Evidence strongly suggests vulnerability but is not
-  conclusive. For example, timing-based detection of SQL injection,
-  indirect indicators of exploitation, or patterns consistent with
-  vulnerable code but without direct proof.
-- potential: The alert is plausible but evidence is weak or indirect.
-  Dynamic scanners produce false positives at high rates. This is the
-  safe default when evidence is ambiguous or the framework likely
-  provides automatic protection.
-- false_positive: The alert pattern is a known false positive. For
-  example, reflected but HTML-encoded output, informational headers
-  missing from response, or ZAP pattern match unrelated to the tested
-  parameter."""
+- confirmed: You located the vulnerable code, traced \
+user input to the sink, and can describe a concrete \
+exploit that an attacker could execute. The source \
+confirms the scanner's finding and no mitigations \
+neutralize it. ALL conditions must hold.
+- probable: The source code strongly suggests a \
+vulnerability but you could not complete the full \
+trace. For example, the handler processes user input \
+unsafely but you could not confirm the absence of \
+upstream middleware that sanitizes it.
+- potential: The finding is plausible but the source \
+investigation introduced significant uncertainty. \
+The endpoint exists but the vulnerable code path may \
+be unreachable, mitigated by the framework, or \
+limited to dev/test environments.
+- false_positive: The source code proves the finding \
+is safe. The behavior is intentional, the input is \
+sanitized, the endpoint is unreachable in production, \
+or the scanner misidentified the pattern."""
 
 
 _PREDICATE_GUIDANCE = """\

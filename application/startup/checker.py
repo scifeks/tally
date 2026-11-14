@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 _INSTALL_HINTS = {
     "semgrep": "pip install semgrep",
     "osv-scanner": "go install github.com/google/osv-scanner/cmd/osv-scanner@latest",
-    "pip-audit": "pip install pip-audit",
+    "pip-audit": "Run install.sh or: .venv/bin/pip install pip-audit",
     "npm-audit": "Included with Node.js: https://nodejs.org",
     "composer-audit": "Included with Composer: https://getcomposer.org",
     "gitleaks": "https://github.com/gitleaks/gitleaks?tab=readme-ov-file#installing",
@@ -43,7 +43,6 @@ def _parse_version(version_str: str) -> tuple[int, ...] | None:
         return None
 
 
-# Map package names in requirements.txt to importable module names
 _PACKAGE_IMPORT_MAP = {
     "pydantic": "pydantic",
     "rich": "rich",
@@ -138,7 +137,6 @@ class DependencyChecker:
             ]
 
         for line in lines:
-            # Strip version specifiers (>=, ==, etc.)
             pkg_name = (
                 line.split(">=")[0].split("==")[0].split("!=")[0].split("~=")[0].strip()
             )

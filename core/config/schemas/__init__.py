@@ -1,5 +1,6 @@
 """Configuration schemas package."""
 
+from .burp_config import BurpConfig
 from .claude_config import ClaudeConfig
 from .command_entry import CommandEntry
 from .defectdojo_config import (
@@ -14,6 +15,7 @@ from .global_config import (
     GlobalConfig,
 )
 from .local_inference_config import LocalInferenceConfig
+from .mcp_config import McpConfig
 from .opencode_config import OpenCodeConfig
 from .project_config import ProjectConfig
 from .repo_service import RepoService
@@ -21,6 +23,7 @@ from .repository import _VALID_REPO_TYPES, RepoAuth, Repository, build_excluded_
 from .validation import TOOL_METACHAR_CHARS, has_shell_metacharacters
 
 __all__ = [
+    "BurpConfig",
     "ClaudeConfig",
     "CommandEntry",
     "DefectDojoGlobalConfig",
@@ -30,6 +33,7 @@ __all__ = [
     "FeatureInferenceConfig",
     "GlobalConfig",
     "LocalInferenceConfig",
+    "McpConfig",
     "TRIAGE_SESSION_TIMEOUT_SECONDS_DEFAULT",
     "OpenCodeConfig",
     "ProjectConfig",

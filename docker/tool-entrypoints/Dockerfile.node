@@ -18,6 +18,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
+# Trust all directories for git (handles cross-ownership of mounted repos)
+RUN git config --global --add safe.directory '*'
+
 # Install nvm and node in one layer, write resolved bin path to /etc/environment
 # so it persists across layers without shell-time evaluation
 RUN curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash \

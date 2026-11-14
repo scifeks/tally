@@ -120,6 +120,6 @@ OWASP_LLM_CODE_TO_NAME: dict[str, str] = {
 
 OWASP_LLM_NAMES: frozenset[str] = frozenset(OWASP_LLM_CODE_TO_NAME.values())
 
-DAST_TOOLS: frozenset[str] = frozenset({"zap", "xsstrike", "dalfox"})
+DAST_TOOLS: frozenset[str] = frozenset({"zap", "xsstrike", "dalfox", "burp"})
 DISCOVERY_TOOLS: frozenset[str] = frozenset({"katana", "noir"})
 URL_PRODUCING_TOOLS: frozenset[str] = frozenset({"katana", "noir"})

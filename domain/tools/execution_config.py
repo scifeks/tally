@@ -24,3 +24,4 @@ class ToolExecutionConfig:
     noir_provider: NoirProviderSnapshot | None
     blind_xss_callback_url: str = ""
     antares_config: Any = None
+    endpoint_extraction_enabled: bool = False

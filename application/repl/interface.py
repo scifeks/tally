@@ -25,8 +25,10 @@ from application.repl.adapters.dependency_summary_display import (
 )
 from application.repl.adapters.tool_registry_display import print_discovery_summary
 from application.repl.commands import (
+    BurpCommands,
     DocumentCommands,
     KnowledgeCommands,
+    McpCommands,
     ProjectCommands,
     PurgeCommand,
     ReportCommand,
@@ -79,6 +81,16 @@ _COMPLETIONS = [
     "sync",
     "ui",
     "vuln-data",
+    "burp poll",
+    "burp scan",
+    "mcp token create",
+    "mcp token list",
+    "mcp token revoke",
+    "mcp serve start",
+    "mcp serve stop",
+    "mcp serve restart",
+    "mcp serve status",
+    "mcp triage prepare",
 ]
 # First tokens only for WordCompleter
 _TOP_TOKENS = sorted({c.split()[0] for c in _COMPLETIONS})
@@ -258,9 +270,19 @@ class REPL:
                 build_runtime_dependency_probes(base_path=base_path)
             )
         self._runtime_service = runtime_service
+        gcfg = self.config.global_config
+        triage_provider = ""
+        triage_api_key = ""
+        if gcfg.triage_inference:
+            triage_provider = gcfg.triage_inference.provider
+            if triage_provider in ("claude", "claude_code"):
+                triage_api_key = gcfg.claude.api_key if gcfg.claude else ""
+            elif triage_provider == "openai":
+                triage_api_key = gcfg.openai.api_key if gcfg.openai else ""
         self.triage_readiness = compute_triage_readiness(
-            base_path=base_path,
+            provider=triage_provider,
             docker_available=runtime_service.is_installed("docker"),
+            api_key=triage_api_key,
         )
         if web_ui_runner is None:
             from infrastructure.web_ui.runner import WebUiRunner
@@ -277,6 +299,7 @@ class REPL:
         )
         self.project_commands = ProjectCommands(self, self.help_renderer)
         self.scan_commands = ScanCommands(self)
+        self.burp_commands = BurpCommands(self)
         self.knowledge_commands = KnowledgeCommands(self)
         self.purge_commands = PurgeCommand(self)
         self.report_commands = ReportCommand(self)
@@ -286,6 +309,8 @@ class REPL:
         self.ui_commands = UiCommands(self, web_ui_runner=web_ui_runner)
         self.vuln_data_commands = VulnDataCommands(self)
         self.document_commands = DocumentCommands(self)
+        self.mcp_commands = McpCommands(self)
+        self.burp_commands = BurpCommands(self)
 
     def run(self) -> None:
         """Start the REPL loop."""
@@ -349,6 +374,11 @@ class REPL:
                 f"[dim]Cancelling {len(handles)} active scan(s)...[/dim]"
             )
 
+        from application.mcp.lifecycle import stop_mcp_server
+
+        if stop_mcp_server():
+            self.console.print("[dim]Stopping MCP server...[/dim]")
+
     def _run_harness(self) -> None:
         """Plain-stdin REPL loop (prints sentinel before each prompt)."""
         self._print_banner()
@@ -410,6 +440,8 @@ class REPL:
             "sync": self.sync_commands.cmd_sync,
             "ui": self.ui_commands.cmd_ui,
             "vuln-data": self.vuln_data_commands.cmd_vuln_data,
+            "burp": self.burp_commands.cmd_burp,
+            "mcp": self.mcp_commands.cmd_mcp,
         }
         handler = handlers.get(cmd)
         if handler is None:

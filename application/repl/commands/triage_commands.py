@@ -111,9 +111,15 @@ class TriageCommands:
             self._repl.console.print("[yellow]Triage cancelled.[/yellow]")
             return
 
+        repos = load_active_repos(
+            self._repl.base_path,
+            self._repl.active_project,
+        )
+        repo_paths = {r.name: Path(r.path) for r in repos if r.path}
+
         if not self._ensure_image():
             return
-        if not self._ensure_containers():
+        if not self._ensure_containers(repo_paths):
             return
 
         row = self._repl.project_registry.resolve_by_name(self._repl.active_project)
@@ -123,7 +129,11 @@ class TriageCommands:
             )
             return
         try:
-            service = create_triage_service(self._repl.project_registry, row.id)
+            service = create_triage_service(
+                self._repl.project_registry,
+                row.id,
+                repo_paths=repo_paths,
+            )
         except ProjectNotFound:
             self._repl.console.print(
                 f"[red]Error:[/red] project {self._repl.active_project!r} not found"
@@ -135,7 +145,7 @@ class TriageCommands:
                 project_id=row.id,
                 project_name=self._repl.active_project,
                 tool_registry=self._repl.tool_registry,
-                event_sink=ConsoleTriageEventSink(),
+                event_sink=ConsoleTriageEventSink(self._repl.console),
             )
         except NoScanRunError as exc:
             self._repl.console.print(f"[red]Error:[/red] {exc}")
@@ -177,7 +187,10 @@ class TriageCommands:
             return False
         return True
 
-    def _ensure_containers(self) -> bool:
+    def _ensure_containers(
+        self,
+        repo_paths: dict[str, Path] | None = None,
+    ) -> bool:
         """Check triage containers; start if not running.
 
         Returns False on error.
@@ -191,7 +204,7 @@ class TriageCommands:
                 self._repl.console.print(
                     "[yellow]Starting triage containers...[/yellow]"
                 )
-            started = ensure_triage_containers(app_root, project)
+            started = ensure_triage_containers(app_root, project, repo_paths=repo_paths)
             if started:
                 self._repl.console.print("[green]Triage containers ready.[/green]")
         except DockerNotAvailableError:

@@ -542,6 +542,7 @@ class TestUpdateFindingShouldReport:
             finding_type_json="[]",
             triage_meta={},
             strategy="test",
+            triaged_by="manual",
         )
 
         with factory.connect() as conn:
@@ -572,6 +573,7 @@ class TestUpdateFindingShouldReport:
             finding_type_json="[]",
             triage_meta={},
             strategy="test",
+            triaged_by="manual",
         )
 
         with factory.connect() as conn:

@@ -61,6 +61,11 @@ class FindingKnowledgeBase:
     ) -> None:
         self._index.upsert(documents=documents, metadatas=metadatas, ids=ids)
 
+    def remove_findings_by_id(self, ids: list[str]) -> None:
+        if not ids:
+            return
+        self._index.delete(ids)
+
     def delete_findings(
         self,
         tool: str | None = None,

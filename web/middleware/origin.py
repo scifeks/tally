@@ -5,17 +5,15 @@ from __future__ import annotations
 from collections.abc import Iterable
 from urllib.parse import urlparse
 
-from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.requests import Request
-from starlette.responses import Response
-from starlette.types import ASGIApp
+from starlette.types import ASGIApp, Receive, Scope, Send
 
 from web.api._errors import error_response
 
 _SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
 
 
-class OriginCheckMiddleware(BaseHTTPMiddleware):
+class OriginCheckMiddleware:
     """Reject cross-origin mutating requests to /api/* paths."""
 
     def __init__(
@@ -25,20 +23,25 @@ class OriginCheckMiddleware(BaseHTTPMiddleware):
         *,
         extra_origins: Iterable[str] = (),
     ) -> None:
-        super().__init__(app)
+        self._app = app
         self._allowed = {
             f"https://localhost:{port}",
             f"https://127.0.0.1:{port}",
             *extra_origins,
         }
 
-    async def dispatch(
-        self, request: Request, call_next: RequestResponseEndpoint
-    ) -> Response:
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self._app(scope, receive, send)
+            return
+
+        request = Request(scope)
         if not request.url.path.startswith("/api/"):
-            return await call_next(request)
+            await self._app(scope, receive, send)
+            return
         if request.method in _SAFE_METHODS:
-            return await call_next(request)
+            await self._app(scope, receive, send)
+            return
 
         origin = request.headers.get("origin", "")
         if not origin:
@@ -48,5 +51,7 @@ class OriginCheckMiddleware(BaseHTTPMiddleware):
                 origin = f"{parsed.scheme}://{parsed.netloc}"
 
         if origin not in self._allowed:
-            return error_response(403, "FORBIDDEN", "Cross-origin request rejected")
-        return await call_next(request)
+            response = error_response(403, "FORBIDDEN", "Cross-origin request rejected")
+            await response(scope, receive, send)
+            return
+        await self._app(scope, receive, send)

@@ -10,6 +10,7 @@ from application.pipeline.strategies import (
     PersistOnlyStrategy,
     PostIngestStrategy,
 )
+from application.rag.finding_indexer import FindingIndexer
 from application.url_inventory.ingest_handler import UrlInventoryIngestHandler
 from domain.pipeline.events import EventBus, IngestCompleted, ToolCompleted
 
@@ -54,14 +55,18 @@ class PipelineFactory:
         bus.subscribe(ToolCompleted, ingest.handle)
         bus.register_cleanup_target(ingest)
 
+        indexer = FindingIndexer(finding_repo=finding_repo)
+
         strategy: PostIngestStrategy
         if skip_enrichment:
             strategy = PersistOnlyStrategy(
                 finding_repo=finding_repo,
+                indexer=indexer,
             )
         else:
             strategy = EnrichThenPersistStrategy(
                 finding_repo=finding_repo,
+                indexer=indexer,
                 reporter=reporter,
                 project_id=project_id,
                 event_sink=event_sink,

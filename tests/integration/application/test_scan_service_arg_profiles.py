@@ -10,7 +10,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from application.locking.registry import LockRegistry
-from application.ports.subprocess_runner import SubprocessRunnerPort
+from application.ports.tool_runner import CliToolRunnerPort
 from application.tools.scan_run_registry import ScanRunRegistry
 from application.tools.scan_service import ScanService
 from domain.tool_arg_profiles.entry import (
@@ -66,7 +66,7 @@ def service(
     lock_registry: LockRegistry, scan_run_registry: ScanRunRegistry
 ) -> ScanService:
     svc = ScanService(
-        subprocess_runner=MagicMock(spec=SubprocessRunnerPort),
+        cli_tool_runner=MagicMock(spec=CliToolRunnerPort),
         lock_registry=lock_registry,
         scan_run_registry=scan_run_registry,
     )

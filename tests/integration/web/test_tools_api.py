@@ -47,7 +47,7 @@ _PROJECT_CONFIG: dict[str, Any] = {
 
 
 class _FakeTool:
-    """Minimal duck-typed stand-in for ToolWrapper used in catalog tests."""
+    """Minimal duck-typed stand-in for ToolWrapper."""
 
     def __init__(
         self,
@@ -55,11 +55,13 @@ class _FakeTool:
         category: str,
         description: str,
         installed: bool = True,
+        requires_base_urls: bool = False,
     ) -> None:
         self.name = name
         self.category = category
         self.description = description
         self._installed = installed
+        self.requires_base_urls = requires_base_urls
 
     def check_available(self) -> bool:
         return self._installed
@@ -67,7 +69,7 @@ class _FakeTool:
 
 @pytest_asyncio.fixture()
 async def tools_v1_client(tmp_path: Path):
-    """Yield (client, mut_headers, tmp_path) with a real project on disk."""
+    """Authenticated test client backed by a real project on disk."""
     config_dir = tmp_path / "config"
     config_dir.mkdir(parents=True)
     (config_dir / "global.json").write_text("{}")
@@ -164,21 +166,25 @@ class TestToolsCatalog:
         assert isinstance(item["supports_local"], bool)
         assert isinstance(item["supports_docker"], bool)
         assert item["description"] == "Python security linter"
+        assert isinstance(item["requires_base_urls"], bool)
+        assert isinstance(item["requires_url_inventory"], bool)
 
-    async def test_catalog_with_empty_registry_only_has_disk_tools(
+    async def test_catalog_with_empty_registry_excludes_uninstalled_disk_tools(
         self, app_client
     ) -> None:
+        from infrastructure.system.installed_tools_probe import InstalledToolsProbe
+
         client, *_ = app_client
         app = client._transport.app
         registry = app.state.tool_registry
         registry.clear()
         app.state.tool_catalog_snapshot = registry.snapshot()
+        app.state.installed_tools = InstalledToolsProbe(registry)
         resp = await client.get("/api/v1/tools/catalog")
         assert resp.status_code == 200
         data = resp.json()
-        assert data["total"] == len(data["items"])
-        for item in data["items"]:
-            assert item["domain"] == ""
+        assert data["total"] == 0
+        assert data["items"] == []
 
     async def test_catalog_stable_after_registry_mutation(self, app_client) -> None:
         client, *_ = app_client

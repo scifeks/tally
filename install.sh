@@ -21,11 +21,16 @@ if [ "$PYTHON_MAJOR" -lt 3 ] || { [ "$PYTHON_MAJOR" -eq 3 ] && [ "$PYTHON_MINOR"
 fi
 echo "  v Python $PYTHON_VERSION"
 
-# Create venv if it does not already exist
-if [ -d ".venv" ]; then
+# Create venv if it does not already exist, or recreate if stale
+if [ -d ".venv" ] && .venv/bin/python3 --version >/dev/null 2>&1; then
     echo "  v .venv already exists, skipping creation"
 else
-    echo "  Creating .venv..."
+    if [ -d ".venv" ]; then
+        echo "  Stale .venv detected (interpreter missing or broken), recreating..."
+        rm -rf .venv
+    else
+        echo "  Creating .venv..."
+    fi
     "$PYTHON" -m venv .venv
     echo "  v .venv created"
 fi

@@ -10,7 +10,7 @@ from pathlib import Path
 
 
 def _migrate_repositories_to_services(conn: sqlite3.Connection) -> None:
-    """Collapse flat repo columns into services_json for pre-TAL-143 databases."""
+    """Collapse flat repo columns into services_json for legacy databases."""
     cursor = conn.cursor()
     table_info = cursor.execute("PRAGMA table_info(repositories)").fetchall()
     column_names = {row[1] for row in table_info}
@@ -99,6 +99,42 @@ def _migrate_repositories_to_services(conn: sqlite3.Connection) -> None:
     )
 
 
+def _migrate_finding_history_source(conn: sqlite3.Connection) -> None:
+    """Add 'mcp_triage' to the finding_history source CHECK constraint."""
+    row = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='finding_history'"
+    ).fetchone()
+    if row is None or "mcp_triage" in (row[0] or ""):
+        return
+    conn.executescript("""
+        PRAGMA foreign_keys = OFF;
+        CREATE TABLE IF NOT EXISTS finding_history_new (
+            id                INTEGER PRIMARY KEY AUTOINCREMENT,
+            finding_id        INTEGER NOT NULL
+                                REFERENCES findings(id) ON DELETE CASCADE,
+            timestamp         TEXT NOT NULL,
+            before_values     TEXT NOT NULL,
+            after_values      TEXT NOT NULL,
+            inference_context TEXT,
+            source            TEXT NOT NULL CHECK (source IN (
+                                'llm_inference',
+                                'auto_triage',
+                                'web_ui',
+                                'repl',
+                                'mcp_triage',
+                                'cli'
+                              ))
+        );
+        INSERT INTO finding_history_new
+            SELECT * FROM finding_history;
+        DROP TABLE finding_history;
+        ALTER TABLE finding_history_new RENAME TO finding_history;
+        CREATE INDEX IF NOT EXISTS idx_finding_history_finding_id
+            ON finding_history (finding_id, timestamp DESC);
+        PRAGMA foreign_keys = ON;
+    """)
+
+
 class ConnectionFactory:
     """Creates SQLite connections and manages schema initialization."""
 
@@ -156,10 +192,12 @@ class ConnectionFactory:
                     status           TEXT,
                     triaged_at       TEXT,
                     triaged_by       TEXT,
+                    triage_provider  TEXT,
                     should_report    INTEGER NOT NULL DEFAULT 0,
                     business_impact  TEXT,
                     tal_id           TEXT,
-                    repo_id          INTEGER
+                    repo_id          INTEGER,
+                    duplicate_of     INTEGER
     """
 
     _FINDINGS_INDEXES = """
@@ -188,6 +226,7 @@ class ConnectionFactory:
             "chat_sessions",
             "chat_messages",
             "url_findings",
+            "organizer_ingested_items",
         }
     )
 
@@ -300,7 +339,9 @@ class ConnectionFactory:
                                         'llm_inference',
                                         'auto_triage',
                                         'web_ui',
-                                        'repl'
+                                        'repl',
+                                        'mcp_triage',
+                                        'cli'
                                       ))
                 );
 
@@ -386,7 +427,7 @@ class ConnectionFactory:
                     ),
                     CHECK (
                         (source = 'scan' AND tool IS NOT NULL
-                         AND tool IN ('katana', 'noir'))
+                         AND tool IN ('katana', 'noir', 'llm'))
                         OR (source = 'user' AND tool IS NULL)
                     ),
                     FOREIGN KEY (repo_id) REFERENCES repositories(id)
@@ -492,6 +533,14 @@ class ConnectionFactory:
 
                 CREATE INDEX IF NOT EXISTS idx_saved_scan_arg_profiles_profile
                     ON saved_scan_arg_profiles (arg_profile_id);
+
+                CREATE TABLE IF NOT EXISTS organizer_ingested_items (
+                    project_id  INTEGER NOT NULL,
+                    item_id     INTEGER NOT NULL,
+                    ingested_at TEXT    NOT NULL
+                                  DEFAULT (datetime('now')),
+                    PRIMARY KEY (project_id, item_id)
+                );
             """)
             from infrastructure.store.migrations import run_pending
 
@@ -505,6 +554,7 @@ class ConnectionFactory:
                     WHERE scope = 'service';
             """)
             _migrate_repositories_to_services(conn)
+            _migrate_finding_history_source(conn)
 
     def purge_operational_tables(self) -> None:
         """Clear operational data tables, preserving configuration.

@@ -292,7 +292,8 @@ def test_single_finding_triaged_via_container(
         session_timeout_seconds=180,
         finding_repo=env["finding_repo"],
         repo_paths=env["repo_paths"],
-        triaged_by="opencode",
+        triage_provider="opencode",
+        triaged_by="auto_triage",
     )
 
     result = runner.run()

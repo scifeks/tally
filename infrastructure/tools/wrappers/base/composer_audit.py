@@ -50,6 +50,10 @@ class BaseComposerAuditTool(ToolInterface):
         return True
 
     @property
+    def findings_exit_codes(self) -> frozenset[int]:
+        return frozenset({1, 2, 3})
+
+    @property
     def language_gates(self) -> list[str]:
         return ["php"]
 

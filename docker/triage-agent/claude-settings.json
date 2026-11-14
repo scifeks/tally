@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Read|Grep|Glob",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/home/agent/.claude/hooks/scope-guard.sh"
+          }
+        ]
+      }
+    ]
+  }
+}

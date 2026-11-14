@@ -11,9 +11,13 @@ from __future__ import annotations
 import sys
 from contextlib import contextmanager
 from pathlib import Path
+from typing import TYPE_CHECKING
 from unittest.mock import MagicMock
 
 import pytest
+
+if TYPE_CHECKING:
+    from application.triage.prompts.triage_prompt import TriagePrompt
 
 _TALLY_ROOT = Path(__file__).resolve().parents[3]
 if str(_TALLY_ROOT) not in sys.path:
@@ -86,7 +90,7 @@ class _StubTriageBackend:
 
     def run_triage(
         self,
-        prompt: str,
+        prompt: TriagePrompt,
         *,
         finding_id: int,
         timeout_seconds: int,
@@ -169,7 +173,8 @@ def _make_runner_real(
         session_timeout_seconds=300,
         finding_repo=finding_repo,
         repo_paths={"testrepo": Path("/tmp/fakerepo")},
-        triaged_by="claudecode",
+        triage_provider="anthropic",
+        triaged_by="auto_triage",
     )
     return runner, factory, run_repo, finding_repo
 
@@ -222,7 +227,7 @@ def test_pipeline_finding_marked_enriched(
         ).fetchone()
     assert row["enriched"] == 1
     assert row["triaged_at"] is not None
-    assert row["triaged_by"] == "claudecode"
+    assert row["triaged_by"] == "auto_triage"
 
 
 def test_pipeline_result_counts_match(
@@ -318,4 +323,4 @@ def test_both_findings_enriched(tmp_path: Path) -> None:
     with factory.connect() as conn:
         rows = conn.execute("SELECT enriched, triaged_by FROM findings").fetchall()
     assert all(r["enriched"] == 1 for r in rows)
-    assert all(r["triaged_by"] == "claudecode" for r in rows)
+    assert all(r["triaged_by"] == "auto_triage" for r in rows)

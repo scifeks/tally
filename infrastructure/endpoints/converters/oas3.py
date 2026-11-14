@@ -60,6 +60,19 @@ def _normalize_full_url_paths(doc: dict) -> dict:
     return result
 
 
+def _validate_oas31_structure(doc: dict) -> None:
+    """Structural checks only; the pinned validator has no 3.1 support."""
+    info = doc.get("info")
+    if not isinstance(info, dict) or "title" not in info or "version" not in info:
+        raise ValueError("'info' must be an object with 'title' and 'version'")
+    paths = doc.get("paths")
+    if not isinstance(paths, dict):
+        raise ValueError("'paths' must be an object")
+    for key in paths:
+        if not isinstance(key, str) or not key.startswith("/"):
+            raise ValueError(f"path key must start with '/': {key!r}")
+
+
 class OAS3PassthroughAdapter(ConverterAdapter):
     """Normalize, validate, and write OAS3 files."""
 
@@ -78,7 +91,10 @@ class OAS3PassthroughAdapter(ConverterAdapter):
             )
         doc = _normalize_full_url_paths(doc)
         try:
-            validate(doc, cls=OpenAPIV30SpecValidator)
+            if openapi_ver.startswith("3.1"):
+                _validate_oas31_structure(doc)
+            else:
+                validate(doc, cls=OpenAPIV30SpecValidator)
         except Exception as exc:
             raise ConverterError(f"OAS3 spec validation failed: {exc}") from exc
 

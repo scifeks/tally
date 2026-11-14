@@ -108,6 +108,10 @@ class ProjectPaths:
     def sessions_dir(self) -> Path:
         return self.root / "sessions"
 
+    @property
+    def agentic_dir(self) -> Path:
+        return self.root / "agentic"
+
     @classmethod
     def from_registry_row(cls, row: ProjectRow) -> ProjectPaths:
         """Build a ProjectPaths from a registry result row."""

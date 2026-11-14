@@ -36,6 +36,28 @@ def _make_repo(ignore_dirs: list[str] | None = None) -> Repository:
     )
 
 
+def _make_repo_with_test_dirs(
+    test_dirs: list[str] | None = None,
+    ignore_dirs: list[str] | None = None,
+) -> Repository:
+    service = RepoService.model_construct(
+        name="default",
+        relative_path="",
+        type=["api"],
+        languages=["python"],
+        base_urls=["http://localhost:9090"],
+        test_dirs=test_dirs or [],
+        ignore_dirs=ignore_dirs or [],
+        docker_path="",
+        container_name="",
+    )
+    return Repository.model_construct(
+        name="dvna",
+        path="/tmp/dvna",
+        services=[service],
+    )
+
+
 def _make_ctx(repo: Repository) -> UrlProviderContext:
     return UrlProviderContext(
         repo=repo,
@@ -166,6 +188,28 @@ class TestVendorFilterAtIngestBoundary:
             )
         )
         assert [r.path for r in rows] == ["/api/users"]
+
+    def test_repo_test_dirs_excluded(self) -> None:
+        ctx = _make_ctx(_make_repo_with_test_dirs(test_dirs=["tests"]))
+        doc = _doc(
+            ("/api/users", "GET"),
+            ("/tests/mock/handler.py", "GET"),
+        )
+        assert _collect(doc, ctx) == ["/api/users"]
+
+    def test_repo_test_and_ignore_dirs_combined(self) -> None:
+        ctx = _make_ctx(
+            _make_repo_with_test_dirs(
+                test_dirs=["tests"],
+                ignore_dirs=["mocks"],
+            )
+        )
+        doc = _doc(
+            ("/api/users", "GET"),
+            ("/tests/mock/handler.py", "GET"),
+            ("/mocks/data/stub.json", "POST"),
+        )
+        assert _collect(doc, ctx) == ["/api/users"]
 
 
 class TestNonVendorPathHandling:

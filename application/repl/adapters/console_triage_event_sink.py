@@ -1,13 +1,28 @@
-"""REPL adapter: no-op triage event sink.
+"""REPL adapter for triage lifecycle events.
 
-The REPL output is driven by direct print() and logging. This sink
-discards events to keep the REPL output byte-identical.
+Prints batch progress to the Rich console so the REPL shows feedback
+when triage is started from the terminal. Non-batch events are
+discarded; the REPL does not display them.
 """
 
 from __future__ import annotations
 
-from application.ports.triage_event_sink import NullTriageEventSink
+from typing import TYPE_CHECKING
+
+from domain.pipeline.triage_events import BatchCreated
+
+if TYPE_CHECKING:
+    from rich.console import Console
+
+    from domain.pipeline.triage_events import TriageEvent
 
 
-class ConsoleTriageEventSink(NullTriageEventSink):
-    """No-op sink for the REPL path."""
+class ConsoleTriageEventSink:
+    """Prints triage batch progress to a Rich Console."""
+
+    def __init__(self, console: Console) -> None:
+        self._console = console
+
+    def emit(self, event: TriageEvent) -> None:
+        if isinstance(event, BatchCreated):
+            self._console.print(f"  {event.message}")

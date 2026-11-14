@@ -82,7 +82,7 @@ def _build_orchestrator(
         project_name=project_name,
         base_path=tmp_path,
         prompt=prompt,
-        subprocess_runner=MagicMock(),
+        cli_tool_runner=MagicMock(),
     )
     bus = EventBus()
     return ScanOrchestrator(
@@ -180,7 +180,7 @@ def test_orchestrator_no_op_when_project_id_is_none(tmp_path: Path) -> None:
         project_name="testproject",
         base_path=tmp_path,
         prompt=prompt,
-        subprocess_runner=MagicMock(),
+        cli_tool_runner=MagicMock(),
     )
     bus = EventBus()
     orch = ScanOrchestrator(

@@ -98,9 +98,10 @@ def _make_db_active(
     rows: list[tuple[str, str, str]],
 ) -> None:
     _init_store(db_path)
-    _seed_scan_run(db_path)
     conn = sqlite3.connect(str(db_path))
     conn.row_factory = sqlite3.Row
+    cur = conn.execute("INSERT INTO scan_runs (args) VALUES ('{}')")
+    run_id = cur.lastrowid  # type: ignore[assignment]
     repo_ids: dict[str, int] = {}
     for tool, repo_name, segment in rows:
         if repo_name not in repo_ids:
@@ -111,9 +112,9 @@ def _make_db_active(
             repo_ids[repo_name] = cur.lastrowid  # type: ignore[assignment]
         conn.execute(
             "INSERT INTO findings"
-            " (tool, status, repo_id, segment, triaged_at)"
-            " VALUES (?, 'active', ?, ?, NULL)",
-            (tool, repo_ids[repo_name], segment),
+            " (run_id, tool, status, repo_id, segment, triaged_at)"
+            " VALUES (?, ?, 'active', ?, ?, NULL)",
+            (run_id, tool, repo_ids[repo_name], segment),
         )
     conn.commit()
     conn.close()
@@ -339,7 +340,7 @@ def test_create_triage_batches_called_per_combo(
         [
             ("semgrep", "repo1", "sast"),
             ("semgrep", "repo1", "sast"),
-            ("zap", "repo1", "api"),
+            ("zap", "repo1", "web"),
         ],
     )
 
@@ -356,7 +357,7 @@ def test_create_triage_batches_called_per_combo(
         patch(
             "infrastructure.store.repositories.triage"
             ".TriageBatchRepository.create_batches",
-            return_value=1,
+            return_value=[(1, 1)],
         ),
         patch("application.triage.factory.TriageAgentFactory") as mock_factory,
     ):
@@ -373,9 +374,9 @@ def test_create_triage_batches_called_per_combo(
         )
 
     assert mock_fetch.call_count == 2
-    calls = {(c.args[0], c.args[1], c.args[2]) for c in mock_fetch.call_args_list}
+    calls = {(c.args[1], c.args[2], c.args[3]) for c in mock_fetch.call_args_list}
     assert ("semgrep", "repo1", "sast") in calls
-    assert ("zap", "repo1", "api") in calls
+    assert ("zap", "repo1", "web") in calls
 
 
 def test_batching_error_aborts_before_session_prep(
@@ -413,8 +414,16 @@ def test_batching_error_aborts_before_session_prep(
     mock_prepare.assert_not_called()
 
 
-def test_batch_count_reported(project_db, capsys) -> None:
+def test_batch_count_reported(project_db) -> None:
+    from application.triage.orchestrator import run_triage_for_project
+    from domain.pipeline.triage_events import BatchCreated
     from infrastructure.store import make_store
+
+    collected: list[object] = []
+
+    class _CollectingSink:
+        def emit(self, event: object) -> None:
+            collected.append(event)
 
     project, tmp_root, db = project_db
     _make_db_active(db, [("semgrep", "repo1", "sast")])
@@ -430,22 +439,25 @@ def test_batch_count_reported(project_db, capsys) -> None:
         patch(
             "infrastructure.store.repositories.triage"
             ".TriageBatchRepository.create_batches",
-            return_value=3,
+            return_value=[(1, 1), (2, 1), (3, 1)],
         ),
         patch("application.triage.factory.TriageAgentFactory") as mock_factory,
     ):
         mock_factory.return_value.create.return_value = _StubAdapter()
-        run_triage(
+        run_triage_for_project(
             project,
-            _make_tool_registry_mock(),
+            project_id=1,
+            tool_registry=_make_tool_registry_mock(),
             app_root=tmp_root,
             run_repo=run_repo,
             finding_repo=finding_repo,
             triage_repo=triage_repo,
             audit_repo=audit_repo,
             repo_paths={},
+            event_sink=_CollectingSink(),
         )
 
-    out = capsys.readouterr().out
-    assert "3" in out
-    assert "semgrep" in out
+    batch_events = [e for e in collected if isinstance(e, BatchCreated)]
+    assert len(batch_events) == 3
+    assert all(e.findings_count == 1 for e in batch_events)
+    assert all("semgrep" in e.message for e in batch_events)

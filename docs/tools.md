@@ -1,26 +1,31 @@
 # Tools
 
+Tally is designed for authorized security assessments. Run these tools only against systems you own or have explicit permission to test.
+
 ## Supported Tools
 
 | Tool | Category | What it does |
 |---|---|---|
-| Antares | SAST | CWE vulnerability localization using LLM agent investigation. Identifies files likely to contain specific CWE weaknesses by exploring the codebase with a small language model. Requires endpoint configuration; see [docs/antares-shim.md](antares-shim.md) |
-| ffuf | DAST | Fast web fuzzer for discovering hidden files, directories, and parameters via wordlist-based brute-force |
-| Nuclei | DAST | Template-based vulnerability scanner; known CVE fingerprinting, misconfiguration detection, and DAST fuzzing |
-| OWASP ZAP | DAST | Dynamic web/API security scanning |
-| XSStrike | DAST | XSS-focused dynamic scanner; context-aware payload generation and WAF evasion to complement ZAP |
-| graphql-cop | DAST | GraphQL security auditing; tests for introspection, batching, alias abuse, field suggestions, and other misconfigurations |
-| OWASP Noir | Pre-DAST | Static endpoint discovery; produces an OAS3 spec for ZAP |
-| Psalm | SAST | PHP taint analysis; traces data flow from user input to dangerous sinks (SQL injection, XSS, command injection) |
-| Semgrep | SAST | Static analysis across many languages |
-| tree-sitter | SAST | AST-based code analysis (Python library) |
-| Gitleaks | Secrets | Git history and working-tree secret scanning |
-| osv-scanner | SCA | Dependency vulnerability scanning via OSV database |
-| pip-audit | SCA | Python dependency audit (PyPI advisory database) |
-| npm-audit | SCA | Node.js dependency audit |
-| composer-audit | SCA | PHP Composer dependency audit |
-| Retire.js | SCA | Vulnerable JavaScript library detector; scans JS files directly for known CVEs without requiring a lockfile |
-| Garak | LLM Security | LLM vulnerability scanning for prompt injection, jailbreaks, data leakage, and toxicity |
+| [Antares](https://github.com/IBM/Antares) | SAST | CWE vulnerability localization using LLM agent investigation; identifies files likely to contain specific CWE weaknesses by exploring the codebase with a small language model. Requires endpoint configuration; see [docs/antares-shim.md](antares-shim.md) |
+| [Burp Suite](https://portswigger.net/burp) | DAST | Web vulnerability scanner using crawl-and-audit; connects to a running Burp instance via REST API |
+| [Nuclei](https://github.com/projectdiscovery/nuclei) | DAST | Template-based vulnerability scanner; known CVE fingerprinting, misconfiguration detection, and DAST fuzzing |
+| [OWASP ZAP](https://github.com/zaproxy/zaproxy) | DAST | Dynamic web/API security scanning |
+| [XSStrike](https://github.com/s0md3v/XSStrike) | DAST | XSS-focused dynamic scanner; context-aware payload generation and WAF evasion to complement ZAP |
+| [sqlmap](https://github.com/sqlmapproject/sqlmap) | DAST | SQL injection scanner; tests multiple injection techniques across 40+ DBMS backends |
+| [graphql-cop](https://github.com/dolevf/graphql-cop) | DAST | GraphQL security auditing; tests for introspection, batching, alias abuse, field suggestions, and other misconfigurations |
+| [DalFox](https://github.com/hahwul/dalfox) | DAST | XSS scanner using headless Chrome; detects cross-site scripting vulnerabilities in JavaScript-heavy applications and SPAs |
+| [OWASP Noir](https://github.com/noir-cr/noir) | Pre-DAST | Static endpoint discovery; produces an OAS3 spec for ZAP |
+| [Katana](https://github.com/projectdiscovery/katana) | Discovery | Runtime web crawler for endpoint discovery; follows links and extracts XHR endpoints; produces OAS3 output for DAST tools |
+| [Psalm](https://github.com/vimeo/psalm) | SAST | PHP taint analysis; traces data flow from user input to dangerous sinks (SQL injection, XSS, command injection) |
+| [Semgrep](https://github.com/semgrep/semgrep) | SAST | Static analysis across many languages |
+| [tree-sitter](https://github.com/tree-sitter/tree-sitter) | SAST | AST-based code analysis (Python library) |
+| [Gitleaks](https://github.com/gitleaks/gitleaks) | Secrets | Git history and working-tree secret scanning |
+| [osv-scanner](https://github.com/google/osv-scanner) | SCA | Dependency vulnerability scanning via OSV database |
+| [pip-audit](https://github.com/pypa/pip-audit) | SCA | Python dependency audit (PyPI advisory database) |
+| npm-audit | SCA | Node.js dependency audit (built into [npm](https://github.com/npm/cli)) |
+| composer-audit | SCA | PHP Composer dependency audit (built into [Composer](https://github.com/composer/composer)) |
+| [Retire.js](https://github.com/RetireJS/retire.js) | SCA | Vulnerable JavaScript library detector; scans JS files directly for known CVEs without requiring a lockfile |
+| [Garak](https://github.com/NVIDIA/garak) | LLM Security | LLM vulnerability scanning for prompt injection, jailbreaks, data leakage, and toxicity |
 
 All tools are optional. Tally skips any tool that is not detected.
 
@@ -65,18 +70,70 @@ setup instructions, and a description of how conversion works.
 
 ---
 
-## ffuf
+## LLM Endpoint Extraction
 
-ffuf is a fast web fuzzer written in Go that discovers hidden files, directories, vhosts, and parameters by brute-forcing HTTP requests with a wordlist. It runs in the `web` scan segment against configured `base_urls`.
+LLM endpoint extraction is an alternative URL discovery mechanism that complements Noir and Katana. When configured, Tally uses an LLM to read controller source code and extract HTTP routes, query parameters, and form parameters, producing parameterized URLs for DAST tools.
+
+### When it triggers
+
+Endpoint extraction runs automatically during scans when both conditions are met:
+
+1. Noir is skipped for the repository (unsupported framework) or returns zero endpoints
+2. The `endpoint_extraction_inference` feature is configured in `config/global.json`
+
+The scan also checks the URL inventory; if it contains endpoints, extraction is skipped to avoid redundant work.
+
+### What it produces
+
+Extracted endpoints become informational findings (same as Noir and Katana output) and feed downstream DAST tools (sqlmap, dalfox, xsstrike) that require parameterized URLs.
+
+### Provider options
+
+Choose a provider based on your needs:
+
+- **Ollama or llama.cpp.** Run inference locally at no API cost. Fast, suitable for small-to-medium codebases. Set `base_url` in the `ollama` or `llama_cpp` provider config and reference it in `endpoint_extraction_inference`.
+- **Claude API.** Higher accuracy on complex endpoint patterns and modern frameworks. Requires Anthropic API key. Set `api_key` in the `claude` provider config and reference it in `endpoint_extraction_inference`.
+
+See [docs/configuration.md](configuration.md) for examples of enabling endpoint extraction with each provider.
+
+---
+
+## Antares
+
+Antares is a SAST scanner that uses a small language model to investigate your codebase and identify files likely to contain specific CWE weaknesses. Unlike pattern-based scanners, Antares explores source code paths and data flows to localize where weaknesses are most likely to exist. It uses IBM's Granite model and requires a completions-compatible LLM endpoint.
 
 ### Requirements
 
-- **ffuf binary.** Install from `https://github.com/ffuf/ffuf` or via your package manager (`go install github.com/ffuf/ffuf/v2@latest`). The binary must be on `$PATH` or configured in `config/commands.json`.
-- **A wordlist.** ffuf needs a wordlist for brute-force discovery. Set the `FFUF_WORDLIST` environment variable to the path of your preferred wordlist, or install SecLists (`/usr/share/seclists/`). Without a wordlist, ffuf is skipped automatically.
+- **Antares binary.** The `antares` command must be on `$PATH` or configured in `config/commands.json`.
+- **An LLM endpoint.** Antares needs a completions-capable backend. Three options: Ollama (with automatic shim), llama-server, or vLLM. See [docs/antares-shim.md](antares-shim.md) for setup.
 
 ### How it works
 
-ffuf appends `/FUZZ` to each configured `base_url` and sends one HTTP request per wordlist entry, filtering responses by status code (200, 201, 301, 302, 307, 401, 403, 405, 500). Each discovered path becomes an "exposure" finding with its HTTP status, response length, and content type.
+Antares receives a JSON payload via stdin specifying the target repository, model, and endpoint. It dispatches concurrent workers, one per CWE class, that use the language model to explore the codebase and identify files likely to contain that weakness. Each worker produces findings with file paths, CWE IDs, and an investigation trace showing the model's reasoning path.
+
+When using Ollama, Tally automatically starts a local completions shim that translates between the OpenAI-format `/v1/completions` API that Antares expects and Ollama's `/api/generate` endpoint. The shim sets `raw=True` so Antares can format prompts using Granite's native template. The shim is stopped after the scan completes.
+
+### Configuration
+
+Add `antares_inference` and optionally `antares_sweep_config` to `config/global.json`:
+
+```json
+{
+  "antares_inference": {
+    "provider": "ollama",
+    "model": "granite3-dense:2b",
+    "timeout_seconds": 300
+  },
+  "antares_sweep_config": {
+    "max_cwes": 15,
+    "workers": 4
+  }
+}
+```
+
+If `antares_inference.model` is not set and the provider is Ollama, Tally resolves the model from the chat, triage, or base Ollama config in that order.
+
+See [docs/antares-shim.md](antares-shim.md) for full configuration reference, backend options, and troubleshooting.
 
 ---
 
@@ -134,7 +191,7 @@ the URL seed mode:
 
 | Mode | Description | Default when |
 |------|-------------|--------------|
-| `provided` | Generate seeds from the user-supplied endpoint file (`oas3_path` → URL list) | `oas3_path` is set |
+| `provided` | Generate seeds from the user-supplied endpoint file (`oas3_path` -> URL list) | `oas3_path` is set |
 | `noir` | Generate seeds from the most recent Noir OAS3 output for the repository | No endpoint file |
 | `crawl` | XSStrike spiders from `base_url` directly | Fallback / third option |
 
@@ -241,6 +298,30 @@ Run `search --show-fields --tool=<tool>` to see all available fields for a tool.
 | `severity` | Severity level (low, medium, high, critical) |
 | `vulnerability_id` | CVE or advisory ID |
 
+### antares
+
+| Field | Description |
+|---|---|
+| `confidence` | Confidence level (potential) |
+| `cwe` | CWE ID of the identified weakness |
+| `file_path` | Source file path where the weakness was localized |
+| `finding_type` | Type of finding (weakness) |
+| `rule_id` | Primary CWE ID |
+| `severity` | Severity level (low, medium, high, critical) |
+
+### burp
+
+| Field | Description |
+|---|---|
+| `alert_name` | Burp issue name (e.g. Cross-site request forgery) |
+| `confidence` | Confidence level (confirmed) |
+| `evidence` | Decoded HTTP request/response evidence |
+| `finding_type` | Type of finding (vulnerability) |
+| `fingerprint_type` | Burp issue type from fingerprint |
+| `method` | HTTP method (empty for most Burp findings) |
+| `severity` | Severity level (informational, low, medium, high) |
+| `url` | Full URL where the issue was found |
+
 ### dalfox
 
 | Field | Description |
@@ -257,19 +338,6 @@ Run `search --show-fields --tool=<tool>` to see all available fields for a tool.
 | `poc` | Proof of concept URL |
 | `severity` | Severity level (low, medium, high, critical) |
 | `url` | URL where the vulnerability was found |
-
-### ffuf
-
-| Field | Description |
-|---|---|
-| `content_type` | Response content type |
-| `finding_type` | Type of finding (exposure) |
-| `host` | Target host |
-| `length` | Response body length in bytes |
-| `redirect_location` | Redirect target URL (for 3xx responses) |
-| `severity` | Severity level (informational, low) |
-| `status` | HTTP response status code |
-| `url` | Discovered URL |
 
 ### garak
 
@@ -456,6 +524,8 @@ Run `search --show-fields --tool=<tool>` to see all available fields for a tool.
 Tally calls `check_system_tools()` on startup and when you run the `tools` REPL command.
 Three detection strategies are used:
 
-1. **PATH lookup** (`shutil.which`). Used by most tools (semgrep, gitleaks, osv-scanner, pip-audit, npm-audit, composer-audit). A tool is available if its binary is on `$PATH`.
+1. **PATH lookup** (`shutil.which`). Used by most tools (antares, semgrep, gitleaks, osv-scanner, pip-audit, npm-audit, composer-audit). A tool is available if its binary is on `$PATH`.
 2. **Configured path** (`Path.exists`). Used by OWASP ZAP. Checks the absolute path set in `config/commands.json` (e.g. `/usr/share/zaproxy/zap.sh`), which allows ZAP to be detected even when not on `$PATH`.
 3. **Python import** (`importlib.util.find_spec`). Used by tree-sitter. Checks that `tree_sitter` and `tree_sitter_language_pack` are importable in the active environment.
+
+Burp Suite uses a different detection strategy: Tally checks for a `burp` section in `config/global.json` and probes the configured REST API endpoint at startup. No binary on PATH is required.

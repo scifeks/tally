@@ -1,0 +1,306 @@
+"""MCP server factory with streamable HTTP transport for Tally triage and ingest."""
+
+from __future__ import annotations
+
+import logging
+from pathlib import Path
+from typing import TYPE_CHECKING, Any
+
+from mcp.server import MCPServer
+
+from application.mcp.ingest_service import (
+    McpIngestService,
+    list_active_projects,
+)
+from application.mcp.service import McpTriageService
+from application.rag.finding_indexer import FindingIndexer
+from application.rag.knowledge_base_cache import (
+    get_or_build_knowledge_base,
+)
+from application.url_inventory.service import UrlInventoryService
+from application.url_inventory.url_list_service import UrlListService
+from core.config import ConfigManager
+from core.project_paths import ProjectPaths
+from infrastructure.endpoints.converters.endpoint_file_converter import (
+    EndpointFileConverter,
+)
+from infrastructure.store.connection import ConnectionFactory
+from infrastructure.store.repositories.findings import (
+    FindingRepository,
+)
+from infrastructure.store.repositories.repositories import (
+    RepositoryRepository,
+)
+from infrastructure.store.repositories.runs import RunRepository
+from infrastructure.store.repositories.triage import (
+    TriageBatchRepository,
+)
+from infrastructure.store.repositories.url_findings import (
+    UrlFindingRepository,
+)
+
+if TYPE_CHECKING:
+    from application.ports.event_publisher import EventPublisherPort
+    from application.ports.mcp_token_repository import (
+        McpTokenRepositoryPort,
+    )
+    from application.ports.project_repo_repository import ProjectRepoRepositoryPort
+    from application.ports.run_repository import RunRepositoryPort
+    from application.project.registry_service import (
+        ProjectRegistryService,
+    )
+    from application.tools.registry import ToolRegistry
+
+logger = logging.getLogger(__name__)
+
+
+def create_mcp_server(
+    project_registry: ProjectRegistryService,
+    tool_registry: ToolRegistry,
+    base_path: str | Path,
+    event_publisher: EventPublisherPort | None = None,
+) -> MCPServer:
+    """Create the MCP server with triage and ingest tools."""
+    server = MCPServer(
+        name="Tally MCP",
+        instructions=(
+            "Tally MCP tools: fetch_batch, submit_verdicts,"
+            " skip_batch, get_triage_status, list_projects,"
+            " create_scan_run, submit_finding,"
+            " get_duplicate_candidates, resolve_duplicates,"
+            " end_scan."
+        ),
+    )
+
+    kb_cache: dict[str, Any] = {}
+    base_path_obj = Path(base_path) if isinstance(base_path, str) else base_path
+    cfg = ConfigManager(str(base_path_obj)).global_config
+    max_agents = cfg.mcp_triage.max_concurrent_agents
+
+    def _run_repo_factory(db_path: str) -> RunRepositoryPort:
+        conn_factory = ConnectionFactory(Path(db_path))
+        conn_factory.init_schema()
+        return RunRepository(conn_factory)
+
+    def _repo_repo_factory(db_path: str) -> ProjectRepoRepositoryPort:
+        conn_factory = ConnectionFactory(Path(db_path))
+        conn_factory.init_schema()
+        return RepositoryRepository(conn_factory)
+
+    def _get_service(
+        project_name: str,
+    ) -> McpTriageService:
+        row = project_registry.resolve_by_name(project_name)
+        if row is None or row.archived_at:
+            raise ValueError(f"Project '{project_name}' not found")
+        paths = ProjectPaths.from_registry_row(row)
+        paths.sqlite_dir.mkdir(parents=True, exist_ok=True)
+        factory = ConnectionFactory(paths.findings_db)
+        factory.init_schema()
+        event_sink = None
+        if event_publisher is not None:
+            from web.adapters.event_bus_triage_sink import (
+                EventBusTriageSink,
+            )
+
+            event_sink = EventBusTriageSink(event_publisher)
+        return McpTriageService(
+            triage_repo=TriageBatchRepository(factory),
+            finding_repo=FindingRepository(factory),
+            run_repo=RunRepository(factory),
+            tool_registry=tool_registry,
+            event_sink=event_sink,
+            max_concurrent_agents=max_agents,
+        )
+
+    def _get_ingest_service(project_name: str) -> McpIngestService:
+        """Create an ingest service for a project with KB and indexer."""
+        row = project_registry.resolve_by_name(project_name)
+        if row is None or row.archived_at:
+            raise ValueError(f"Project '{project_name}' not found")
+        paths = ProjectPaths.from_registry_row(row)
+        paths.sqlite_dir.mkdir(parents=True, exist_ok=True)
+        conn_factory = ConnectionFactory(paths.findings_db)
+        conn_factory.init_schema()
+        finding_repo = FindingRepository(conn_factory)
+        run_repo = RunRepository(conn_factory)
+        indexer = FindingIndexer(finding_repo=finding_repo)
+        kb = get_or_build_knowledge_base(kb_cache, project_name, str(base_path_obj))
+        return McpIngestService(
+            finding_repo=finding_repo,
+            run_repo=run_repo,
+            repo_repo=RepositoryRepository(conn_factory),
+            indexer=indexer,
+            knowledge_base=kb,
+        )
+
+    @server.tool()
+    def fetch_batch(project: str) -> dict[str, Any]:
+        """Fetch the next triage batch for a project."""
+        service = _get_service(project)
+        return service.fetch_batch(project)
+
+    @server.tool()
+    def submit_verdicts(
+        project: str,
+        batch_id: int,
+        verdicts: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        """Submit verdicts for a triage batch."""
+        service = _get_service(project)
+        return service.submit_verdicts(batch_id, verdicts, project_name=project)
+
+    @server.tool()
+    def skip_batch(project: str, batch_id: int) -> dict[str, str]:
+        """Skip a triage batch without processing."""
+        service = _get_service(project)
+        return service.skip_batch(batch_id)
+
+    @server.tool()
+    def get_triage_status(project: str) -> dict[str, Any]:
+        """Get triage progress summary without claiming."""
+        service = _get_service(project)
+        return service.get_triage_status(project)
+
+    @server.tool()
+    def list_projects() -> list[dict[str, Any]]:
+        """Enumerate every active project with its latest run id and active repos."""
+        return list_active_projects(
+            project_registry, _run_repo_factory, _repo_repo_factory
+        )
+
+    @server.tool()
+    def create_scan_run(
+        project: str,
+        project_id: int,
+        repo_ids: list[str],
+    ) -> dict[str, int]:
+        """Open a new scan_run for an external Claude Code scan."""
+        service = _get_ingest_service(project)
+        return service.create_scan_run(project_id, repo_ids)
+
+    @server.tool()
+    def submit_finding(
+        project: str,
+        project_id: int,
+        repo_id: int | None,
+        run_id: int,
+        finding: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Submit a single finding under an MCP scan_run."""
+        service = _get_ingest_service(project)
+        return service.submit_finding(run_id, finding, repo_id=repo_id)
+
+    @server.tool()
+    def get_duplicate_candidates(
+        project: str,
+        run_id: int,
+    ) -> dict[str, Any]:
+        """Return candidate duplicate groups for a scan run."""
+        service = _get_ingest_service(project)
+        return service.get_duplicate_candidates(run_id)
+
+    @server.tool()
+    def resolve_duplicates(
+        project: str,
+        run_id: int,
+        survivor_id: int,
+        removed_ids: list[int],
+    ) -> dict[str, Any]:
+        """Mark removed findings as duplicates of a survivor."""
+        service = _get_ingest_service(project)
+        return service.resolve_duplicates(run_id, survivor_id, removed_ids)
+
+    @server.tool()
+    def ingest_attack_surface(
+        project: str,
+        repo_name: str,
+        spec_path: str,
+    ) -> dict[str, Any]:
+        """Ingest an OpenAPI attack-surface spec into a repo's URL inventory."""
+        try:
+            row = project_registry.resolve_by_name(project)
+            if row is None or row.archived_at:
+                raise ValueError(f"Project '{project}' not found")
+            spec_file = Path(spec_path)
+            if not spec_file.is_file():
+                raise FileNotFoundError(f"Spec file not found: {spec_path}")
+            contents = spec_file.read_bytes()
+
+            paths = ProjectPaths.from_registry_row(row)
+            paths.sqlite_dir.mkdir(parents=True, exist_ok=True)
+            conn_factory = ConnectionFactory(paths.findings_db)
+            conn_factory.init_schema()
+            url_repo = UrlFindingRepository(conn_factory)
+            repo_store = RepositoryRepository(conn_factory)
+            repo = repo_store.get_by_name(repo_name)
+            repo_id = repo_store.find_id_by_name(repo_name)
+            if repo is None or repo_id is None:
+                raise ValueError(f"Repository '{repo_name}' not found")
+
+            UrlListService(
+                url_repo=url_repo,
+                project_repo=repo_store,
+                inventory=UrlInventoryService(url_repo),
+                converter=EndpointFileConverter(),
+                findings_db_exists=True,
+                paths=paths,
+                project_name=row.name,
+            ).ingest_uploaded_endpoint_file(
+                repo=repo,
+                repo_id=repo_id,
+                filename=spec_file.name,
+                contents=contents,
+            )
+
+            merged_urls = paths.endpoint_dir(str(repo_id)) / "merged_urls.txt"
+            count = 0
+            if merged_urls.exists():
+                count = sum(
+                    1 for line in merged_urls.read_text().splitlines() if line.strip()
+                )
+            return {"status": "ok", "endpoints_ingested": count}
+        except Exception as exc:
+            logger.warning("ingest_attack_surface failed: %s", exc)
+            return {"status": "error", "error": str(exc)}
+
+    @server.tool()
+    def end_scan(
+        project: str,
+        project_id: int,
+        run_id: int,
+    ) -> dict[str, str]:
+        """Mark a scan run as finished."""
+        service = _get_ingest_service(project)
+        return service.end_scan(project_id, run_id)
+
+    return server
+
+
+def start_mcp_server(
+    port: int,
+    project_registry: ProjectRegistryService,
+    tool_registry: ToolRegistry,
+    token_repo: McpTokenRepositoryPort,
+    encryption_key: bytes,
+    base_path: str | Path,
+    event_publisher: EventPublisherPort | None = None,
+) -> None:
+    """Launch the MCP server with streamable HTTP transport (blocking)."""
+    import uvicorn
+
+    from mcp_server.auth import BearerTokenMiddleware
+
+    mcp = create_mcp_server(
+        project_registry,
+        tool_registry,
+        base_path,
+        event_publisher=event_publisher,
+    )
+    app = mcp.streamable_http_app()
+    app = BearerTokenMiddleware(app, token_repo, encryption_key)
+    logger.info(
+        "Starting MCP server on port %d with streamable HTTP transport",
+        port,
+    )
+    uvicorn.run(app, host="127.0.0.1", port=port)

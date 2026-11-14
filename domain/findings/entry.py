@@ -67,6 +67,7 @@ class Finding:
     should_report: bool = False
     business_impact: str | None = None
     tal_id: str | None = None
+    duplicate_of: int | None = None
     repo_id: int | None = None
 
     @classmethod
@@ -107,6 +108,7 @@ class Finding:
             should_report=bool(row["should_report"]),
             business_impact=row["business_impact"],
             tal_id=row["tal_id"],
+            duplicate_of=row["duplicate_of"],
             repo_id=row["repo_id"],
         )
 

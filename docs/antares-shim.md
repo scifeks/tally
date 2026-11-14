@@ -173,7 +173,7 @@ When you run a scan that includes Antares:
 **Fix:**
 - Verify Ollama is running: `ollama serve` (or check your configured base_url if using llama-server or vLLM)
 - Verify `base_url` matches your setup (default: `http://localhost:11434` for Ollama)
-- If using a remote host, ensure the host is reachable and the port is open
+- If using a remote host, verify the host is reachable and the port is open
 
 ### Model not found
 

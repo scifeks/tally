@@ -125,8 +125,9 @@ class BaseNucleiTool(ToolInterface):
         custom_template_dir = Path(repo_path) / ".nuclei"
         if custom_template_dir.is_dir():
             shared_kwargs["custom_template_dir"] = str(custom_template_dir)
-            default_dir = self._resolve_default_templates_dir()
-            shared_kwargs["default_template_dir"] = str(default_dir)
+
+        default_dir = self._resolve_default_templates_dir()
+        shared_kwargs["default_template_dir"] = str(default_dir)
 
         return [
             ExecutionPass(
@@ -148,11 +149,7 @@ class BaseNucleiTool(ToolInterface):
         ]
 
     def merge_pass_results(self, pass_results: list[ToolResult]) -> ToolResult:
-        """Combine automatic and DAST pass results with deduplication.
-
-        Combines findings from both passes and deduplicates by template ID
-        and matched URL to produce a single result.
-        """
+        """Combine automatic and DAST pass results with deduplication."""
         auto_result, dast_result = pass_results[0], pass_results[1]
         auto_data = auto_result.parsed_data or {}
         dast_data = dast_result.parsed_data or {}
@@ -160,7 +157,6 @@ class BaseNucleiTool(ToolInterface):
         auto_findings = auto_data.get("findings", [])
         dast_findings = dast_data.get("findings", [])
 
-        # Deduplicate by fingerprint: nuclei|<template-id>|<matched-at>
         seen: dict[str, dict[str, Any]] = {}
         for finding in auto_findings:
             key = self._fingerprint_finding(finding)

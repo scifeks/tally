@@ -171,9 +171,9 @@ export function RepositorySection({
   }
 
   const handleToggleMode = (newMode: ConfigMode) => {
-    if (newMode === 'advanced' && mode === 'basic') {
-      setMode('advanced')
-    }
+    if (newMode === mode) return
+    if (newMode === 'basic' && !canSwitchToBasic) return
+    setMode(newMode)
   }
 
   const canSwitchToBasic = formServices.length <= 1
@@ -277,6 +277,14 @@ export function RepositorySection({
         payload.authType = 'header'
       }
       onUpdateAuth(selectedId, payload)
+    }
+  }
+
+  const handleClearFormAuth = () => {
+    if (selectedId === null || isNewRepo) return
+    if (confirm('Clear authentication credentials? This cannot be undone.')) {
+      onUpdateAuth(selectedId, { authType: 'form', loginUrl: '' })
+      setAuth(EMPTY_AUTH)
     }
   }
 
@@ -682,7 +690,7 @@ export function RepositorySection({
                     }
                     placeholder={
                       !isNewRepo && selectedRepo?.authConfigured
-                        ? 'Stored — enter new value to override'
+                        ? 'Stored; enter new value to override'
                         : 'https://example.com/login'
                     }
                     className="w-full h-8 px-2 bg-background border border-border text-xs text-foreground font-mono focus:border-accent focus:outline-none"
@@ -708,7 +716,7 @@ export function RepositorySection({
                     }
                     placeholder={
                       !isNewRepo && selectedRepo?.authConfigured
-                        ? 'Stored — enter new value to override'
+                        ? 'Stored; enter new value to override'
                         : undefined
                     }
                     className="w-full h-8 px-2 bg-background border border-border text-xs text-foreground focus:border-accent focus:outline-none"
@@ -734,7 +742,7 @@ export function RepositorySection({
                     }
                     placeholder={
                       !isNewRepo && selectedRepo?.authConfigured
-                        ? 'Stored — enter new value to override'
+                        ? 'Stored; enter new value to override'
                         : undefined
                     }
                     className="w-full h-8 px-2 bg-background border border-border text-xs text-foreground focus:border-accent focus:outline-none"
@@ -807,26 +815,45 @@ export function RepositorySection({
             )}
 
             {!isNewRepo && (
-              <div className="flex items-center justify-end gap-2 mt-4">
-                {authJustSaved && (
-                  <span className="text-[10px] text-accent flex items-center gap-1">
-                    <Check className="h-3 w-3" />
-                    Saved
-                  </span>
-                )}
-                <button
-                  onClick={handleSaveAuth}
-                  disabled={isSavingAuth || (auth.authType === 'form' && !auth.loginUrl)}
-                  className={cn(
-                    'flex items-center gap-1 px-3 h-8 text-[10px] uppercase tracking-wider transition-all',
-                    !isSavingAuth && (auth.authType === 'header' || auth.loginUrl)
-                      ? 'bg-accent text-background hover:bg-accent/70'
-                      : 'bg-muted text-dim opacity-40 cursor-not-allowed'
+              <div className="flex items-center justify-between gap-2 mt-4">
+                <div>
+                  {authJustSaved && (
+                    <span className="text-[10px] text-accent flex items-center gap-1">
+                      <Check className="h-3 w-3" />
+                      Saved
+                    </span>
                   )}
-                >
-                  <Save className="h-3 w-3" />
-                  {isSavingAuth ? 'Saving...' : 'Save Auth'}
-                </button>
+                </div>
+                <div className="flex items-center gap-2">
+                  {auth.authType === 'form' && auth.loginUrl && (
+                    <button
+                      onClick={handleClearFormAuth}
+                      disabled={isSavingAuth}
+                      className={cn(
+                        'flex items-center gap-1 px-3 h-8 text-[10px] uppercase tracking-wider border transition-colors',
+                        !isSavingAuth
+                          ? 'border-crit text-crit hover:bg-crit/10'
+                          : 'border-border text-dim opacity-40 cursor-not-allowed'
+                      )}
+                    >
+                      <Trash2 className="h-3 w-3" />
+                      Clear Auth
+                    </button>
+                  )}
+                  <button
+                    onClick={handleSaveAuth}
+                    disabled={isSavingAuth || (auth.authType === 'form' && !auth.loginUrl)}
+                    className={cn(
+                      'flex items-center gap-1 px-3 h-8 text-[10px] uppercase tracking-wider transition-all',
+                      !isSavingAuth && (auth.authType === 'header' || auth.loginUrl)
+                        ? 'bg-accent text-background hover:bg-accent/70'
+                        : 'bg-muted text-dim opacity-40 cursor-not-allowed'
+                    )}
+                  >
+                    <Save className="h-3 w-3" />
+                    {isSavingAuth ? 'Saving...' : 'Save Auth'}
+                  </button>
+                </div>
               </div>
             )}
           </div>

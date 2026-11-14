@@ -19,9 +19,6 @@ _CONTAINER_PORT = "application.triage.container._resolve_container_port"
 _COMPOSE_PATH = "application.triage.container._compose_path"
 _GENERATE = "application.triage.compose.generate_triage_compose"
 _RESOLVE_CONFIG = "application.triage.factory.resolve_triage_config"
-_CONN_FACTORY = "infrastructure.store.connection.ConnectionFactory"
-_REPO_REPO = "infrastructure.store.repositories.repositories.RepositoryRepository"
-_PROJECT_PATHS = "core.project_paths.ProjectPaths"
 
 
 @pytest.fixture()
@@ -31,7 +28,17 @@ def mock_port() -> MagicMock:
 
 @pytest.fixture()
 def fake_compose(tmp_path: Path) -> Path:
-    return tmp_path / "docker-compose.yaml"
+    p = tmp_path / "docker-compose.yaml"
+    p.write_text("services: {}")
+    return p
+
+
+def _noop_generate(
+    app_root: Path,
+    repo_paths: dict[str, Path],
+    **kwargs: object,
+) -> None:
+    """Mock generate that leaves the compose file unchanged."""
 
 
 class TestTriageContainersRunning:
@@ -45,30 +52,34 @@ class TestTriageContainersRunning:
 
 
 class TestEnsureTriageContainers:
-    def test_returns_false_when_already_running(
+    def test_returns_false_when_already_running_and_compose_unchanged(
         self, mock_port: MagicMock, fake_compose: Path
     ) -> None:
         mock_port.is_running.return_value = True
         with (
             patch(_CONTAINER_PORT, return_value=mock_port),
             patch(_COMPOSE_PATH, return_value=fake_compose),
+            patch(
+                _RESOLVE_CONFIG,
+                return_value=MagicMock(
+                    provider_name="claude",
+                    base_url="",
+                    model="sonnet",
+                ),
+            ),
+            patch(_GENERATE, side_effect=_noop_generate),
         ):
             assert ensure_triage_containers(Path("/app"), "proj") is False
         mock_port.up.assert_not_called()
+        mock_port.down.assert_not_called()
 
-    def test_generates_compose_and_starts(
+    def test_restarts_when_compose_changed(
         self, mock_port: MagicMock, fake_compose: Path
     ) -> None:
-        mock_port.is_running.return_value = False
+        mock_port.is_running.return_value = True
 
-        mock_paths = MagicMock()
-        mock_paths.findings_db = Path("/tmp/findings.db")
-
-        mock_repo = MagicMock()
-        mock_repo.name = "myrepo"
-        mock_repo.path = "/code/myrepo"
-        mock_repo_repo = MagicMock()
-        mock_repo_repo.list_active.return_value = [mock_repo]
+        def _write_new_compose(*_args: object, **_kw: object) -> None:
+            fake_compose.write_text("services: {updated: true}")
 
         with (
             patch(_CONTAINER_PORT, return_value=mock_port),
@@ -81,17 +92,36 @@ class TestEnsureTriageContainers:
                     model="sonnet",
                 ),
             ),
-            patch(
-                _PROJECT_PATHS + ".from_canonical",
-                return_value=mock_paths,
-            ),
-            patch(_CONN_FACTORY),
-            patch(_REPO_REPO, return_value=mock_repo_repo),
-            patch(_GENERATE, return_value=fake_compose),
+            patch(_GENERATE, side_effect=_write_new_compose),
         ):
             result = ensure_triage_containers(Path("/app"), "proj")
 
         assert result is True
+        mock_port.down.assert_called_once()
+        mock_port.up.assert_called_once()
+
+    def test_generates_compose_and_starts(
+        self, mock_port: MagicMock, fake_compose: Path
+    ) -> None:
+        mock_port.is_running.return_value = False
+
+        with (
+            patch(_CONTAINER_PORT, return_value=mock_port),
+            patch(_COMPOSE_PATH, return_value=fake_compose),
+            patch(
+                _RESOLVE_CONFIG,
+                return_value=MagicMock(
+                    provider_name="claude",
+                    base_url="",
+                    model="sonnet",
+                ),
+            ),
+            patch(_GENERATE, side_effect=_noop_generate),
+        ):
+            result = ensure_triage_containers(Path("/app"), "proj")
+
+        assert result is True
+        mock_port.up.assert_called_once()
 
     def test_raises_docker_not_available(
         self, mock_port: MagicMock, fake_compose: Path
@@ -100,6 +130,15 @@ class TestEnsureTriageContainers:
         with (
             patch(_CONTAINER_PORT, return_value=mock_port),
             patch(_COMPOSE_PATH, return_value=fake_compose),
+            patch(
+                _RESOLVE_CONFIG,
+                return_value=MagicMock(
+                    provider_name="claude",
+                    base_url="",
+                    model="sonnet",
+                ),
+            ),
+            patch(_GENERATE, side_effect=_noop_generate),
             pytest.raises(DockerNotAvailableError),
         ):
             ensure_triage_containers(Path("/app"), "proj")
@@ -110,12 +149,6 @@ class TestEnsureTriageContainers:
         mock_port.is_running.return_value = False
         mock_port.up.side_effect = TriageContainerStartError("boom")
 
-        mock_paths = MagicMock()
-        mock_paths.findings_db = Path("/tmp/findings.db")
-
-        mock_repo_repo = MagicMock()
-        mock_repo_repo.list_active.return_value = []
-
         with (
             patch(_CONTAINER_PORT, return_value=mock_port),
             patch(_COMPOSE_PATH, return_value=fake_compose),
@@ -127,13 +160,7 @@ class TestEnsureTriageContainers:
                     model="sonnet",
                 ),
             ),
-            patch(
-                _PROJECT_PATHS + ".from_canonical",
-                return_value=mock_paths,
-            ),
-            patch(_CONN_FACTORY),
-            patch(_REPO_REPO, return_value=mock_repo_repo),
-            patch(_GENERATE, return_value=fake_compose),
+            patch(_GENERATE, side_effect=_noop_generate),
             pytest.raises(TriageContainerStartError, match="boom"),
         ):
             ensure_triage_containers(Path("/app"), "proj")

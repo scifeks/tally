@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import threading
 import uuid
 from concurrent.futures import Future
@@ -22,12 +23,14 @@ from application.triage.orchestrator import (
     resume_triage_for_project,
     run_triage_for_project,
 )
+from application.triage.readiness import _FRONTIER_PROVIDERS
 from application.triage.run_registry import (
     TriageRunRegistry,
     get_triage_run_registry,
 )
 from application.triage.runner import NoScanRunError, TriageCancelled
 from core.config.manager import ConfigManager
+from domain.triage.errors import TriageModeError
 
 if TYPE_CHECKING:
     from application.ports.audit_repository import AuditRepositoryPort
@@ -118,15 +121,37 @@ class TriageService:
         tool_registry: ToolRegistry,
         event_sink: TriageEventSink | None = None,
         finding_ids: tuple[int, ...] | None = None,
+        scan_run_id: int | None = None,
     ) -> TriageStartHandle:
         """Start a triage run against the latest scan_run for a project.
 
         Raises NoScanRunError if no scan_runs exist, JobBusy if another
-        triage holds the lock.
+        triage holds the lock, TriageModeError if a frontier provider
+        has no API key configured for auto-triage.
         """
         del finding_ids  # finding-scoped triage is reserved for later
-        ensure_triage_backend_configured(app_root=Path(base_path))
-        scan_run_id = self._run_repo.latest_run_id()
+        provider = ensure_triage_backend_configured(app_root=Path(base_path))
+        if provider in _FRONTIER_PROVIDERS:
+            cfg = ConfigManager(base_path).global_config
+            api_key = ""
+            if provider in ("claude", "claude_code") and cfg.claude:
+                api_key = cfg.claude.api_key
+            elif provider == "openai" and cfg.openai:
+                api_key = cfg.openai.api_key
+            if not api_key:
+                env_map = {
+                    "claude": "ANTHROPIC_API_KEY",
+                    "claude_code": "ANTHROPIC_API_KEY",
+                    "openai": "OPENAI_API_KEY",
+                }
+                env_var = env_map.get(provider, "")
+                if not os.environ.get(env_var):
+                    raise TriageModeError(
+                        f"Auto-triage requires an API key for {provider}. "
+                        "Use MCP triage instead."
+                    )
+        if scan_run_id is None:
+            scan_run_id = self._run_repo.latest_run_id()
         if scan_run_id is None:
             raise NoScanRunError(
                 f"No scan runs found for project {project_name!r}; "
@@ -240,6 +265,18 @@ class TriageService:
         sink = event_sink
         try:
             try:
+                from application.triage.container import (
+                    ensure_triage_containers,
+                    ensure_triage_image,
+                )
+
+                ensure_triage_image(Path(base_path))
+                ensure_triage_containers(
+                    Path(base_path),
+                    project_name,
+                    repo_paths=self._repo_paths,
+                )
+
                 if is_resume:
                     result = resume_triage_for_project(
                         project_name,
@@ -330,32 +367,36 @@ class TriageService:
     async def build_snapshot_event(
         self,
         project_id: int,
-        scan_run_id: int | None,
+        scan_run_id: int,
+        *,
+        after_batch_id: int | None = None,
     ) -> BusEvent:
-        """Build the on-connect snapshot for a triage SSE stream."""
+        """Build the on-connect snapshot for a run-scoped triage SSE stream."""
         payload: dict[str, Any] = {
             "project_id": project_id,
             "scan_run_id": scan_run_id,
+            "after_batch_id": after_batch_id,
         }
-        if scan_run_id is not None:
-            summary = await asyncio.to_thread(
-                self._triage_repo.summarize_for_run, scan_run_id
+        summary = await asyncio.to_thread(
+            self._triage_repo.summarize_for_run,
+            scan_run_id,
+            after_batch_id=after_batch_id,
+        )
+        if summary is not None:
+            batches = await asyncio.to_thread(
+                self._triage_repo.list_for_run,
+                scan_run_id,
+                include_cancelled=True,
+                after_batch_id=after_batch_id,
             )
-            if summary is not None:
-                batches = await asyncio.to_thread(
-                    self._triage_repo.list_for_run, scan_run_id
-                )
-                payload.update(
-                    status=summary.status,
-                    total_findings=summary.total_findings,
-                    processed_findings=summary.processed_findings,
-                    started_at=summary.started_at,
-                    finished_at=summary.finished_at,
-                    batches=[self._batch_to_dict(b) for b in batches],
-                )
-        else:
-            active = self._triage_run_registry.list_for_project(project_id)
-            payload["active_scan_run_ids"] = [h.scan_run_id for h in active]
+            payload.update(
+                status=summary.status,
+                total_findings=summary.total_findings,
+                processed_findings=summary.processed_findings,
+                started_at=summary.started_at,
+                finished_at=summary.finished_at,
+                batches=[self._batch_to_dict(b) for b in batches],
+            )
 
         return BusEvent(
             event_id=new_event_id(),

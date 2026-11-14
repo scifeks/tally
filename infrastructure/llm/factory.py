@@ -13,12 +13,13 @@ from .llama_cpp_adapter import LlamaCppAdapter
 from .ollama_adapter import OllamaAdapter
 from .openai_adapter import OpenAIAdapter
 
-Role = Literal["chat", "enrichment", "report"]
+Role = Literal["chat", "enrichment", "report", "endpoint_extraction"]
 
 _FEATURE_FIELDS: dict[Role, str] = {
     "chat": "chat_inference",
     "enrichment": "enrichment_inference",
     "report": "report_inference",
+    "endpoint_extraction": "endpoint_extraction_inference",
 }
 
 

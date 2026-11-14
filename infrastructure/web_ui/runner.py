@@ -2,15 +2,19 @@
 
 from __future__ import annotations
 
+import asyncio
 import atexit
+import logging
 import os
 import secrets
+import signal
 import socket
 import subprocess
 import threading
 import time
 import webbrowser
 from collections.abc import Callable
+from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -23,7 +27,29 @@ if TYPE_CHECKING:
     from application.project.registry_service import ProjectRegistryService
     from application.tools.registry import ToolRegistry
 
+logger = logging.getLogger(__name__)
+
 _BANNED_HOSTS = {"0.0.0.0", "::", ""}
+
+
+class _ShutdownGuard:
+    """Absorb CancelledError from in-flight requests during graceful shutdown.
+
+    Uvicorn cancels ASGI tasks when its graceful-shutdown timeout expires.
+    StreamingResponse.listen_for_disconnect holds a long-lived receive()
+    that raises CancelledError on cancellation. Without this wrapper,
+    the error propagates to uvicorn's run_asgi, which logs a noisy
+    'Exception in ASGI application' traceback on every open connection.
+    """
+
+    def __init__(self, app: Any) -> None:
+        self._app = app
+
+    async def __call__(self, scope: Any, receive: Any, send: Any) -> None:
+        try:
+            await self._app(scope, receive, send)
+        except asyncio.CancelledError:
+            pass
 
 
 class WebUiRunner(WebUiRunnerPort):
@@ -32,6 +58,8 @@ class WebUiRunner(WebUiRunnerPort):
     def __init__(self, app_factory: Callable[..., Any]) -> None:
         self._app_factory = app_factory
         self._vite_proc: subprocess.Popen[bytes] | None = None
+        self._vite_log: Any | None = None
+        self._shutting_down = False
 
     def serve(
         self,
@@ -70,7 +98,7 @@ class WebUiRunner(WebUiRunnerPort):
             tool_registry=tool_registry,
         )
 
-        self._start_vite(ui_dir)
+        self._start_vite(ui_dir, Path(base_path))
 
         vite_url = f"https://{host}:{vite_port}"
         if not self._wait_for_port(host, vite_port, timeout=10.0):
@@ -88,15 +116,20 @@ class WebUiRunner(WebUiRunnerPort):
         print("Press Ctrl+C to stop the server.")
         try:
             uvicorn.run(
-                app,
+                _ShutdownGuard(app),
                 host=host,
                 port=api_port,
                 log_level="warning",
                 ssl_keyfile=str(key_path),
                 ssl_certfile=str(cert_path),
+                timeout_graceful_shutdown=3,
             )
+        except KeyboardInterrupt:
+            pass
         except OSError:
             print(f"Port {api_port} is already in use or API server failed to start.")
+        finally:
+            self._stop_vite()
 
     @staticmethod
     def _write_env_local(
@@ -120,32 +153,82 @@ class WebUiRunner(WebUiRunnerPort):
         tmp.write_text(content, encoding="utf-8")
         os.replace(tmp, target)
 
+    @staticmethod
+    def _killpg_safe(pgid: object, sig: int) -> None:
+        """Signal a process group, refusing group IDs that are not int > 1."""
+        # MagicMock.__index__ returns 1; os.killpg(1, sig) is kill(-1, sig).
+        if not isinstance(pgid, int) or isinstance(pgid, bool) or pgid <= 1:
+            logger.error(
+                "Refusing os.killpg(%r, %s): not a valid process group ID",
+                pgid,
+                sig,
+            )
+            return
+        os.killpg(pgid, sig)
+
     def _stop_vite(self) -> None:
         if self._vite_proc is None:
             return
+        self._shutting_down = True
         try:
-            self._vite_proc.terminate()
+            self._killpg_safe(self._vite_proc.pid, signal.SIGTERM)
             self._vite_proc.wait(timeout=5)
         except Exception:
-            self._vite_proc.kill()
+            try:
+                self._killpg_safe(self._vite_proc.pid, signal.SIGKILL)
+            except OSError:
+                pass
         self._vite_proc = None
+        if self._vite_log is not None:
+            self._vite_log.close()
+            self._vite_log = None
 
-    def _start_vite(self, ui_dir: Path) -> None:
+    def _monitor_vite(self, log_path: Path) -> None:
+        """Poll the Vite process and warn the user if it exits."""
+        while self._vite_proc is not None:
+            rc = self._vite_proc.poll()
+            if rc is not None:
+                if not self._shutting_down:
+                    print(
+                        f"\nVite dev server exited (code {rc}). "
+                        f"The web UI will not load. "
+                        f"Check {log_path} for details."
+                    )
+                return
+            time.sleep(2)
+
+    def _start_vite(self, ui_dir: Path, base_path: Path) -> None:
         npm = "npm"
         env = {**os.environ, "FORCE_COLOR": "0"}
+
+        log_dir = base_path / "logs"
+        log_dir.mkdir(exist_ok=True)
+        log_name = "vite-" + datetime.now().strftime("%Y-%m-%d") + ".log"
+        self._vite_log = open(log_dir / log_name, "a", encoding="utf-8")
+
         try:
             self._vite_proc = subprocess.Popen(
                 [npm, "run", "dev"],
                 cwd=ui_dir,
                 env=env,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
+                stdout=self._vite_log,
+                stderr=self._vite_log,
+                start_new_session=True,
             )
         except FileNotFoundError:
             print("npm not found. Vite dev server not started.")
+            self._vite_log.close()
+            self._vite_log = None
             self._vite_proc = None
             return
         atexit.register(self._stop_vite)
+
+        monitor = threading.Thread(
+            target=self._monitor_vite,
+            args=(log_dir / log_name,),
+            daemon=True,
+        )
+        monitor.start()
 
     @staticmethod
     def _wait_for_port(host: str, port: int, timeout: float) -> bool:

@@ -10,20 +10,22 @@ write it to stdout.  This follows the same pattern as ``GitleaksLocalTool``:
 ``parse_output`` reads from it.
 
 The OAS3 file is not deleted after parsing because the URL-inventory
-ingest handler reads it via ``output_files['oas3']``. The on-disk file
-is the raw Noir output; vendor-path filtering is applied in the
-application core (see ``application.url_inventory.providers
-._oas3_to_findings.iter_oas3_rows``) at ingest time. This ensures vendor
-URLs never enter ``url_findings`` and the rebuilt merged OAS3 (consumed by
-ZAP, XSStrike, DalFox) inherits the filter.
+ingest handler reads it via ``output_files['oas3']``. Vendor and
+dependency endpoints are filtered in ``parse_output`` using lockfile
+detection results from ``build_execution_passes``. The ingest-time
+filter in ``iter_oas3_rows`` remains as defense-in-depth.
 """
 
 from __future__ import annotations
 
+import json
 import shutil
 from pathlib import Path
 from typing import Any
 
+from domain.tools.interface import ExecutionContext, ExecutionPass
+from domain.url_inventory.vendor_filter import is_vendor_path
+from infrastructure.tools.dependency_detection import detect_dependency_dirs
 from infrastructure.tools.parsers.noir import (
     parse_noir_json,
     parse_noir_json_string,
@@ -38,6 +40,8 @@ class NoirLocalTool(BaseNoirTool):
     def __init__(self, config=None) -> None:
         # Stores the OAS3 output path between build_command and parse_output.
         self._last_report_path: Path | None = None
+        # Stores detected dependency dirs for post-parse filtering.
+        self._exclude_indicators: list[str] = []
 
     @property
     def command(self) -> str:
@@ -48,6 +52,20 @@ class NoirLocalTool(BaseNoirTool):
 
     def get_version(self) -> str | None:
         return get_tool_version(self.command)
+
+    def build_execution_passes(self, context: ExecutionContext) -> list[ExecutionPass]:
+        """Override base implementation to detect and store lockfile dirs."""
+        passes = super().build_execution_passes(context)
+        assert context.repo is not None
+        assert context.service is not None
+        repo_path = context.registry.get_service_path(
+            self.name, context.service, context.repo.path
+        )
+        lockfile_dirs = detect_dependency_dirs(Path(repo_path))
+        self._exclude_indicators = list(
+            dict.fromkeys(lockfile_dirs + list(context.excluded_dirs))
+        )
+        return passes
 
     def build_command(self, **kwargs: object) -> list[str]:
         """Build the Noir argv list.
@@ -118,9 +136,9 @@ class NoirLocalTool(BaseNoirTool):
         Empty OAS3 files (zero paths) are deleted so the ingest handler
         does not import an empty spec.
 
-        Vendor / dependency path filtering happens at the URL-inventory
-        ingest boundary (``iter_oas3_rows``), not here. The wrapper's
-        only job is to surface Noir's raw output.
+        Filters out vendor and dependency endpoints detected via lockfile
+        analysis in ``build_execution_passes``. The ingest-time filter in
+        ``iter_oas3_rows`` remains as defense-in-depth.
         """
         try:
             if self._last_report_path is not None and self._last_report_path.exists():
@@ -131,6 +149,36 @@ class NoirLocalTool(BaseNoirTool):
                     parsed = parse_noir_json(json_path)
                 else:
                     parsed = parse_noir_json_string(output)
+
+            if self._exclude_indicators:
+                parsed["endpoints"] = [
+                    ep
+                    for ep in parsed.get("endpoints", [])
+                    if not is_vendor_path(
+                        ep["path"],
+                        extra_indicators=self._exclude_indicators,
+                    )
+                ]
+                parsed["summary"]["total_endpoints"] = len(parsed["endpoints"])
+                if (
+                    self._last_report_path is not None
+                    and self._last_report_path.exists()
+                ):
+                    surviving = {ep["path"] for ep in parsed["endpoints"]}
+                    try:
+                        raw = json.loads(
+                            self._last_report_path.read_text(encoding="utf-8")
+                        )
+                        if isinstance(raw, dict) and isinstance(raw.get("paths"), dict):
+                            raw["paths"] = {
+                                k: v for k, v in raw["paths"].items() if k in surviving
+                            }
+                            self._last_report_path.write_text(
+                                json.dumps(raw),
+                                encoding="utf-8",
+                            )
+                    except (OSError, json.JSONDecodeError):
+                        pass
 
             if (
                 not parsed.get("endpoints")
@@ -147,3 +195,4 @@ class NoirLocalTool(BaseNoirTool):
             return parsed
         finally:
             self._last_report_path = None
+            self._exclude_indicators = []

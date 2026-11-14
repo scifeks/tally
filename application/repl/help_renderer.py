@@ -15,8 +15,8 @@ if TYPE_CHECKING:
 HELP_BOX = box.Box("┌─┬┐\n│ ││\n├─┼┤\n│ ││\n├─┼┤\n├─┼┤\n│ ││\n└─┴┘\n")
 
 # Help registry: (group, command, argument, description)
-# command=None  → section header row; description holds the section title.
-# command=_NOTE → dim informational row (no Command/Arguments cells).
+# command=None marks a section header row; description holds the title.
+# command=_NOTE marks a dim informational row (no Command/Arguments cells).
 # group is used by HelpRenderer.render() to render filtered tables.
 _NOTE = "_NOTE_"
 
@@ -94,6 +94,20 @@ _HELP_REGISTRY = [
     # Manual Run
     ("run", None, None, "Manual Run"),
     ("run", "run", "<tool> [args...]", "Execute a tool with raw arguments"),
+    # Burp
+    ("burp", None, None, "Burp Suite"),
+    (
+        "burp",
+        "burp scan",
+        "[config_name]",
+        "Start a Burp crawl-and-audit scan using project base URLs",
+    ),
+    (
+        "burp",
+        "burp poll",
+        None,
+        "Poll Burp Organizer for new items. Ctrl+C to stop.",
+    ),
     # Tools
     ("tool", None, None, "Tools"),
     ("tool", "tool add", None, "Add a tool to the active configuration"),
@@ -346,6 +360,57 @@ _HELP_REGISTRY = [
         "ui ssl regenerate",
         None,
         "Regenerate the self-signed TLS certificate for web_ui_host.",
+    ),
+    # MCP Server
+    ("mcp", None, None, "MCP Server"),
+    (
+        "mcp",
+        "mcp serve start",
+        None,
+        "Start the MCP server in the background",
+    ),
+    (
+        "mcp",
+        "mcp serve stop",
+        None,
+        "Stop the running MCP server",
+    ),
+    (
+        "mcp",
+        "mcp serve restart",
+        None,
+        "Restart the MCP server",
+    ),
+    (
+        "mcp",
+        "mcp serve status",
+        None,
+        "Show MCP server status",
+    ),
+    (
+        "mcp",
+        "mcp triage prepare",
+        "[run_id]",
+        "Create triage batches for MCP processing",
+    ),
+    (
+        "mcp",
+        "mcp token create",
+        "[name]",
+        "Create a new MCP bearer token",
+    ),
+    ("mcp", "mcp token list", None, "List MCP tokens"),
+    (
+        "mcp",
+        "mcp token revoke",
+        "<name>",
+        "Revoke an MCP token",
+    ),
+    (
+        "mcp",
+        "mcp show-config",
+        None,
+        "Show Claude Code config snippet",
     ),
     # Utility
     ("utility", None, None, "Utility"),

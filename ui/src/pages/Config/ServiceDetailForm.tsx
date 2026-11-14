@@ -88,6 +88,7 @@ export function ServiceDetailForm({
   katanaDefaults?: { headless: boolean; crawlDepth: number }
 }) {
   const isLibrary = service.type.includes('library')
+  const hasPython = service.languages.some(l => l.toLowerCase() === 'python')
 
   const toggleType = (type: RepoType) => {
     const current = service.type
@@ -290,7 +291,7 @@ export function ServiceDetailForm({
 
       {/* API targets + dependencies */}
       <div className="border-t border-border pt-4">
-        <div className="grid grid-cols-2 gap-4">
+        <div className={`grid gap-4 ${hasPython ? 'grid-cols-2' : 'grid-cols-1'}`}>
           <div>
             <div className="block text-[10px] uppercase tracking-wider text-muted-foreground mb-1">
               Base URLs
@@ -305,26 +306,28 @@ export function ServiceDetailForm({
               First URL is used as canonical scope for scans
             </div>
           </div>
-          <div>
-            <label
-              htmlFor="svc-deps-file"
-              className="block text-[10px] uppercase tracking-wider text-muted-foreground mb-1"
-            >
-              Dependencies File
-            </label>
-            <input
-              id="svc-deps-file"
-              type="text"
-              value={service.dependenciesFile}
-              onChange={e => onChange('dependenciesFile', e.target.value)}
-              disabled={isDisabled}
-              placeholder="requirements.txt"
-              className="w-full h-8 px-2 bg-background border border-border text-xs text-foreground font-mono focus:border-accent focus:outline-none disabled:opacity-50"
-            />
-            <div className="text-[9px] text-dim mt-1">
-              Path to dependency manifest for SCA scanning
+          {hasPython && (
+            <div>
+              <label
+                htmlFor="svc-deps-file"
+                className="block text-[10px] uppercase tracking-wider text-muted-foreground mb-1"
+              >
+                Python Dependencies File
+              </label>
+              <input
+                id="svc-deps-file"
+                type="text"
+                value={service.dependenciesFile}
+                onChange={e => onChange('dependenciesFile', e.target.value)}
+                disabled={isDisabled}
+                placeholder="requirements.txt"
+                className="w-full h-8 px-2 bg-background border border-border text-xs text-foreground font-mono focus:border-accent focus:outline-none disabled:opacity-50"
+              />
+              <div className="text-[9px] text-dim mt-1">
+                Override for pip-audit (auto-detected when absent)
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
 

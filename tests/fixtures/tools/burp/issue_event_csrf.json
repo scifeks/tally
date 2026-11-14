@@ -1,0 +1,30 @@
+{
+  "type": "issue_found",
+  "issue": {
+    "name": "Cross-site request forgery",
+    "origin": "https://goat.justinc.app",
+    "path": "/WebGoat/login",
+    "severity": "medium",
+    "confidence": "firm",
+    "description": "The form does not include a CSRF token.",
+    "remediation": "Include an unpredictable token in each form.",
+    "type_index": 5048320,
+    "serial_number": "7890",
+    "evidence": [
+      {
+        "type": "FirstOrderEvidence",
+        "request_response": {
+          "request": [
+            {"type": "DataSegment", "data": "R0VUIC9XZWJHb2F0L2xvZ2luIEhUVFAvMS4x"},
+            {"type": "HighlightSegment", "data": "SG9zdDogZ29hdC5qdXN0aW5jLmFwcA=="}
+          ],
+          "response": [
+            {"type": "DataSegment", "data": "SFRUUC8xLjEgMjAwIE9L"},
+            {"type": "SnipSegment", "length": 4096}
+          ]
+        }
+      }
+    ],
+    "fingerprint": ":type=CROSS_SITE_REQUEST_FORGERY:origin=https%3A%2F%2Fgoat.justinc.app:path=%2FWebGoat%2Flogin:variant=1"
+  }
+}

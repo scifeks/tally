@@ -170,7 +170,7 @@ class GraphqlCopLocalTool(BaseGraphqlCopTool):
         if not service.base_urls:
             return set()
 
-        gql_path_list = service.graphql_paths or ["/graphql"]
+        gql_path_list = service.graphql_paths or list(_DEFAULT_GQL_PATHS)
         for base in service.base_urls:
             for gql_path in gql_path_list:
                 target_urls.add(base.rstrip("/") + gql_path)

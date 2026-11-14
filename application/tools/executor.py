@@ -14,10 +14,9 @@ from application.ports.subprocess_runner import (
     SubprocessCancelled,
     SubprocessNotFound,
     SubprocessPermissionDenied,
-    SubprocessResult,
-    SubprocessRunnerPort,
     SubprocessTimeout,
 )
+from application.ports.tool_runner import CliToolRunnerPort, ToolRunOutput
 from application.ports.user_prompt import UserPromptPort
 from core.project_paths import ProjectPaths
 from domain.tools.base import ToolResult, ToolWrapper
@@ -69,7 +68,7 @@ def sanitize_command(cmd: list[str]) -> list[str]:
 
 
 class _RunResult(NamedTuple):
-    proc: SubprocessResult
+    proc: ToolRunOutput
     start: float
     success: bool
 
@@ -80,13 +79,13 @@ class ToolExecutor:
         project_name: str,
         base_path: Path,
         prompt: UserPromptPort,
-        subprocess_runner: SubprocessRunnerPort,
+        cli_tool_runner: CliToolRunnerPort,
         reporter: ProgressReporter | None = None,
     ) -> None:
         self.project_name = project_name
         self.base_path = Path(base_path)
         self._prompt = prompt
-        self._subprocess_runner = subprocess_runner
+        self._cli_runner = cli_tool_runner
         self._reporter: ProgressReporter = reporter or NullProgressReporter()
         self._sudo_approved = False
         self._cancel_token: CancellationToken = no_op_token()
@@ -107,6 +106,7 @@ class ToolExecutor:
         env: dict[str, str] | None = None,
         raw_cmd: list[str] | None = None,
         stdin_data: str | None = None,
+        tool_output_path: Path | None = None,
         **kwargs,
     ) -> ToolResult:
         """Build, approve, run, and capture a tool execution."""
@@ -147,6 +147,9 @@ class ToolExecutor:
         ts_file = datetime.now(UTC).strftime("%Y-%m-%d_%H%M%S")
         label = _sanitize_filename(label)
         findings_exit_ok = getattr(tool, "findings_exit_ok", False)
+        findings_exit_codes: frozenset[int] = getattr(
+            tool, "findings_exit_codes", frozenset({1})
+        )
 
         start = perf_counter()
         run_result = self._run_with_escalation(
@@ -157,6 +160,7 @@ class ToolExecutor:
             cwd,
             start,
             findings_exit_ok,
+            findings_exit_codes,
             env,
             stdin_data,
         )
@@ -175,6 +179,9 @@ class ToolExecutor:
             path.write_text(proc.stderr, encoding="utf-8")
             output_files["stderr"] = path
 
+        if tool_output_path is not None and tool_output_path.exists():
+            output_files["tool_output"] = tool_output_path
+
         # Combined output: stdout always first; append stderr on failure
         combined = proc.stdout or ""
         if not success and proc.stderr:
@@ -186,7 +193,7 @@ class ToolExecutor:
         except Exception:
             _log.exception("Tool %s: parse_output raised an exception", tool.name)
 
-        status = "✓ Complete" if success else "✗ Failed "
+        status = "PASS" if success else "FAIL"
         self._reporter.report(f"    {status} (exit {proc.returncode}, {duration}s)")
         _log.info(
             "Tool %s: exit=%d duration=%.1fs", tool.name, proc.returncode, duration
@@ -230,6 +237,7 @@ class ToolExecutor:
             cwd=pass_.cwd,
             env=pass_.env,
             stdin_data=pass_.stdin_data,
+            tool_output_path=pass_.output_path,
             **pass_.kwargs,
         )
 
@@ -239,6 +247,7 @@ class ToolExecutor:
         tool: Any,
         auto_approve: bool = True,
         label: str = "custom",
+        output_path: Path | None = None,
     ) -> ToolResult:
         """Execute a pre-built command, bypassing tool.build_command."""
         tool_timeout: int = getattr(tool, "timeout", None) or DEFAULT_TIMEOUT
@@ -248,6 +257,7 @@ class ToolExecutor:
             timeout=tool_timeout,
             label=label,
             raw_cmd=raw_cmd,
+            tool_output_path=output_path,
         )
 
     # Private helpers
@@ -288,7 +298,7 @@ class ToolExecutor:
     ) -> ToolResult:
         duration = round(perf_counter() - start, 3)
         _log.error("Tool %s: timed out after %ds", tool_name, timeout)
-        self._reporter.report(f"    ✗ Failed  (timeout after {timeout}s)")
+        self._reporter.report(f"    FAIL (timeout after {timeout}s)")
         return ToolResult(
             tool_name=tool_name,
             success=False,
@@ -306,10 +316,10 @@ class ToolExecutor:
         cwd: str | None,
         env: dict[str, str] | None,
         stdin_data: str | None = None,
-    ) -> SubprocessResult:
-        """Delegate to the SubprocessRunner port; translate cancellation."""
+    ) -> ToolRunOutput:
+        """Delegate to the CLI tool runner; translate cancellation."""
         try:
-            return self._subprocess_runner.run(
+            return self._cli_runner.run(
                 cmd,
                 timeout=timeout,
                 cwd=cwd,
@@ -329,6 +339,7 @@ class ToolExecutor:
         cwd: str | None,
         start: float,
         findings_exit_ok: bool,
+        findings_exit_codes: frozenset[int],
         env: dict[str, str] | None = None,
         stdin_data: str | None = None,
     ) -> _RunResult | ToolResult:
@@ -337,15 +348,17 @@ class ToolExecutor:
         except SubprocessTimeout:
             return self._timeout_result(tool_name, timestamp, start, timeout)
         except SubprocessNotFound:
-            self._reporter.report("    ✗ Failed  (command not found)")
+            self._reporter.report("    FAIL (command not found)")
             _log.error("Tool %s: command not found: %s", tool_name, cmd[0])
             return self._failure(tool_name, timestamp, f"Command not found: {cmd[0]!r}")
         except SubprocessPermissionDenied:
-            self._reporter.report("    ✗ Failed  (permission denied)")
+            self._reporter.report("    FAIL (permission denied)")
             _log.error("Tool %s: permission denied: %s", tool_name, cmd[0])
             return self._failure(tool_name, timestamp, f"Permission denied: {cmd[0]!r}")
 
-        success = proc.returncode == 0 or (findings_exit_ok and proc.returncode == 1)
+        success = proc.returncode == 0 or (
+            findings_exit_ok and proc.returncode in findings_exit_codes
+        )
 
         if not success and _needs_root(proc.stderr):
             sudo_cmd = ["sudo"] + cmd
@@ -370,7 +383,7 @@ class ToolExecutor:
                         )
                     except (SubprocessNotFound, SubprocessPermissionDenied):
                         self._reporter.report(
-                            "    ✗ Failed  (elevated privileges not available)"
+                            "    FAIL (elevated privileges not available)"
                         )
                         _log.error(
                             "Tool %s: elevated privileges unavailable", tool_name
@@ -382,11 +395,13 @@ class ToolExecutor:
                             " (sudo and su both failed)",
                         )
                 except SubprocessPermissionDenied:
-                    self._reporter.report("    ✗ Failed  (permission denied)")
+                    self._reporter.report("    FAIL (permission denied)")
                     _log.error("Tool %s: permission denied running sudo", tool_name)
                     return self._failure(
                         tool_name, timestamp, "Permission denied running sudo"
                     )
-                success = proc.returncode == 0
+                success = proc.returncode == 0 or (
+                    findings_exit_ok and proc.returncode in findings_exit_codes
+                )
 
         return _RunResult(proc=proc, start=start, success=success)

@@ -229,7 +229,7 @@ stripped before the OAS3 output is written.
 After a successful Noir run, if 0 endpoints are discovered, Tally prints:
 
 ```
-⚠ noir found 0 endpoints. The framework may not be supported by noir.
+WARNING noir found 0 endpoints. The framework may not be supported by noir.
   ZAP will fall back to spider-only mode for this repository.
 ```
 

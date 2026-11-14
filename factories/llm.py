@@ -12,7 +12,7 @@ if TYPE_CHECKING:
 
 
 def create_llm_provider(
-    role: Literal["chat", "enrichment", "report"],
+    role: Literal["chat", "enrichment", "report", "endpoint_extraction"],
     base_path: str | Path,
 ) -> LLMProvider:
     from infrastructure.llm.factory import get_llm_provider

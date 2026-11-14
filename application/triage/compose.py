@@ -136,16 +136,28 @@ def build_opencode_config(
                     "baseURL": base_url.rstrip("/") + "/v1",
                 },
                 "models": {
-                    model: {"name": model},
+                    model: {
+                        "name": model,
+                        "limit": {
+                            "context": 32768,
+                            "output": 4096,
+                        },
+                        "reasoningEffort": "none",
+                    },
                 },
             },
         },
         "permission": {
-            "edit": "deny",
+            "edit": "allow",
             "bash": {"*": "deny"},
             "webfetch": "deny",
             "read": {"*": "allow"},
-            "write": {"*": "deny"},
+            "write": {
+                "*": "deny",
+                "/workspace/out/verdict.json": "allow",
+            },
+            "task": "deny",
+            "todowrite": "deny",
         },
     }
     return json.dumps(config, indent=2) + "\n"
@@ -190,6 +202,8 @@ def build_compose_dict(
     opencode_config_path: Path | None = None,
     claude_settings_path: Path | None = None,
     claude_hook_script_path: Path | None = None,
+    opencode_share_path: Path | None = None,
+    verdict_out_dir: Path | None = None,
 ) -> dict[str, Any]:
     """Builds the compose file structure as a dict.
 
@@ -203,6 +217,7 @@ def build_compose_dict(
                 "type": "bind",
                 "source": str(host_path),
                 "target": f"/workspace/repos/{name}",
+                "read_only": True,
             }
         )
 
@@ -215,7 +230,6 @@ def build_compose_dict(
     )
     for oc_dir in (
         "/home/agent/.opencode",
-        "/home/agent/.local/share/opencode",
         "/home/agent/.local/state/opencode",
         "/home/agent/.cache/opencode",
         "/home/agent/.config/opencode",
@@ -225,6 +239,31 @@ def build_compose_dict(
                 "type": "tmpfs",
                 "target": oc_dir,
                 "tmpfs": {"mode": 0o1777},
+            }
+        )
+    if opencode_share_path is not None:
+        volumes.append(
+            {
+                "type": "bind",
+                "source": str(opencode_share_path),
+                "target": "/home/agent/.local/share/opencode",
+            }
+        )
+    else:
+        volumes.append(
+            {
+                "type": "tmpfs",
+                "target": "/home/agent/.local/share/opencode",
+                "tmpfs": {"mode": 0o1777},
+            }
+        )
+
+    if verdict_out_dir is not None:
+        volumes.append(
+            {
+                "type": "bind",
+                "source": str(verdict_out_dir),
+                "target": "/workspace/out",
             }
         )
 
@@ -447,6 +486,12 @@ def generate_triage_compose(
 
     hook_script_path = app_root / "docker" / "triage-agent" / "hooks" / "scope-guard.sh"
 
+    opencode_share_path = app_root / "logs" / "triage" / "opencode-workspace"
+    opencode_share_path.mkdir(parents=True, exist_ok=True)
+
+    verdict_out_dir = app_root / "logs" / "triage" / "verdicts"
+    verdict_out_dir.mkdir(parents=True, exist_ok=True)
+
     compose_dict = build_compose_dict(
         repo_paths=repo_paths,
         claude_creds=claude_creds,
@@ -459,6 +504,8 @@ def generate_triage_compose(
         opencode_config_path=oc_config_path,
         claude_settings_path=claude_settings_path,
         claude_hook_script_path=hook_script_path,
+        opencode_share_path=opencode_share_path if not is_claude and model else None,
+        verdict_out_dir=verdict_out_dir if not is_claude and model else None,
     )
 
     content = yaml.dump(

@@ -2,7 +2,7 @@
 
 ## Overview
 
-Triage uses an AI agent to assess SAST and API findings from your scans. The agent
+Triage uses an AI agent to assess SAST, API, and DAST findings from your scans. The agent
 reads the finding metadata and the associated source file, then produces a
 **verdict** with confidence level, severity, finding type, reasoning, remediation
 guidance, attack vector, and call stack. SCA findings are not triaged because they
@@ -14,26 +14,46 @@ Two backends are supported:
   default).
 - **OpenCode** connects to a local Ollama instance running any compatible model.
 
-Both backends run inside a Docker container with filesystem and network sandboxing.
-The agent receives the finding and source content inline, produces a structured JSON
-verdict, and exits. No persistent agent state is kept between findings.
+Triage also runs in one of two modes. Your configuration determines which one
+applies; it is not a preference you set directly.
 
-Triage can also be started from the web UI. The Triage page shows batch progress in real time and lets you resume failed runs. See [docs/ui.md](ui.md) for the UI walkthrough.
+- **Auto-triage** runs headless inside a Docker container with filesystem and
+  network sandboxing, with no interaction required once started. It requires
+  either an Anthropic API key (Claude Code backend) or a local model (OpenCode
+  backend).
+- **MCP triage** runs interactively inside your own Claude Code session
+  instead of the container, using the `/tally-triage` skill. It is required
+  when using Claude Code without an API key: provider terms reserve
+  subscription sessions for direct interactive use, not headless automation,
+  so Tally cannot run Claude Code unattended inside the container in that
+  case. See [MCP Triage Mode](#mcp-triage-mode) for setup and usage.
+
+In auto-triage, the agent receives the finding and source content inline,
+produces a structured JSON verdict, and exits. No persistent agent state is
+kept between findings.
+
+Triage can also be started from the web UI. The Triage page shows batch progress in real time and lets you resume failed runs. See [docs/web-ui.md](web-ui.md) for the UI walkthrough.
 
 ---
 
 ## Prerequisites
 
-- **Docker** installed and running on the host
 - `triage_inference` configured in `config/global.json` with a valid provider
-- Credentials configured for your chosen backend (see [Host Setup](#host-setup))
 - At least one completed scan with untriaged findings
+- **For auto-triage:** Docker installed and running on the host, and either
+  an Anthropic API key (Claude Code backend) or a running local model
+  (OpenCode backend) (see [Host Setup](#host-setup))
+- **For MCP triage:** Claude Code installed locally and an MCP token (see
+  [MCP Triage Mode](#mcp-triage-mode))
 
 ---
 
 ## Host Setup
 
 ### Claude Code with API key
+
+An API key enables auto-triage: Tally runs Claude Code headlessly inside the
+triage container instead of routing you to MCP mode.
 
 Set `claude.api_key` in `config/global.json` or export `ANTHROPIC_API_KEY` as an
 environment variable. When `claude.api_key` is non-empty, Tally injects it as
@@ -50,22 +70,15 @@ environment variable. When `claude.api_key` is non-empty, Tally injects it as
 }
 ```
 
-### Claude Code with OAuth
+### Claude Code without an API key
 
-When `claude.api_key` is empty, Tally falls back to **OAuth mode**. Run `claude`
-on the host to authenticate before your first triage run. Tally mounts two
-credential files read-only into the container:
-
-- `~/.claude.json` (account identity)
-- `~/.claude/.credentials.json` (OAuth tokens)
-
-If either file is missing, compose generation fails with a message directing you
-to authenticate on the host or set an API key.
-
-The container cannot persist refreshed tokens to disk because the mount is
-read-only. For short triage calls (30-60 seconds per finding), in-memory refresh
-is sufficient. If you see authentication errors, re-run `claude` on the host to
-refresh the session.
+When `claude.api_key` is empty and `ANTHROPIC_API_KEY` is not set, Tally cannot
+run headless auto-triage for Claude Code. Auto-triage would otherwise run
+Claude Code unattended inside the triage container using your OAuth session,
+and provider terms reserve subscription sessions for direct interactive use,
+not headless automation. Tally runs triage in [MCP mode](#mcp-triage-mode)
+instead: the agent executes inside your own authenticated Claude Code session
+rather than the container.
 
 ### Local Model (Ollama / Llama.cpp)
 
@@ -98,7 +111,7 @@ unless explicitly overridden.
 
 ## Running Triage
 
-Run triage on all untriaged SAST and API findings in the active project:
+Run triage on all untriaged SAST, API, and DAST findings in the active project:
 
 ```
 [acme-audit]> triage
@@ -121,28 +134,6 @@ Triage: 3 sessions run, 2 success, 1 failed, 0 incomplete
 
 The image build message appears only on the first run. On later runs, containers
 start within a few seconds if they are not already running.
-
-### Batch-only mode
-
-```
-[acme-audit]> triage --batch
-Created 3 batches
-```
-
-Creates triage batches from untriaged findings without starting containers or
-invoking the agent. Use this to preview how findings will be grouped before
-committing to a full triage run.
-
-### Dry-run mode
-
-```
-[acme-audit]> triage --dry-run
-Rendered 3 batch prompt(s); see DEBUG log
-```
-
-Creates batches and renders the prompts that would be sent to the agent, writing
-them to the DEBUG log. No containers are started and no agent is invoked. Use this
-to inspect prompt construction or debug rendering issues.
 
 ---
 
@@ -191,8 +182,11 @@ The next `triage` call starts containers from the rebuilt image.
 
 ### What the sandbox protects against
 
-**Filesystem isolation.** The agent can only access repositories mounted into the
-container at `/workspace/repos/`. All other host files are invisible. Credential
+**Filesystem isolation.** The agent runs with a working directory and file access
+scope limited to `/workspace`. Repositories are mounted into the container at
+`/workspace/repos/`, and the agent CLI tools (for Claude Code and OpenCode) are
+invoked with `--add-dir /workspace` or `--dir /workspace` flags, restricting all
+file operations to that subtree. All other host files are invisible. Credential
 files (when using OAuth mode) are mounted read-only.
 
 **Network restriction.** A tinyproxy sidecar running in FilterDefaultDeny mode
@@ -244,8 +238,9 @@ Claude Code invokes a hosted Anthropic model (Sonnet by default, configurable vi
 `claude.model` in `config/global.json`). Frontier models produce more accurate
 verdicts, particularly for findings that require data-flow analysis, recognizing
 sanitization patterns, or evaluating framework-level protections. Requires network
-access to `api.anthropic.com` and an Anthropic API key or authenticated OAuth
-session.
+access to `api.anthropic.com` and an Anthropic API key configured in
+`config/global.json` or as `ANTHROPIC_API_KEY`. Without a key, triage runs in
+[MCP mode](#mcp-triage-mode) instead of this headless flow.
 
 ### Local model (OpenCode)
 
@@ -254,19 +249,13 @@ you run. Smaller models (such as Qwen3-Coder-30B) produce more conservative
 verdicts and are more likely to miss subtle sanitization or protection patterns.
 No finding data leaves your network.
 
-### What to expect
+### Batching differences
 
-In proof-of-concept testing with 6 SAST findings across both backends:
-
-- Claude Code (Sonnet): 6/6 format adherence, 37-second median per finding
-- OpenCode (Qwen3-Coder-30B): 5/6 format adherence, 20-second median per finding
-  (one finding timed out at 120 seconds)
-- The two backends fully agreed on 1 of 5 findings where both produced results
-
-Running both backends on the same findings will produce different results. This is
-expected. The frontier model is more aggressive about identifying false positives
-when data-flow evidence supports it, while the local model tends toward more
-conservative assessments.
+Claude Code processes up to 4 findings per batch. Local models (Ollama and
+Llama.cpp) use a batch size of 1 (one finding per agent invocation) because
+smaller models perform better with isolated analysis tasks. This means a scan
+with 100 SAST findings will result in 25 agent invocations for Claude Code but
+100 for OpenCode. Batching is automatic and cannot be overridden.
 
 ---
 
@@ -277,6 +266,200 @@ triage run. Set `post_triage_sync` to `["defectdojo"]` in
 `config/global.json`. See
 [docs/integrations/defect-dojo.md](integrations/defect-dojo.md#automatic-post-triage-sync)
 for setup details.
+
+---
+
+## MCP Triage Mode
+
+MCP triage mode runs the triage agent inside your own Claude Code session
+instead of inside a Docker container. It exists so that Claude users without
+an API key can still run triage without violating Anthropic's terms, which
+reserve subscription sessions for direct interactive use rather than
+headless automation. Tally runs an MCP server that hands out triage batches
+and accepts verdicts back; you invoke the `/tally-triage` skill in Claude
+Code to process them.
+
+### Mode determination
+
+Tally decides whether a project runs **auto** triage (headless, inside the
+Docker container) or **MCP** triage (interactive, inside your Claude Code
+session) from the configured `triage_inference` provider and whether an API
+key is present. This is not a setting you choose: it is enforced when
+triage starts, and starting auto-triage without an API key for a frontier
+provider fails with an error directing you to MCP mode instead.
+
+| Provider | API key present | Mode |
+|---|---|---|
+| `claude` / `openai` | Yes | auto |
+| `claude` / `openai` | No | mcp |
+| `ollama` / `llama_cpp` / `opencode` | N/A | auto |
+
+Frontier providers (`claude`, `openai`) without an API key fall back to MCP
+mode because auto-triage would otherwise run the provider's CLI unattended
+inside the triage container using your subscription session, and provider
+terms reserve subscription sessions for direct interactive use. Local
+providers always run in auto mode: there is no subscription session to
+protect, and the container never leaves your network.
+
+### Web UI MCP triage flow
+
+When a project's triage mode is `mcp`, the Triage page (`/triage`) shows a
+**Start MCP Triage** button in place of **Start Triage**. Clicking it
+creates triage batches for the latest scan run and starts the MCP server
+if it is not already running.
+
+An instructions panel shows the server host and port. The first time you
+start MCP triage for a project, the panel also shows a bearer token; copy
+it, since it is not shown again. On later starts, the panel reminds you to
+use the token you already saved instead of generating a new one. The panel
+also shows the command to run: open Claude Code and invoke `/tally-triage`.
+
+Batch and log results from MCP triage appear in the same panels used for
+auto-triage: the batches panel and the triage log update identically
+regardless of which mode produced them.
+
+Click **Stop MCP Triage** to stop the server. This does not cancel work
+already in progress in Claude Code; it only stops Tally's MCP server from
+accepting further connections.
+
+### REPL MCP triage flow
+
+#### Step 1: Generate an MCP token
+
+```
+[myproject]> mcp token create ci-agent
+Token created: ci-agent
+Token value (save this, it won't be shown again):
+  dG9rZW5fZXhhbXBsZV92YWx1ZV9oZXJl...
+```
+
+Save the token value securely. You will pass it to Claude Code when
+configuring the MCP connection.
+
+#### Step 2: Create triage batches
+
+```
+[myproject]> mcp triage prepare
+Created 12 batches (43 findings) for run 7
+```
+
+`mcp triage prepare` groups untriaged SAST, API, and DAST findings from a
+scan run into batches for MCP processing. Pass a run ID to target a
+specific scan; omit it to use the most recent run:
+
+```
+[myproject]> mcp triage prepare 7
+```
+
+#### Step 3: Start the MCP server
+
+```
+[myproject]> mcp serve start
+MCP server started on 127.0.0.1:8765
+```
+
+Bare `mcp serve` (no subcommand) prints a submenu instead of starting
+anything. Manage a running server with `mcp serve status`, `mcp serve
+stop`, and `mcp serve restart`.
+
+### Claude Code Connection
+
+Run `mcp show-config` to generate a ready-to-run setup command. Tally
+reads the token from its encrypted store and embeds it in the command:
+
+```
+[myproject]> mcp show-config
+Run this command in your terminal:
+
+  claude mcp add-json tally '{"type":"http","url":"http://127.0.0.1:8765/mcp","headers":{"Authorization":"Bearer <token>"}}' --scope user
+
+One-time setup. Restart Claude Code after running.
+```
+
+Copy the command and run it in a terminal. This registers the Tally MCP
+server in Claude Code's user-level config (`~/.claude.json`). The token
+comes from `mcp token create` (see
+[Step 1](#step-1-generate-an-mcp-token) above). You only need to do
+this once; if you revoke and recreate the token, re-run `mcp show-config`
+to get an updated command.
+
+If you restart Tally's MCP server while Claude Code is already connected,
+Claude Code may not detect the change automatically. Run `/mcp` in Claude
+Code and reconnect the `tally` server.
+
+### Invoking triage in Claude Code
+
+With batches prepared and the server running, open Claude Code in the
+project directory and run:
+
+```
+/tally-triage
+```
+
+Claude Code asks for your project name and MCP token, reports how many
+batches and findings are pending, and asks for a single approval to
+proceed. Once approved, it fetches each batch, dispatches concurrent
+`triage-agent` subagents (one per finding), submits the collected
+verdicts, and repeats until no batches remain. There is no per-batch
+confirmation after the initial approval; verdicts are persisted to the
+project database as each batch completes.
+
+### Concurrent sessions
+
+Do not run more than one `/tally-triage` session against the same project
+at a time. Auto-triage enforces a single run per project through a lock;
+MCP triage has no equivalent lock, so concurrent sessions pull batches
+from the same shared queue and produce interleaved, unpredictable results.
+
+---
+
+## DAST Triage
+
+DAST (dynamic application security testing) triage differs from SAST triage in one fundamental way: it assumes the vulnerability exists. A dynamic scanner such as ZAP or Burp has already confirmed the behavior by sending a crafted request and observing a vulnerable response. The triage agent's task is to locate the vulnerable code path in the source tree.
+
+Unlike SAST triage, which asks "is this a real vulnerability?", DAST triage asks a different question: "where is the vulnerability in the source code that allows this endpoint to be exploited?" This inverted approach focuses investigation on finding the code, not re-confirming the scanner's observation. The resulting verdict includes a `call_stack` field that traces the full vulnerability chain from request intake to the vulnerable operation.
+
+### Evidence differences between ZAP and Burp
+
+ZAP and Burp provide different evidence in their findings:
+
+**ZAP** includes:
+- Alert name and severity
+- Attack payload (the malicious input sent by the scanner)
+- Parameter name (the injection point)
+- Evidence string (proof of behavior extracted from the response)
+
+**Burp** includes:
+- Alert name, severity, and confidence
+- Full HTTP request and response (decoded and human-readable)
+- Vulnerability fingerprint type (identifies the specific variant detected)
+- Remediation guidance (vendor-provided fix recommendations)
+
+The triage agent reads both formats and extracts the evidence needed to guide source code investigation.
+
+### Verdict format for DAST findings
+
+DAST verdicts use the standard triage verdict schema with one required addition:
+
+- `finding_id`, `confidence`, `finding_type`, `severity`, `access_required`, `exploitation_complexity`, `user_interaction`, `reasoning`, `remediation` are the same as SAST verdicts.
+- `attack_vector` is the HTTP method, endpoint path, and vulnerable parameter (example: `POST /api/user?id=1 (id parameter)`).
+- `call_stack` is required and must be non-empty. A JSON array of strings, each in the format `file:line function_name`, that traces every file and function from request entry to the vulnerable operation.
+
+The `call_stack` field is mandatory and distinguishes DAST verdicts from other finding types. The agent must examine the source tree to populate this field before returning a verdict.
+
+### Source code not examined error
+
+If the agent cannot locate the repository, route handler, or source code for an endpoint, it returns an error object instead of a verdict:
+
+```json
+{
+  "error": "source_not_examined",
+  "finding_id": 12345,
+  "reason": "Could not locate route handler for POST /api/endpoint"
+}
+```
+
+This prevents false positives from incomplete source examination.
 
 ---
 

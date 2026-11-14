@@ -29,6 +29,51 @@ from domain.tools.scan_types.resources import IExecutionResources
 logger = logging.getLogger(__name__)
 
 
+def _emit_skipped(
+    resources: IExecutionResources,
+    config: ScanTypeConfig,
+    repo_name: str,
+    tool_name: str,
+    segment: str,
+    skip_reason: str,
+) -> None:
+    resources.event_sink.emit(
+        se.ToolSkipped(
+            run_id=config.run_id or 0,
+            project_id=config.project_id,
+            segment=segment,
+            repo=repo_name,
+            tool=tool_name,
+            message=f"{tool_name} skipped: {skip_reason}",
+            skip_reason=skip_reason,
+        )
+    )
+
+
+def _skip_summary(
+    tool_name: str,
+    skip_reason: str,
+    duration: float,
+    config: ScanTypeConfig,
+    resources: IExecutionResources,
+    repo_name: str,
+    segment: str,
+) -> ScanSummary:
+    resources.display.print_tool_line(
+        ToolDisplayRow(tool_name, False, True, 0, 0.0, skip_reason)
+    )
+    _emit_skipped(resources, config, repo_name, tool_name, segment, skip_reason)
+    return ScanSummary(
+        total_tools_run=0,
+        total_tools_skipped=1,
+        total_tools_failed=0,
+        results=[],
+        duration_seconds=duration,
+        findings_ingested=0,
+        findings_by_tool={},
+    )
+
+
 class ToolOnRepoScan(ScanType):
     """Run a single tool against one named repository."""
 
@@ -60,24 +105,62 @@ class ToolOnRepoScan(ScanType):
 
         _noir_skip = noir_skip_reason(service)
         if self.tool_name == "noir" and _noir_skip is not None:
-            raise ValueError(f"Noir does not support '{repo.name}': {_noir_skip}.")
+            return _skip_summary(
+                self.tool_name,
+                f"noir unsupported: {_noir_skip}",
+                0.0,
+                config,
+                resources,
+                repo.name,
+                "",
+            )
 
         tool_config = registry.get_tool_config(self.tool_name)
         if tool_config is None:
-            raise ValueError(f"Tool '{self.tool_name}' is not registered.")
+            return _skip_summary(
+                self.tool_name,
+                "not registered",
+                0.0,
+                config,
+                resources,
+                repo.name,
+                "",
+            )
 
         try:
             tool: Any = factory.create(self.tool_name, tool_config)
         except Exception as exc:
-            raise ValueError(f"Tool '{self.tool_name}' factory error: {exc}") from exc
+            logger.warning("Factory failed for %r: %s", self.tool_name, exc)
+            return _skip_summary(
+                self.tool_name,
+                "factory error",
+                0.0,
+                config,
+                resources,
+                repo.name,
+                "",
+            )
 
         if not tool.check_available():
-            raise ValueError(f"Tool '{self.tool_name}' is not installed.")
+            return _skip_summary(
+                self.tool_name,
+                "not installed",
+                0.0,
+                config,
+                resources,
+                repo.name,
+                "",
+            )
 
         if tool.requires_base_urls and not service.base_urls:
-            raise ValueError(
-                f"Tool '{self.tool_name}' requires base_urls but none are"
-                f" configured for service '{service.name}'."
+            return _skip_summary(
+                self.tool_name,
+                "no base_urls configured",
+                0.0,
+                config,
+                resources,
+                repo.name,
+                getattr(tool, "scan_segment", "") or "",
             )
 
         skip_sca, skip_reason = should_skip_sca_tool(tool, service, repo.path)

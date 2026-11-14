@@ -8,7 +8,17 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
+    from application.triage.prompts.triage_prompt import TriagePrompt
     from application.triage.verdict import Verdict
+
+
+class TriageBackendUnavailable(RuntimeError):
+    """Backend transport is gone and further calls in this run will fail.
+
+    Adapters raise this when their persistent process (relay, MCP host,
+    etc.) has died. The runner catches it, aborts the whole triage run,
+    and leaves remaining batches ``pending`` so a resume can retry them.
+    """
 
 
 @dataclass(frozen=True)
@@ -80,7 +90,7 @@ class OneshotTriagePort(Protocol):
 
     def run_triage(
         self,
-        prompt: str,
+        prompt: TriagePrompt,
         *,
         finding_id: int,
         timeout_seconds: int,
@@ -90,4 +100,4 @@ class OneshotTriagePort(Protocol):
 
 @runtime_checkable
 class OneshotTriageBackendPort(OneshotTriagePort, TriageSessionPreparerPort, Protocol):
-    """One-shot backend contract. Adapters implement this from 2.2."""
+    """One-shot backend contract used by the runner."""

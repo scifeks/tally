@@ -21,6 +21,7 @@ from application.pipeline.strategies import PersistOnlyStrategy  # noqa: E402
 from application.ports.embedding_provider import EmbeddingProvider  # noqa: E402
 from application.project import ProjectManager  # noqa: E402
 from application.rag import EnrichmentPipeline  # noqa: E402
+from application.rag.finding_indexer import FindingIndexer  # noqa: E402
 from application.rag.knowledge_base import FindingKnowledgeBase  # noqa: E402
 from core.project_paths import ProjectPaths  # noqa: E402
 from domain.pipeline.events import IngestCompleted  # noqa: E402
@@ -439,7 +440,10 @@ class TestEnrichmentPipeline:
             project_name=project_env["project_name"],
             base_path=str(project_env["base_path"]),
         )
-        handler = PersistOnlyStrategy(finding_repo=finding_repo)
+        handler = PersistOnlyStrategy(
+            finding_repo=finding_repo,
+            indexer=FindingIndexer(finding_repo=finding_repo),
+        )
         with patch(
             "application.pipeline.handlers._build_knowledge_base",
             side_effect=_build_test_kb,

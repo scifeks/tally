@@ -82,7 +82,9 @@ def perform_login(auth: RepoAuth) -> dict[str, str]:
     username, password = creds
 
     try:
-        with httpx.Client(follow_redirects=True, timeout=15) as client:
+        with httpx.Client(
+            follow_redirects=True, timeout=15, verify=auth.verify_ssl
+        ) as client:
             # GET first to harvest CSRF tokens from hidden inputs
             get_resp = client.get(auth.login_url)
             get_resp.raise_for_status()

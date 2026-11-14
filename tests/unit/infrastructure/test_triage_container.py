@@ -91,6 +91,16 @@ class TestUp:
         ):
             adapter.up(compose)
 
+    def test_up_includes_wait_flag(
+        self, adapter: DockerTriageContainer, tmp_path: Path
+    ) -> None:
+        compose = tmp_path / "docker-compose.yaml"
+        mock_result = type("R", (), {"stdout": "", "stderr": "", "returncode": 0})()
+        with patch(_RUN, return_value=mock_result) as mock_run:
+            adapter.up(compose)
+        cmd = mock_run.call_args[0][0]
+        assert "--wait" in cmd
+
 
 class TestDown:
     def test_calls_compose_down(

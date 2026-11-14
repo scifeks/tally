@@ -11,7 +11,11 @@ if TYPE_CHECKING:
 
 class FindingRepositoryPort(Protocol):
     def insert_findings(
-        self, run_id: int, findings: list[NormalizedFinding]
+        self,
+        run_id: int,
+        findings: list[NormalizedFinding],
+        *,
+        should_report: bool = False,
     ) -> None: ...
     def delete_findings(self, tools: list[str] | None = None) -> None: ...
     def delete_findings_by_tool_name(self, tools: list[str]) -> None: ...
@@ -46,7 +50,8 @@ class FindingRepositoryPort(Protocol):
         triage_meta: dict,
         strategy: str,
         *,
-        triaged_by: str = "claudecode",
+        triage_provider: str | None = None,
+        triaged_by: str,
         source: str = "auto_triage",
     ) -> bool: ...
     def get_reportable_findings(self) -> list[Finding]: ...
@@ -93,5 +98,8 @@ class FindingRepositoryPort(Protocol):
         columns: dict[str, Any],
         meta: dict[str, Any],
         fingerprint: str,
+        *,
+        should_report: bool = False,
     ) -> int: ...
     def delete_finding_by_id(self, finding_id: int) -> None: ...
+    def mark_as_duplicate(self, finding_id: int, survivor_id: int) -> None: ...

@@ -1,0 +1,70 @@
+{
+  "ollama": {
+    "base_url": "http://10.1.20.101:11434",
+    "model": "gemma4:latest",
+    "timeout_seconds": 60,
+    "num_ctx": 32768
+  },
+  "llama_cpp": {
+    "base_url": "http://10.1.20.101:11435",
+    "model": "qwen3-14b",
+    "timeout_seconds": 60,
+    "num_ctx": 8192
+  },
+  "claude": {
+    "model": "claude-opus-4-6",
+    "max_tokens": 1024,
+    "timeout_seconds": 60
+  },
+  "chat_inference": {
+    "provider": "ollama"
+  },
+  "enrichment_inference": {
+    "provider": "ollama",
+    "model": "qwen3.6:27b",
+    "debug": true
+  },
+  "report_inference": {
+    "provider": "ollama",
+    "timeout_seconds": 120
+  },
+  "embedding_inference": {
+    "provider": "ollama",
+    "model": "nomic-embed-text:latest",
+    "debug": true
+  },
+  "noir_inference": {
+    "provider": "ollama",
+    "timeout_seconds": 120
+  },
+  "triage_inference": {
+    "provider": "ollama",
+    "model": "qwen3.6:27b",
+    "timeout_seconds": 600,
+    "debug": true,
+    "retry_count": 1
+  },
+  "antares_inference": {
+    "provider": "ollama",
+    "model": "granite3-dense:8b",
+    "timeout_seconds": 300
+  },
+  "defectdojo": {
+    "url": "https://dojo.justinc.app",
+    "api_token": "c7944dd56341eb45d210bd457f5adf10e42f1daf",
+    "verify_ssl": false,
+    "product_type": "Tally Scan",
+    "engagement_type": "Tally Engagement"
+  },
+  "post_scan_sync": [
+    "defectdojo"
+  ],
+  "projects_dir": "./projects",
+  "location_attestation_confirmed": true,
+  "enrichment_max_concurrency": 4,
+  "report_finding_prefix": "TAL",
+  "web_ui_host": "10.1.20.101",
+  "web_ui_port": 4173,
+  "web_ui_vite_port": 3000,
+  "subprocess_stream_chunk_bytes": 268435456
+}

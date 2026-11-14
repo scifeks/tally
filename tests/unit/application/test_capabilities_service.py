@@ -122,3 +122,28 @@ class TestComputeShape:
         assert caps.triage_enabled is True
         assert caps.report_retention_enabled is False
         assert caps.max_report_history == 10
+        assert caps.triage_backend_label == "Claude Code"
+
+    def test_backend_label_exposed(self, tmp_path: Path) -> None:
+        readiness = TriageReadiness(
+            provider="ollama",
+            backend_label="OpenCode (Ollama)",
+            enabled=True,
+            reason=None,
+        )
+        _write_global_config(tmp_path, {})
+        svc = CapabilitiesService(str(tmp_path), triage_readiness=readiness)
+        caps = svc.compute()
+        assert caps.triage_backend_label == "OpenCode (Ollama)"
+
+    def test_backend_label_none_when_disabled(self, tmp_path: Path) -> None:
+        readiness = TriageReadiness(
+            provider="",
+            backend_label=None,
+            enabled=False,
+            reason="disabled",
+        )
+        _write_global_config(tmp_path, {})
+        svc = CapabilitiesService(str(tmp_path), triage_readiness=readiness)
+        caps = svc.compute()
+        assert caps.triage_backend_label is None

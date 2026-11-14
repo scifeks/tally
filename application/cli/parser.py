@@ -43,7 +43,11 @@ def build_parser() -> argparse.ArgumentParser:
             "  tally --project myapp --command repo-edit"
             " --repo-name backend --languages python,go\n"
             "  tally --project myapp --command repo-delete"
-            " --repo-name backend"
+            " --repo-name backend\n"
+            "  tally --project myapp --command finding-add"
+            " --repo backend --finding-file finding.json\n"
+            "  tally --project myapp --command finding-update"
+            " --finding-id 42 --status fixed"
         ),
     )
 
@@ -71,12 +75,15 @@ def build_parser() -> argparse.ArgumentParser:
             "stats",
             "integration-sync",
             "ui",
+            "mcp",
             "project-create",
             "project-list",
             "repo-add",
             "repo-list",
             "repo-edit",
             "repo-delete",
+            "finding-add",
+            "finding-update",
         ],
         help="Command to execute",
     )
@@ -102,7 +109,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--repo",
         type=str,
         metavar="REPOS",
-        help="Comma-separated repository names to scan",
+        help="Comma-separated repository names to scan; one name for finding-add",
     )
     parser.add_argument(
         "--domain",
@@ -215,6 +222,14 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     parser.add_argument(
+        "--port",
+        type=int,
+        default=None,
+        metavar="PORT",
+        help="Port override for ui or mcp commands",
+    )
+
+    parser.add_argument(
         "--company-name",
         type=str,
         default="",
@@ -241,6 +256,36 @@ def build_parser() -> argparse.ArgumentParser:
         type=str,
         metavar="NAME",
         help="Repository name (repo-add, repo-edit, repo-delete)",
+    )
+    parser.add_argument(
+        "--finding-file",
+        type=str,
+        metavar="PATH",
+        help="Finding payload JSON file, or - for stdin (finding-add)",
+    )
+    parser.add_argument(
+        "--status",
+        type=str,
+        default=None,
+        metavar="STATUS",
+        help=(
+            "Finding status (finding-add default: active,"
+            " finding-update: unchanged if omitted)"
+        ),
+    )
+    parser.add_argument(
+        "--finding-id",
+        type=int,
+        default=None,
+        metavar="ID",
+        help="Finding ID to update (finding-update only)",
+    )
+    parser.add_argument(
+        "--description",
+        type=str,
+        default=None,
+        metavar="TEXT",
+        help="Finding description (finding-update only)",
     )
     parser.add_argument(
         "--repo-path",

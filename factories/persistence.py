@@ -27,6 +27,9 @@ from infrastructure.store.repositories.finding_history import (
     FindingHistoryRepository,
 )
 from infrastructure.store.repositories.findings import FindingRepository
+from infrastructure.store.repositories.organizer_state import (
+    OrganizerStateRepository,
+)
 from infrastructure.store.repositories.reports import ReportRepository
 from infrastructure.store.repositories.repositories import (
     RepositoryRepository,
@@ -53,6 +56,7 @@ if TYPE_CHECKING:
 
     from application.chat.session_service import ChatSessionService
     from application.findings.findings_service import FindingsService
+    from application.mcp.ingest_service import McpIngestService
     from application.ports.audit_repository import AuditRepositoryPort
     from application.ports.chat_session_repository import (
         ChatSessionRepositoryPort,
@@ -195,6 +199,18 @@ def create_finding_repo(
     return FindingRepository(_init_factory(db_path))
 
 
+def create_ingest_service(db_path: Path) -> McpIngestService:
+    """Create an McpIngestService for the given project DB."""
+    from application.mcp.ingest_service import McpIngestService
+
+    factory = _init_factory(db_path)
+    return McpIngestService(
+        finding_repo=FindingRepository(factory),
+        run_repo=RunRepository(factory),
+        repo_repo=RepositoryRepository(factory),
+    )
+
+
 def create_url_finding_repo(
     db_path: Path,
 ) -> UrlFindingRepositoryPort:
@@ -221,6 +237,12 @@ def create_saved_scans_repo(
 ) -> SavedScansRepositoryPort:
     """Create a SavedScansRepository for the given DB."""
     return SavedScansRepository(_init_factory(db_path))
+
+
+def create_organizer_state_repo(
+    db_path: Path,
+) -> OrganizerStateRepository:
+    return OrganizerStateRepository(_init_factory(db_path))
 
 
 def create_scan_repos(
@@ -266,7 +288,7 @@ def build_url_repo_factory() -> Callable[[Path], UrlFindingRepositoryPort]:
 
 
 # ------------------------------------------------------------------
-# Service factories (replace for_project classmethods)
+# Service factories
 # ------------------------------------------------------------------
 
 
@@ -284,6 +306,7 @@ def create_findings_service(
     )
     from application.findings.findings_service import FindingsService
     from application.locking import LockQueryService
+    from application.rag.finding_indexer import FindingIndexer
 
     row, paths = _resolve_project(registry, project_id)
     findings_db_exists = paths.findings_db.exists()
@@ -298,6 +321,7 @@ def create_findings_service(
         project_repo=project_repo,
         analyst=analyst,
         lock_query=LockQueryService(),
+        indexer=FindingIndexer(finding_repo=finding_repo),
         project_id=project_id,
         project_name=row.name,
         findings_db_exists=findings_db_exists,
@@ -363,6 +387,8 @@ def create_scans_service(
 def create_triage_service(
     registry: ProjectRegistryService,
     project_id: int,
+    *,
+    repo_paths: dict[str, Path] | None = None,
 ) -> TriageService:
     """Build a TriageService for a project."""
     from application.triage.triage_service import TriageService
@@ -374,6 +400,7 @@ def create_triage_service(
         triage_repo=TriageBatchRepository(factory),
         finding_repo=FindingRepository(factory),
         audit_repo=AuditRepository(factory),
+        repo_paths=repo_paths,
     )
 
 

@@ -1,4 +1,4 @@
-"""Unit tests for the one-shot API/ZAP prompt renderer."""
+"""Unit tests for the one-shot web prompt renderer."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ import pytest
 
 from application.triage.prompts.api_trace import render
 from application.triage.verdict import Verdict, parse_verdict
+from tests.prompt_helpers import fenced_record
 
 _SAMPLE_FINDING: dict = {
     "id": 99,
@@ -152,6 +153,20 @@ class TestPromptSections:
         assert "potential" in result
         assert "false_positive" in result
 
+    def test_source_examination_required(self) -> None:
+        result = render(
+            _SAMPLE_FINDING,
+            project=_PROJECT,
+        )
+        assert "source_not_examined" in result
+
+    def test_workspace_repos_mentioned(self) -> None:
+        result = render(
+            _SAMPLE_FINDING,
+            project=_PROJECT,
+        )
+        assert "/workspace/repos/" in result
+
 
 class TestEdgeCases:
     def test_none_fields_handled(self) -> None:
@@ -173,8 +188,9 @@ class TestEdgeCases:
             sparse,
             project="test",
         )
-        assert isinstance(result, str)
-        assert "n/a" in result
+        record = fenced_record(result, "finding_metadata")
+        assert record["url"] is None
+        assert record["severity"] == "n/a"
 
     def test_cwe_id_as_int(self) -> None:
         finding = {**_SAMPLE_FINDING, "cwe_id": 79}
@@ -198,7 +214,7 @@ class TestEdgeCases:
             finding,
             project=_PROJECT,
         )
-        assert "n/a" in result
+        assert fenced_record(result, "finding_metadata")["cwe_id"] is None
 
 
 class TestVerdictRoundtrip:

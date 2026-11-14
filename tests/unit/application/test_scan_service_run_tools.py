@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from application.ports.subprocess_runner import SubprocessRunnerPort
+from application.ports.tool_runner import CliToolRunnerPort
 from application.tools.scan_service import ScanService
 from domain.tools.scan_types import ScanSummary
 
@@ -50,8 +50,8 @@ def _call_worker(
         mock_orch_cls.return_value = mock_orchestrator
 
         svc = ScanService(
-            subprocess_runner=MagicMock(
-                spec=SubprocessRunnerPort,
+            cli_tool_runner=MagicMock(
+                spec=CliToolRunnerPort,
             ),
         )
         svc._run_worker(

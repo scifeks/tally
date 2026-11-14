@@ -12,13 +12,15 @@ from typing import TYPE_CHECKING, Any
 
 from application.locking import LockRegistry, get_registry
 from application.locking.cancellation import CancellationToken, no_op_token
+from application.ports.triage_agent import TriageBackendUnavailable
 from application.ports.triage_event_sink import (
     NullTriageEventSink,
     TriageEventSink,
 )
 from application.tools.registry import ToolRegistry
-from application.triage.batching import compute_batches
-from application.triage.prompts import api_trace, sast_trace
+from application.triage.batch_creator import create_triage_batches
+from application.triage.prompts import dast_trace, sast_trace
+from application.triage.prompts.triage_prompt import TriagePrompt
 from application.triage.verdict import (
     SourceNotExaminedError,
     Verdict,
@@ -31,7 +33,6 @@ from domain.findings.normalization import (
 )
 from domain.pipeline.triage_events import (
     BatchCompleted,
-    BatchCreated,
     BatchFailed,
     BatchStarted,
     RunCancelled,
@@ -47,29 +48,28 @@ if TYPE_CHECKING:
     from application.ports.triage_batch_repository import TriageBatchRepositoryPort
 
 
-_PROMPT_RENDERERS: dict[str, Callable[..., str]] = {
-    "api": api_trace.render,
-    "sast": sast_trace.render,
+_PROMPT_COMPOSERS: dict[str, Callable[..., TriagePrompt]] = {
+    "sast": sast_trace.compose,
+    "web": dast_trace.compose,
 }
 
 _log = logging.getLogger(__name__)
 
 
 class TriageCancelled(Exception):
-    """Raised when triage observes its CancellationToken set mid-run.
+    """Raised when triage observes its CancellationToken set mid-run."""
 
-    The runner's batch loop catches this, marks remaining batches
-    canceled, emits a ``run_canceled`` event, and exits cleanly.
+
+class TriageAborted(Exception):
+    """Raised when the backend transport dies mid-run.
+
+    Propagates out of the batch loop so remaining pending batches stay
+    ``pending`` (resumable) instead of every one being marked ``failed``.
     """
 
 
 class NoScanRunError(RuntimeError):
-    """Raised when triage is dispatched but the project has no scan_runs.
-
-    Triage operates against the latest scan_run for the project. If no
-    scan has ever run, there is nothing to triage. The API surface
-    translates this into a 404; the REPL surfaces the message.
-    """
+    """Raised when triage is dispatched but the project has no scan_runs."""
 
 
 @dataclass
@@ -100,7 +100,8 @@ class TriageRunner:
         tool_registry: ToolRegistry,
         finding_repo: FindingRepositoryPort | None = None,
         repo_paths: dict[str, Path] | None = None,
-        triaged_by: str = "claudecode",
+        triage_provider: str,
+        triaged_by: str = "auto_triage",
         debug: bool = False,
         max_findings_per_batch: int = 4,
     ) -> None:
@@ -120,6 +121,7 @@ class TriageRunner:
         self._tool_registry = tool_registry
         self._finding_repo = finding_repo
         self._repo_paths: dict[str, Path] = repo_paths or {}
+        self._triage_provider = triage_provider
         self._triaged_by = triaged_by
         self._debug = debug
         self._max_findings_per_batch = max_findings_per_batch
@@ -129,67 +131,18 @@ class TriageRunner:
     def batch(self) -> tuple[int, int]:
         """Run batching phase only.
 
-        Resolves the scan_run_id (constructor arg, else latest in the
-        project DB via ``RunRepository.latest_run_id()``), creates
-        triage_batches rows for that scan_run, and returns
-        ``(scan_run_id, total_batches_created)``. Raises
-        :class:`NoScanRunError` if the project has no scan runs.
+        Raises NoScanRunError if the project has no scan runs.
         """
         run_id = self._resolve_scan_run_id()
-
-        stale = self._triage_repo.cancel_remaining(run_id)
-        if stale:
-            _log.info(
-                "Cancelled %d stale batches for run_id=%d",
-                stale,
-                run_id,
-            )
-
-        skip_tools = frozenset(
-            t.name
-            for t in self._tool_registry.get_all_tools()
-            if getattr(t, "skip", False)
+        created = create_triage_batches(
+            run_id=run_id,
+            triage_repo=self._triage_repo,
+            tool_registry=self._tool_registry,
+            max_findings_per_batch=self._max_findings_per_batch,
+            event_sink=self._event_sink,
+            project_id=self._project_id,
         )
-        combos = self._triage_repo.get_active_finding_combos(skip_tools)
-
-        total = 0
-        for tool, repo, segment in combos:
-            try:
-                findings = self._triage_repo.fetch_active_findings_for_batching(
-                    tool, repo, segment
-                )
-                batches = compute_batches(
-                    findings,
-                    max_findings_per_batch=self._max_findings_per_batch,
-                )
-                count = self._triage_repo.create_batches(run_id, batches)
-                _log.info(
-                    "Created %d batches: tool=%s repo=%s segment=%s",
-                    count,
-                    tool,
-                    repo,
-                    segment,
-                )
-                print(f"  Batched {count} batch(es) for {tool}/{repo}/{segment}")
-                if count > 0:
-                    self._emit(
-                        BatchCreated(
-                            scan_run_id=run_id,
-                            project_id=self._project_id,
-                            batch_id=0,
-                            segment=segment,
-                            findings_count=count,
-                            message=(
-                                f"Batched {count} batch(es) for {tool}/{repo}/{segment}"
-                            ),
-                        )
-                    )
-                total += count
-            except Exception as exc:
-                raise RuntimeError(
-                    f"Batching failed for {tool}/{repo}/{segment}: {exc}"
-                ) from exc
-        return run_id, total
+        return run_id, len(created)
 
     def run(self, *, holder_token: str | None = None) -> TriageResult:
         """Runs one triage pass for a scan run."""
@@ -223,14 +176,27 @@ class TriageRunner:
         except Exception as exc:
             self._emit_run_failed(run_id, exc)
             raise
-        self._emit(
-            RunCompleted(
-                scan_run_id=run_id,
-                project_id=self._project_id,
-                message="Triage completed",
-                processed_count=result.sessions_run,
+        if result.failed > 0 and result.success == 0:
+            self._emit(
+                RunFailed(
+                    scan_run_id=run_id,
+                    project_id=self._project_id,
+                    error="All batches failed",
+                    completed_count=0,
+                    total_count=result.sessions_run,
+                    resumable=True,
+                    message=("Triage completed with all batches failing"),
+                )
             )
-        )
+        else:
+            self._emit(
+                RunCompleted(
+                    scan_run_id=run_id,
+                    project_id=self._project_id,
+                    message="Triage completed",
+                    processed_count=result.sessions_run,
+                )
+            )
         return result
 
     def run_dry_run(self) -> int:
@@ -242,13 +208,13 @@ class TriageRunner:
             batch_data: list[dict[str, Any]],
             segment: str,
         ) -> str:
-            render_fn = _PROMPT_RENDERERS[segment]
+            compose_fn = _PROMPT_COMPOSERS[segment]
             for finding in batch_data:
                 fid = finding.get("id", "?")
-                prompt = render_fn(
+                prompt = compose_fn(
                     finding,
                     project=self._project,
-                )
+                ).combined()
                 _log.debug(
                     "========== FINDING %s (batch %d)"
                     " ==========\n%s\n"
@@ -266,12 +232,7 @@ class TriageRunner:
     # Private helpers
 
     def _resolve_scan_run_id(self) -> int:
-        """Return the scan_run_id triage will operate on.
-
-        Constructor arg wins; otherwise the repository reports the
-        latest scan_run in the project's DB. Raises
-        :class:`NoScanRunError` if no scan_runs exist.
-        """
+        """Return the scan_run_id triage will operate on."""
         if self._scan_run_id is not None:
             return self._scan_run_id
         latest = self._run_repo.latest_run_id()
@@ -294,15 +255,7 @@ class TriageRunner:
             raise TriageCancelled
 
     def _emit_run_failed(self, run_id: int, exc: BaseException) -> None:
-        """Emit a ``triage_failed`` event before re-raising *exc*.
-
-        Best-effort: pulls completed/total counts from
-        ``summarize_for_run`` and the first finding id of the most
-        recently in-progress batch for ``failed_at_finding_id``.
-        ``resumable`` is True when at least one batch is still in
-        ``pending`` or ``in_progress`` (i.e. the run can be resumed
-        without re-batching).
-        """
+        """Emit a RunFailed event with best-effort progress counts."""
         completed = total = 0
         failed_at: int | None = None
         resumable = False
@@ -347,11 +300,8 @@ class TriageRunner:
     ) -> TriageResult:
         """Claim and process every pending batch for run_id.
 
-        handler(batch_id, batch_data, segment) -> outcome string.
-        Skip-flagged tools are auto-completed without calling handler.
-        When holder_token is set, finding-id locks are acquired per
-        batch so that analyst PATCH requests are blocked while the
-        agent writes those findings.
+        Acquires per-finding locks when holder_token is set so analyst
+        writes are blocked during agent processing.
         """
         sessions_run = success = failed = incomplete = 0
         while True:
@@ -371,7 +321,7 @@ class TriageRunner:
             )
 
             if tool_obj is None or tool_obj.skip:
-                self._triage_repo.complete_batch(batch_id, "success")
+                self._triage_repo.complete_batch(batch_id, "completed")
                 continue
 
             segment = tool_obj.scan_segment
@@ -391,7 +341,8 @@ class TriageRunner:
                     outcome = handler(batch_id, batch_data, segment)
             else:
                 outcome = handler(batch_id, batch_data, segment)
-            self._triage_repo.complete_batch(batch_id, outcome)
+            db_status = "failed" if outcome == "failed" else "completed"
+            self._triage_repo.complete_batch(batch_id, db_status)
 
             if outcome == "success":
                 success += 1
@@ -450,14 +401,15 @@ class TriageRunner:
         Returns 'success' (all ok), 'failed' (all failed), or
         'incomplete' (mixed).
         """
-        render_fn = _PROMPT_RENDERERS[segment]
+        compose_fn = _PROMPT_COMPOSERS[segment]
         succeeded = 0
         total = len(batch_data)
         max_attempts = self._retry_count + 1
 
         for finding in batch_data:
+            self._check_canceled()
             fid = finding.get("id", -1)
-            prompt = render_fn(finding, project=self._project)
+            prompt = compose_fn(finding, project=self._project)
             ok = False
             for attempt in range(max_attempts):
                 try:
@@ -497,12 +449,37 @@ class TriageRunner:
                             max_attempts,
                         )
                         continue
-                except Exception as exc:
+                except TriageBackendUnavailable as exc:
+                    stderr_tail = getattr(self._triage_backend, "last_relay_stderr", "")
                     _log.error(
-                        "Triage failed for finding %d in batch %d: %s",
+                        "Triage backend unavailable at finding %d in batch %d: %s",
                         fid,
                         batch_id,
                         exc,
+                    )
+                    self._write_error_log(
+                        batch_id,
+                        fid,
+                        exc_type=type(exc).__name__,
+                        exc_message=str(exc),
+                        stderr_tail=stderr_tail,
+                    )
+                    raise TriageAborted(str(exc)) from exc
+                except Exception as exc:
+                    _log.error(
+                        "Triage failed for finding %d in batch %d: %s: %s",
+                        fid,
+                        batch_id,
+                        type(exc).__name__,
+                        exc,
+                    )
+                    stderr_tail = getattr(self._triage_backend, "last_relay_stderr", "")
+                    self._write_error_log(
+                        batch_id,
+                        fid,
+                        exc_type=type(exc).__name__,
+                        exc_message=str(exc),
+                        stderr_tail=stderr_tail,
                     )
                     break
             if ok:
@@ -526,12 +503,19 @@ class TriageRunner:
             batch_id,
             exc.problem,
         )
-        if not self._debug:
-            return
         raw = getattr(self._triage_backend, "last_raw_output", "")
         content = raw or exc.raw_output
-        if content:
+        if self._debug and content:
             self._write_debug_log(batch_id, fid, content)
+        if not content:
+            stderr_tail = getattr(self._triage_backend, "last_relay_stderr", "")
+            self._write_error_log(
+                batch_id,
+                fid,
+                exc_type=type(exc).__name__,
+                exc_message=f"{exc.problem} (raw_output empty)",
+                stderr_tail=stderr_tail,
+            )
 
     def _write_debug_log(self, batch_id: int, finding_id: int, raw_output: str) -> None:
         from datetime import datetime
@@ -543,18 +527,34 @@ class TriageRunner:
         path.write_text(raw_output, encoding="utf-8")
         _log.debug("Triage debug log written to %s", path)
 
-    def _read_source_file(self, finding: dict[str, Any]) -> str:
-        repo_name = finding.get("repo", "")
-        file_path = finding.get("file") or finding.get("url", "")
-        if not file_path or not repo_name:
-            return ""
-        repo_root = self._repo_paths.get(repo_name)
-        if repo_root is None:
-            return ""
-        full_path = repo_root / file_path
-        if not full_path.is_file():
-            return ""
-        return full_path.read_text(errors="replace")
+    def _write_error_log(
+        self,
+        batch_id: int,
+        finding_id: int,
+        *,
+        exc_type: str,
+        exc_message: str,
+        stderr_tail: str,
+    ) -> None:
+        """Always-on diagnostic dump for failures the runner cannot explain.
+
+        Fires regardless of ``self._debug`` because these files exist
+        precisely for the case where the run log line is not enough to
+        tell what the backend did.
+        """
+        from datetime import datetime
+
+        ts = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
+        log_dir = self._app_root / "logs" / "triage"
+        log_dir.mkdir(parents=True, exist_ok=True)
+        path = log_dir / f"{batch_id}-{finding_id}-{ts}.err.log"
+        body = (
+            f"exception_type: {exc_type}\n"
+            f"exception_message: {exc_message}\n"
+            f"---\nrelay_stderr_tail:\n{stderr_tail}\n"
+        )
+        path.write_text(body, encoding="utf-8")
+        _log.debug("Triage error log written to %s", path)
 
     def _write_verdict(self, verdict: Verdict, segment: str) -> None:
         if self._finding_repo is None:
@@ -576,6 +576,7 @@ class TriageRunner:
                 user_interaction=verdict.user_interaction,
             ),
             strategy=segment,
+            triage_provider=self._triage_provider,
             triaged_by=self._triaged_by,
             source="auto_triage",
         )

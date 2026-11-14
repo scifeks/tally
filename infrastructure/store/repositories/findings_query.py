@@ -42,7 +42,7 @@ class FindingQueryBuilder:
                description, package_version, cwe, enriched, meta,
                first_seen, last_seen, seen_count, status,
                triaged_at, triaged_by, should_report,
-               business_impact, tal_id
+               business_impact, tal_id, duplicate_of
         FROM findings
     """
 
@@ -144,6 +144,7 @@ class FindingQueryBuilder:
             )
             params.extend([term] * 6)
 
+        where_parts.append("duplicate_of IS NULL")
         return where_parts, params
 
     def build(self) -> tuple[str, list[Any]]:

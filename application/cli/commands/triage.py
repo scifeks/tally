@@ -30,6 +30,7 @@ from application.triage.orchestrator import (
 )
 from application.triage.readiness import compute_triage_readiness
 from application.triage.runner import NoScanRunError
+from core.config import ConfigManager
 from factories.persistence import (
     ProjectNotFound,
     create_triage_service,
@@ -61,11 +62,23 @@ def cmd_triage(
         print(str(exc), file=sys.stderr)
         return PROJECT_NOT_FOUND
 
+    config = ConfigManager(str(base_path))
+    gcfg = config.global_config
+    triage_provider = ""
+    triage_api_key = ""
+    if gcfg.triage_inference:
+        triage_provider = gcfg.triage_inference.provider
+        if triage_provider in ("claude", "claude_code"):
+            triage_api_key = gcfg.claude.api_key if gcfg.claude else ""
+        elif triage_provider == "openai":
+            triage_api_key = gcfg.openai.api_key if gcfg.openai else ""
+
     readiness = compute_triage_readiness(
-        base_path=str(base_path),
+        provider=triage_provider,
         docker_available=RuntimeDependencyService(
             build_runtime_dependency_probes(base_path=str(base_path))
         ).is_installed("docker"),
+        api_key=triage_api_key,
     )
     if not readiness.enabled:
         print(f"Error: {readiness.reason}", file=sys.stderr)
@@ -165,6 +178,9 @@ def _full_triage_mode(
     project_name: str,
 ) -> int:
     """Run full triage with Docker containers."""
+    repos = load_active_repos(str(base_path), project_name)
+    repo_paths = {r.name: Path(r.path) for r in repos if r.path}
+
     try:
         ensure_triage_image(Path(base_path))
     except DockerNotAvailableError:
@@ -178,7 +194,7 @@ def _full_triage_mode(
         return GENERAL_ERROR
 
     try:
-        ensure_triage_containers(Path(base_path), project_name)
+        ensure_triage_containers(Path(base_path), project_name, repo_paths=repo_paths)
     except DockerNotAvailableError:
         print(
             "Error: Docker is not installed or not running.",
@@ -190,7 +206,11 @@ def _full_triage_mode(
         return GENERAL_ERROR
 
     try:
-        service = create_triage_service(project_registry, project_id)
+        service = create_triage_service(
+            project_registry,
+            project_id,
+            repo_paths=repo_paths,
+        )
     except ProjectNotFound:
         print(
             f"Error: project {project_name!r} not found",

@@ -17,7 +17,7 @@ import { apiFetch } from './client'
 import { apiEventSource } from './sse'
 import { useUI } from '../store'
 
-// ─── Scan-config: wire-format types & inline mappers ────────────────────────
+// Scan-config: wire-format types & inline mappers
 
 interface ScanConfigRepoApi {
   id: number
@@ -65,7 +65,7 @@ function mapScanConfig(api: ScanConfigResponseApi): ProjectScanConfig {
   }
 }
 
-// ─── Scan-history: wire-format types & inline mapper ────────────────────────
+// Scan-history: wire-format types & inline mapper
 
 export interface ScanRunSummaryApi {
   id: number
@@ -124,10 +124,10 @@ function buildScanHistoryUrl(
   return `${REST_ENDPOINTS.scans(projectId)}?${params.toString()}`
 }
 
-// ─── Hooks ──────────────────────────────────────────────────────────────────
+// Hooks
 
 /**
- * Backend serves snake_case; the inline mapper renames `domain`/`domains` →
+ * Backend serves snake_case; the inline mapper renames `domain`/`domains` to
  * `segment`/`segments` to match the FE Segment vocabulary.
  */
 export function useProjectScanConfig(projectId: number) {
@@ -277,7 +277,43 @@ export function useCancelScan() {
   })
 }
 
-// ─── SSE event handling ─────────────────────────────────────────────────────
+export function useStartBurpScan() {
+  const queryClient = useQueryClient()
+  const setError = useUI(s => s.setScanMutationError)
+
+  return useMutation<
+    Scan,
+    ApiError,
+    { projectId: number; configNames?: string[]; timeout?: number }
+  >({
+    mutationFn: async ({ projectId, configNames, timeout }) => {
+      const body: Record<string, unknown> = {}
+      if (configNames && configNames.length > 0) body.configNames = configNames
+      if (timeout) body.timeout = timeout
+      const data = await apiFetch<ScanRunSummaryApi>(REST_ENDPOINTS.burpScan(projectId), {
+        method: 'POST',
+        body,
+      })
+      return mapScan(data)
+    },
+    onError: err => {
+      const payload: ApiErrorPayload = {
+        code: err.code,
+        message: err.message,
+        details: err.details,
+        status: err.status,
+      }
+      setError(payload)
+    },
+    onSuccess: (_, { projectId }) => {
+      queryClient.invalidateQueries({
+        queryKey: ['scans', projectId],
+      })
+    },
+  })
+}
+
+// SSE event handling
 
 const SCAN_EVENT_TYPES: readonly ScanLogEventType[] = [
   'run_started',

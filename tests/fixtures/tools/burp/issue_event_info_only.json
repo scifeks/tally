@@ -1,0 +1,16 @@
+{
+  "type": "issue_found",
+  "issue": {
+    "name": "Strict transport security not enforced",
+    "origin": "https://goat.justinc.app",
+    "path": "/",
+    "severity": "info",
+    "confidence": "certain",
+    "description": "The application does not set the HSTS header.",
+    "remediation": "Add the Strict-Transport-Security header.",
+    "type_index": 16777984,
+    "serial_number": "5555",
+    "evidence": [],
+    "fingerprint": ":type=STRICT_TRANSPORT_SECURITY:origin=https%3A%2F%2Fgoat.justinc.app:path=%2F:variant=1"
+  }
+}

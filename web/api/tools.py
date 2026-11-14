@@ -79,6 +79,13 @@ def _supports_docker(tool_name: str) -> bool:
     return (_WRAPPERS_ROOT / "docker" / f"{normalized}.py").exists()
 
 
+_URL_INVENTORY_TOOLS: frozenset[str] = frozenset({"dalfox", "xsstrike", "sqlmap"})
+
+
+def _needs_url_inventory(tool) -> bool:
+    return tool.name in _URL_INVENTORY_TOOLS
+
+
 def _discover_all_tool_names() -> set[str]:
     """Scan wrapper directories for all tools with implementations."""
     names: set[str] = set()
@@ -125,12 +132,7 @@ def _to_response(override) -> ToolOverrideResponse:
 
 @tools_v1_router.get("/catalog", response_model=ToolCatalogResponse)
 def get_tools_catalog(request: Request) -> ToolCatalogResponse:
-    """Return metadata for all registered tool wrappers.
-
-    Reads from the startup snapshot so that per-project
-    ``discover_tools`` calls (scans, saved-scan runs) cannot shrink
-    the catalog that the Config page sees.
-    """
+    """Return tool metadata from the startup snapshot."""
     tools_dict, _configs = request.app.state.tool_catalog_snapshot
     tools = list(tools_dict.values())
     items = [
@@ -141,12 +143,15 @@ def get_tools_catalog(request: Request) -> ToolCatalogResponse:
             supports_local=_supports_local(tool.name),
             supports_docker=_supports_docker(tool.name),
             description=tool.description,
+            requires_base_urls=tool.requires_base_urls,
+            requires_url_inventory=_needs_url_inventory(tool),
         )
         for tool in tools
     ]
     registered_ids = {item.id for item in items}
+    installed: frozenset[str] = request.app.state.installed_tools.installed()
     for tool_name in sorted(_discover_all_tool_names()):
-        if tool_name not in registered_ids:
+        if tool_name not in registered_ids and tool_name in installed:
             items.append(
                 ToolCatalogItem(
                     id=tool_name,
@@ -155,6 +160,8 @@ def get_tools_catalog(request: Request) -> ToolCatalogResponse:
                     supports_local=_supports_local(tool_name),
                     supports_docker=_supports_docker(tool_name),
                     description="",
+                    requires_base_urls=False,
+                    requires_url_inventory=(tool_name in _URL_INVENTORY_TOOLS),
                 )
             )
     return ToolCatalogResponse(items=items, total=len(items))
@@ -162,13 +169,7 @@ def get_tools_catalog(request: Request) -> ToolCatalogResponse:
 
 @tools_v1_router.get("/installed", response_model=InstalledToolsResponse)
 def get_installed_tools(request: Request) -> InstalledToolsResponse:
-    """Return the set of tool wrappers whose binary was found at process start.
-
-    The probe runs once per process lifetime; the result is cached. The
-    SPA uses this to gate UI affordances (e.g. hide tools from the scan
-    picker when their binary isn't installed) before any project is
-    selected. Auth-only; no project context required.
-    """
+    """Return tool names whose binary was found on PATH at process start."""
     port = request.app.state.installed_tools
     return InstalledToolsResponse(installed=sorted(port.installed()))
 

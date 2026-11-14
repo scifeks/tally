@@ -23,6 +23,7 @@ def test_iexecution_resources_declares_required_attributes() -> None:
         "event_bus",
         "display",
         "event_sink",
+        "http_runner",
     }
 
 

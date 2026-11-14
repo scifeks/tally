@@ -29,7 +29,7 @@ class TriageContainerStartError(RuntimeError):
     """Triage compose services failed to start."""
 
 
-# -- image lifecycle --
+# Image lifecycle
 
 
 def _resolve_image_port() -> TriageImagePort:
@@ -65,7 +65,7 @@ def rebuild_triage_image(app_root: Path) -> None:
     build_triage_image(app_root)
 
 
-# -- compose service lifecycle --
+# Compose service lifecycle
 
 
 def _resolve_container_port() -> TriageContainerPort:
@@ -92,22 +92,21 @@ def ensure_triage_containers(
     project: str,
     repo_paths: dict[str, Path] | None = None,
 ) -> bool:
-    """Generate compose and start services if not running.
+    """Generate compose and start services.
 
-    Returns True if services were started, False if already running.
-    ``repo_paths`` maps repo name to its on-disk path. When omitted,
-    containers must already be running.
+    Always regenerates the compose file so volume mounts reflect
+    the current ``repo_paths``. If containers are already running
+    and the compose file changed, tears them down and restarts.
+    Returns True if services were (re)started.
     """
-    path = _compose_path(app_root)
-    port = _resolve_container_port()
-
-    if port.is_running(path):
-        return False
-
     from application.triage.compose import generate_triage_compose
     from application.triage.factory import resolve_triage_config
 
+    path = _compose_path(app_root)
+    port = _resolve_container_port()
     resolved = resolve_triage_config(app_root=app_root)
+
+    old_content = path.read_text() if path.is_file() else ""
 
     generate_triage_compose(
         app_root,
@@ -116,6 +115,17 @@ def ensure_triage_containers(
         base_url=resolved.base_url,
         model=resolved.model,
     )
+
+    new_content = path.read_text()
+    running = port.is_running(path)
+
+    if running and new_content == old_content:
+        return False
+
+    if running:
+        log.info("Compose changed; restarting triage containers")
+        port.down(path)
+
     port.up(path)
     return True
 

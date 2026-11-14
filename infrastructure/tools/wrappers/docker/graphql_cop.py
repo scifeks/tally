@@ -70,6 +70,9 @@ class GraphqlCopDockerTool(BaseGraphqlCopTool):
             self._last_target_url = None
 
     def build_execution_passes(self, context: ExecutionContext) -> list[ExecutionPass]:
+        from infrastructure.tools.wrappers.local.graphql_cop import (
+            _DEFAULT_GQL_PATHS,
+        )
         from infrastructure.tools.wrappers.utils.auth_login import (
             build_tool_headers,
         )
@@ -77,18 +80,27 @@ class GraphqlCopDockerTool(BaseGraphqlCopTool):
         assert context.repo is not None
         assert context.service is not None
 
-        kwargs: dict[str, Any] = {
-            "target_url": context.service.base_urls[0],
-        }
-        headers = build_tool_headers(
-            context.repo.auth, context.repo.graphql_cop_headers
-        )
-        if headers:
-            kwargs["headers"] = headers
+        gql_paths = context.service.graphql_paths or list(_DEFAULT_GQL_PATHS)
 
-        return [
-            ExecutionPass(
-                label_suffix=context.repo.name,
-                kwargs=kwargs,
-            )
-        ]
+        passes: list[ExecutionPass] = []
+        for base in context.service.base_urls:
+            for gql_path in gql_paths:
+                url = base.rstrip("/") + gql_path
+                ep_kwargs: dict[str, Any] = {
+                    "target_url": url,
+                }
+                headers = build_tool_headers(
+                    context.repo.auth,
+                    context.repo.graphql_cop_headers,
+                )
+                if headers:
+                    ep_kwargs["headers"] = headers
+
+                passes.append(
+                    ExecutionPass(
+                        label_suffix=(f"{context.repo.name} ({url})"),
+                        kwargs=ep_kwargs,
+                    )
+                )
+
+        return passes

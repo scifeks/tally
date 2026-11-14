@@ -82,11 +82,12 @@ class TestUpdateFinding:
             triage_meta=build_triage_meta(
                 "probable",
                 "Code review confirms taint flow.",
-                "Parameterise the query.",
+                "Parameterize the query.",
                 "network",
                 None,
             ),
             strategy="manual",
+            triaged_by="auto_triage",
             source="auto_triage",
         )
         assert result is True
@@ -98,7 +99,7 @@ class TestUpdateFinding:
             ).fetchone()
         assert row["confidence"] == "probable"
         assert row["severity"] == 1
-        assert row["triaged_by"] == "claudecode"
+        assert row["triaged_by"] == "auto_triage"
 
     def test_raises_for_missing_id(self, repo: FindingRepository) -> None:
         with pytest.raises(ValueError, match="not found"):
@@ -110,11 +111,12 @@ class TestUpdateFinding:
                 triage_meta=build_triage_meta(
                     "probable",
                     "Code review confirms taint flow.",
-                    "Parameterise the query.",
+                    "Parameterize the query.",
                     "network",
                     None,
                 ),
                 strategy="manual",
+                triaged_by="auto_triage",
                 source="auto_triage",
             )
 
@@ -136,11 +138,12 @@ class TestUpdateFinding:
             triage_meta=build_triage_meta(
                 "probable",
                 "Code review confirms taint flow.",
-                "Parameterise the query.",
+                "Parameterize the query.",
                 "network",
                 None,
             ),
             strategy="manual",
+            triaged_by="auto_triage",
             source="auto_triage",
         )
 
@@ -152,5 +155,6 @@ class TestUpdateFinding:
         triage = meta["triage"]
         assert triage["confidence"] == "probable"
         assert triage["strategy"] == "manual"
-        assert triage["triaged_by"] == "claudecode"
+        assert triage["triaged_by"] == "auto_triage"
+        assert triage["triage_provider"] is None
         assert "triaged_at" in triage

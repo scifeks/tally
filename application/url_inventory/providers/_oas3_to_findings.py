@@ -11,6 +11,7 @@ from collections.abc import Iterator
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse
 
+from core.config.schemas.repository import build_excluded_dirs
 from domain.url_inventory.entry import UrlFinding, UrlSource, UrlTool
 from domain.url_inventory.vendor_filter import is_vendor_path
 
@@ -63,15 +64,13 @@ def iter_oas3_rows(
 
     Paths that look like vendor / dependency directories are dropped at
     this gate (single ingest boundary for every URL provider) so they
-    never enter ``url_findings``. Service ignore_dirs are folded
-    in alongside the static indicators so user-configured exclusions
-    also apply to URL discovery.
+    never enter ``url_findings``. Service exclusions (test_dirs and
+    ignore_dirs) are folded in alongside the static indicators so
+    user-configured exclusions also apply to URL discovery.
     """
     base_protocol, base_host, base_port = resolve_base(doc, ctx)
     extra_indicators = (
-        tuple(ctx.repo.services[0].ignore_dirs)
-        if ctx.repo.services and ctx.repo.services[0].ignore_dirs
-        else ()
+        tuple(build_excluded_dirs(ctx.repo.services[0])) if ctx.repo.services else ()
     )
     paths = doc.get("paths") or {}
     if not isinstance(paths, dict):

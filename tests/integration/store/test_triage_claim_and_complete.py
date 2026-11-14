@@ -123,13 +123,13 @@ class TestClaimAndComplete:
         run_id = _seed_batch(factory, run_repo)
         batch = repo.claim_batch(run_id)
         assert batch is not None
-        repo.complete_batch(batch.id, "success")
+        repo.complete_batch(batch.id, "completed")
         with factory.connect() as conn:
             row = conn.execute(
                 "SELECT status, completed_at FROM triage_batches WHERE id = ?",
                 (batch.id,),
             ).fetchone()
-        assert row["status"] == "success"
+        assert row["status"] == "completed"
         assert row["completed_at"] is not None
 
     def test_complete_failed(

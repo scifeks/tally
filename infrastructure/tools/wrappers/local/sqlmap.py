@@ -197,8 +197,10 @@ class SqlmapLocalTool(BaseSqlmapTool):
         if not seeds_file or not Path(seeds_file).exists():
             logger.warning(
                 "sqlmap: no URL inventory for %s; skipping. "
-                "Run Katana, Noir, or configure an endpoint "
-                "file to generate URL discovery output.",
+                "sqlmap needs parameterized URLs (?key=value) "
+                "from URL discovery. Run Katana or Noir first, "
+                "or supply an endpoint file with query "
+                "parameters.",
                 repo.name,
             )
             return []

@@ -24,6 +24,7 @@ def _build_service(
         project_repo=project_repo or MagicMock(),
         analyst=MagicMock(),
         lock_query=MagicMock(),
+        indexer=MagicMock(),
         project_id=1,
         project_name="test-project",
         findings_db_exists=True,

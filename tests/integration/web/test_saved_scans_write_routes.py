@@ -145,7 +145,7 @@ class TestSavedScansCreate:
         fields = data["error"]["details"]["fields"]
         assert any(
             entry["field"] == "toolNames"
-            and "at least one of toolNames or argProfileIds" in entry["issue"]
+            and "at least one of toolNames" in entry["issue"]
             for entry in fields
         )
 

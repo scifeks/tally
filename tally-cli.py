@@ -69,9 +69,14 @@ def _dispatch(
     base_path: str,
 ) -> int:
     """Route to the appropriate command handler."""
+    from application.cli.commands.finding import (
+        cmd_finding_add,
+        cmd_finding_update,
+    )
     from application.cli.commands.integration_sync import (
         cmd_integration_sync,
     )
+    from application.cli.commands.mcp import cmd_mcp_serve
     from application.cli.commands.project import (
         cmd_project_create,
         cmd_project_list,
@@ -102,12 +107,15 @@ def _dispatch(
         "stats": cmd_stats,
         "integration-sync": cmd_integration_sync,
         "ui": cmd_ui,
+        "mcp": cmd_mcp_serve,
         "project-create": cmd_project_create,
         "project-list": cmd_project_list,
         "repo-add": cmd_repo_add,
         "repo-list": cmd_repo_list,
         "repo-edit": cmd_repo_edit,
         "repo-delete": cmd_repo_delete,
+        "finding-add": cmd_finding_add,
+        "finding-update": cmd_finding_update,
     }
 
     handler = handlers.get(args.command)
@@ -126,6 +134,9 @@ def main() -> int:
         "repo-list",
         "repo-edit",
         "repo-delete",
+        "finding-add",
+        "finding-update",
+        "mcp",
     }
 
     parser = build_parser()
@@ -168,7 +179,12 @@ def main() -> int:
             run_repo_factory=lambda p: RunRepository(ConnectionFactory(p)),
         ).run()
 
-    needs_project = args.command not in ("ui", "project-create", "project-list")
+    needs_project = args.command not in (
+        "ui",
+        "mcp",
+        "project-create",
+        "project-list",
+    )
     is_rebuild = args.command == "triage" and getattr(args, "rebuild_container", False)
     if needs_project and not is_rebuild:
         if not args.project:
