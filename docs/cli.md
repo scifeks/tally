@@ -401,6 +401,8 @@ On success the command prints the new finding ID:
 
 An invalid payload, an invalid status, or an unknown repository exits with code 2 and prints the reason to stderr. For an invalid status, the message lists the valid values.
 
+To record a verified vulnerability report you already have as a file, run the `/ingest-finding <project> <repo> <path-to-report>` Claude Code skill from the Tally repository. It maps the report onto this payload, checks the project for duplicates, shows you the payload for approval, and then runs `finding-add`. The full report text is stored in the finding's `meta.source_report`.
+
 ```bash
 python3 tally-cli.py --project myapp --command finding-add --repo backend --finding-file finding.json
 
