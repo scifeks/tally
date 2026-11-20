@@ -277,6 +277,9 @@ class TestResumeFailurePreservesStatus:
                 "application.cli.commands.scan.create_finding_repo",
             ),
             patch(
+                "application.cli.commands.scan.create_repo_repo",
+            ),
+            patch(
                 "application.cli.commands.scan.ConfigManager",
             ),
             patch(
@@ -322,6 +325,9 @@ class TestResumeFailurePreservesStatus:
             ),
             patch(
                 "application.cli.commands.scan.create_finding_repo",
+            ),
+            patch(
+                "application.cli.commands.scan.create_repo_repo",
             ),
             patch(
                 "application.cli.commands.scan.ConfigManager",

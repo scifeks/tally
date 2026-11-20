@@ -106,11 +106,11 @@ class OrganizerPoller:
                 normalized,
                 classification,
                 repo_name=repo_name,
-                repo_id=repo_id,
             )
             result = self._ingest.submit_finding(
                 run_id,
                 payload,
+                repo_id=repo_id,
                 tool="burp_organizer",
                 domain="web",
             )
@@ -184,7 +184,6 @@ def _build_payload(
     classification: NoteClassification | None,
     *,
     repo_name: str = "",
-    repo_id: int | None = None,
 ) -> dict[str, Any]:
     """Convert an OrganizerItem to a finding submission payload."""
     notes = item.notes.strip() if item.notes else ""
@@ -223,8 +222,7 @@ def _build_payload(
         meta["notes"] = notes
     if classification is not None:
         meta["vulnerability_type"] = classification.vulnerability_type
-    if repo_id is not None:
-        meta["repo_id"] = repo_id
+    if repo_name:
         meta["repo"] = repo_name
 
     desc_parts = [title, ""]

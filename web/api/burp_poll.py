@@ -84,7 +84,9 @@ async def start_poll(
     repo_repo = create_repo_repo(paths.findings_db)
     state_repo = OrganizerStateRepository(factory)
     fetcher = BurpMcpClient(burp_cfg.mcp_url)
-    ingest = McpIngestService(finding_repo=finding_repo, run_repo=run_repo)
+    ingest = McpIngestService(
+        finding_repo=finding_repo, run_repo=run_repo, repo_repo=repo_repo
+    )
 
     note_enrichment: NoteEnrichment | None = None
     try:

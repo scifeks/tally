@@ -174,6 +174,7 @@ def _build_background_launcher(
     mcp_service = McpIngestService(
         finding_repo=finding_repo,
         run_repo=run_repo,
+        repo_repo=create_repo_repo(paths.findings_db),
         scan_event_sink=sink,
     )
 
@@ -676,6 +677,7 @@ async def resume_scan(
     mcp_service = McpIngestService(
         finding_repo=finding_repo,
         run_repo=run_repo,
+        repo_repo=create_repo_repo(paths.findings_db),
     )
     scan_config = mcp_service.get_scan_config(project=project_name, run_id=run_id)
     only = scan_config.get("only") or None

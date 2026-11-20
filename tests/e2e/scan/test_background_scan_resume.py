@@ -23,6 +23,7 @@ from application.mcp.ingest_service import McpIngestService
 from infrastructure.events.bus import EventBus
 from infrastructure.store.connection import ConnectionFactory
 from infrastructure.store.repositories.findings import FindingRepository
+from infrastructure.store.repositories.repositories import RepositoryRepository
 from infrastructure.store.repositories.runs import RunRepository
 from tests._app_factory import build_test_app
 from tests.e2e.scan._harness import FakeSkillRunner
@@ -169,6 +170,7 @@ async def scan_e2e_env(tmp_path: Path, monkeypatch):
     ingest_service = McpIngestService(
         finding_repo=finding_repo,
         run_repo=run_repo,
+        repo_repo=RepositoryRepository(factory),
         scan_event_sink=sink,
     )
 

@@ -16,7 +16,7 @@ You also need at least one project created through the REPL or web UI before the
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
-| `--command COMMAND` | string | *(required)* | Command to execute: `scan`, `run`, `report`, `triage`, `purge`, `stats`, `integration-sync`, `ui`, `project-create`, `project-list`, `repo-add`, `repo-list`, `repo-edit`, `repo-delete` |
+| `--command COMMAND` | string | *(required)* | Command to execute: `scan`, `run`, `report`, `triage`, `purge`, `stats`, `integration-sync`, `ui`, `project-create`, `project-list`, `repo-add`, `repo-list`, `repo-edit`, `repo-delete`, `finding-add`, `finding-update` |
 | `--base-path DIR` | string | `.` | Base directory for projects |
 | `--project NAME` | string | *(required)* | Target project name |
 
@@ -392,6 +392,78 @@ tally --project NAME --command repo-delete --repo-name NAME
 python3 tally-cli.py --project myapp --command repo-delete --repo-name backend
 ```
 
+### finding-add
+
+Record one finding against a repository. Use it for findings from manual research or other sources that you review before recording.
+
+```
+tally --project NAME --command finding-add --repo NAME --finding-file PATH
+      [--status STATUS]
+```
+
+| Flag | Description |
+|------|-------------|
+| `--repo NAME` | Repository the finding belongs to (required) |
+| `--finding-file PATH` | Finding payload JSON file, or `-` to read from stdin (required) |
+| `--status STATUS` | `active` (default), `false_positive`, `fixed`, or `wont_fix` |
+
+The payload uses the same format as the MCP `submit_finding` tool. Required fields are `file`, `line_number`, `description`, `severity`, `confidence`, `cwe`, `finding_type`, `rule_id`, and `meta` with `title`, `owasp_name`, and `remediation`. `file` and `line_number` are optional when `segment` is `web`.
+
+The finding is stored as a manual finding: it is not attached to a scan run, it is included in reports, and you can delete it from the web UI. Because it has no scan run, it reaches DefectDojo only through `integration-sync` without `--run-id`.
+
+On success the command prints the new finding ID:
+
+```json
+{
+  "finding_id": 42
+}
+```
+
+An invalid payload, an invalid status, or an unknown repository exits with code 2 and prints the reason to stderr. For an invalid status, the message lists the valid values.
+
+```bash
+python3 tally-cli.py --project myapp --command finding-add --repo backend --finding-file finding.json
+
+# Record a false positive from stdin
+cat finding.json | python3 tally-cli.py --project myapp --command finding-add \
+  --repo backend --finding-file - --status false_positive
+```
+
+### finding-update
+
+Update the status or description of an existing finding.
+
+```
+tally --project NAME --command finding-update --finding-id ID
+      [--status STATUS] [--description TEXT]
+```
+
+| Flag | Description |
+|------|-------------|
+| `--finding-id ID` | Numeric ID of the finding to update (required) |
+| `--status STATUS` | `active`, `false_positive`, `fixed`, or `wont_fix` |
+| `--description TEXT` | New description text for the finding |
+
+At least one of `--status` or `--description` must be provided. Fields you omit stay unchanged.
+
+On success the command prints the updated finding ID:
+
+```json
+{
+  "finding_id": 42
+}
+```
+
+An invalid status exits with code 2. A finding ID that does not exist exits with code 1.
+
+```bash
+python3 tally-cli.py --project myapp --command finding-update \
+  --finding-id 42 --status fixed
+
+python3 tally-cli.py --project myapp --command finding-update \
+  --finding-id 42 --description "Confirmed after manual review"
+```
+
 ---
 
 ## Exit Codes
@@ -413,7 +485,7 @@ Ctrl+C produces exit code 130.
 
 **Exit 1.** Covers runtime failures that are not argument or project errors: RAG engine unavailable, scan already in progress, Docker not available, PDF rendering failure, or unexpected exceptions.
 
-**Exit 2.** The arguments are syntactically valid but semantically wrong: `--tool` and `--skip-tools` both specified on `scan`, unknown tool/repo/domain names.
+**Exit 2.** The arguments are syntactically valid but semantically wrong: `--tool` and `--skip-tools` both specified on `scan`, unknown tool/repo/domain names, a `finding-add` payload or status that fails validation, or a `finding-update` with an invalid status or no fields specified.
 
 **Exit 3.** The `--project` flag was omitted on a command that requires it, the project does not exist, or the project has been archived.
 

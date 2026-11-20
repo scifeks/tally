@@ -22,6 +22,7 @@ from infrastructure.events.bus import EventBus
 from infrastructure.events.types import BusEvent
 from infrastructure.store.connection import ConnectionFactory
 from infrastructure.store.repositories.findings import FindingRepository
+from infrastructure.store.repositories.repositories import RepositoryRepository
 from infrastructure.store.repositories.runs import RunRepository
 from web.adapters.event_bus_scan_sink import SCAN_JOB_ID, EventBusScanSink
 
@@ -40,6 +41,7 @@ def _make_service(db_path: Path, sink: EventBusScanSink) -> McpIngestService:
     return McpIngestService(
         finding_repo=FindingRepository(factory),
         run_repo=RunRepository(factory),
+        repo_repo=RepositoryRepository(factory),
         scan_event_sink=sink,
     )
 

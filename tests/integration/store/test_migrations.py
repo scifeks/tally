@@ -140,7 +140,7 @@ class TestMigrationIdempotency:
 
         with factory.connect() as conn:
             versions = conn.execute("SELECT version FROM schema_version").fetchall()
-        assert len(versions) == 9
+        assert len(versions) == 10
         assert versions[-1][0] == 10
 
     def test_skips_already_applied(self, tmp_path: Path) -> None:

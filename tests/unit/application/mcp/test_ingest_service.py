@@ -14,6 +14,7 @@ from domain.pipeline.scan_events import (
 )
 from infrastructure.store.connection import ConnectionFactory
 from infrastructure.store.repositories.findings import FindingRepository
+from infrastructure.store.repositories.repositories import RepositoryRepository
 from infrastructure.store.repositories.runs import RunRepository
 
 
@@ -35,6 +36,7 @@ def _make_service(
     return McpIngestService(
         finding_repo=FindingRepository(factory),
         run_repo=RunRepository(factory),
+        repo_repo=RepositoryRepository(factory),
         scan_event_sink=sink,
     )
 

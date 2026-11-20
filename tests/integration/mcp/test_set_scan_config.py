@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from unittest.mock import Mock
 
 import pytest
 
@@ -35,7 +36,9 @@ def run_repo(factory: ConnectionFactory) -> RunRepository:
 def service(
     finding_repo: FindingRepository, run_repo: RunRepository
 ) -> McpIngestService:
-    return McpIngestService(finding_repo=finding_repo, run_repo=run_repo)
+    return McpIngestService(
+        finding_repo=finding_repo, run_repo=run_repo, repo_repo=Mock()
+    )
 
 
 class TestSetScanConfig:

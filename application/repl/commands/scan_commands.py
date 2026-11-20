@@ -700,6 +700,7 @@ class ScanCommands:
         mcp_service = McpIngestService(
             finding_repo=finding_repo,
             run_repo=run_repo,
+            repo_repo=create_repo_repo(paths.findings_db),
         )
         from application.repl.adapters.console_scan_event_sink import (
             ConsoleScanEventSink,
@@ -827,6 +828,7 @@ class ScanCommands:
         mcp_service = McpIngestService(
             finding_repo=finding_repo,
             run_repo=run_repo,
+            repo_repo=create_repo_repo(paths.findings_db),
         )
 
         scan_config = mcp_service.get_scan_config(project=project_name, run_id=run_id)

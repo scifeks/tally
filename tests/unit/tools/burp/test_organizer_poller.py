@@ -332,6 +332,7 @@ class TestRepoResolution:
         )
         poller.poll_once()
 
-        payload = ingest.submit_finding.call_args[0][1]
-        assert payload["meta"]["repo_id"] == 5
-        assert payload["meta"]["repo"] == "webgoat"
+        call = ingest.submit_finding.call_args
+        assert call.kwargs["repo_id"] == 5
+        assert "repo_id" not in call.args[1]["meta"]
+        assert call.args[1]["meta"]["repo"] == "webgoat"

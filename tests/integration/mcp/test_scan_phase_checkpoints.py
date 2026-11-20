@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from unittest.mock import Mock
 
 import pytest
 
@@ -75,7 +76,9 @@ class TestMarkScanPhaseComplete:
         run_repo: RunRepository,
     ) -> None:
         """Mark a phase complete and verify get_scan_phase_status reflects it."""
-        service = McpIngestService(finding_repo=finding_repo, run_repo=run_repo)
+        service = McpIngestService(
+            finding_repo=finding_repo, run_repo=run_repo, repo_repo=Mock()
+        )
 
         result = service.mark_scan_phase_complete(
             project=None,
@@ -98,7 +101,9 @@ class TestMarkScanPhaseComplete:
         run_repo: RunRepository,
     ) -> None:
         """Multiple calls to mark_scan_phase_complete auto-increment attempt_number."""
-        service = McpIngestService(finding_repo=finding_repo, run_repo=run_repo)
+        service = McpIngestService(
+            finding_repo=finding_repo, run_repo=run_repo, repo_repo=Mock()
+        )
 
         r1 = service.mark_scan_phase_complete(
             project=None,
@@ -143,7 +148,9 @@ class TestMarkScanPhaseComplete:
         factory: ConnectionFactory,
     ) -> None:
         """Metadata dict is persisted to metadata_json."""
-        service = McpIngestService(finding_repo=finding_repo, run_repo=run_repo)
+        service = McpIngestService(
+            finding_repo=finding_repo, run_repo=run_repo, repo_repo=Mock()
+        )
 
         service.mark_scan_phase_complete(
             project=None,
@@ -176,7 +183,9 @@ class TestMarkInProgressFailed:
         factory: ConnectionFactory,
     ) -> None:
         """in_progress rows flip to failed; completed rows stay unchanged."""
-        service = McpIngestService(finding_repo=finding_repo, run_repo=run_repo)
+        service = McpIngestService(
+            finding_repo=finding_repo, run_repo=run_repo, repo_repo=Mock()
+        )
 
         # Seed one in_progress and one completed phase
         insert_scan_phase_execution(
@@ -216,7 +225,9 @@ class TestGetScanPhaseStatus:
         run_repo: RunRepository,
     ) -> None:
         """Empty run returns empty completed_phases and latest_execution_per_phase."""
-        service = McpIngestService(finding_repo=finding_repo, run_repo=run_repo)
+        service = McpIngestService(
+            finding_repo=finding_repo, run_repo=run_repo, repo_repo=Mock()
+        )
         status = service.get_scan_phase_status(project=None, run_id=run_id)
 
         assert status["completed_phases"] == []
@@ -229,7 +240,9 @@ class TestGetScanPhaseStatus:
         run_repo: RunRepository,
     ) -> None:
         """Multiple distinct phases tracked correctly."""
-        service = McpIngestService(finding_repo=finding_repo, run_repo=run_repo)
+        service = McpIngestService(
+            finding_repo=finding_repo, run_repo=run_repo, repo_repo=Mock()
+        )
 
         service.mark_scan_phase_complete(project=None, run_id=run_id, phase="recon")
         service.mark_scan_phase_complete(

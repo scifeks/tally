@@ -7,6 +7,7 @@ from unittest.mock import MagicMock, patch
 from web.api.scans import _build_background_launcher
 
 
+@patch("web.api.scans.create_repo_repo")
 @patch("web.api.scans.create_finding_repo")
 @patch("web.api.scans.create_scan_repos")
 @patch("web.api.scans.ConfigManager")
@@ -14,6 +15,7 @@ def test_build_background_launcher_passes_sink_and_phase_repo(
     mock_cm: MagicMock,
     mock_scan_repos: MagicMock,
     mock_finding_repo: MagicMock,
+    mock_repo_repo: MagicMock,
 ) -> None:
     mock_scan_repos.return_value = (MagicMock(), None, None, None)
     mock_finding_repo.return_value = MagicMock()

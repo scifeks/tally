@@ -309,6 +309,7 @@ def _schedule_scan_launch(
     mcp_service = McpIngestService(
         finding_repo=finding_repo,
         run_repo=run_repo,
+        repo_repo=create_repo_repo(paths.findings_db),
     )
     # CLI has no live SSE subscribers; events dropped on the floor.
     launcher = ScanBackgroundLauncher(

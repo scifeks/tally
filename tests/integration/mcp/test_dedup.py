@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from unittest.mock import Mock
 
 import pytest
 
@@ -49,7 +50,6 @@ def _make_test_finding(
     line_number: int = 10,
     line_end: int | None = None,
 ) -> dict:
-    """Create a test finding dict."""
     result = {
         "tool": "semgrep",
         "segment": "sast",
@@ -71,7 +71,9 @@ class TestGetDuplicateCandidatesEmptyRun:
         run_repo: RunRepository,
     ) -> None:
         """Empty run (no findings) returns {"groups": []}."""
-        service = McpIngestService(finding_repo=finding_repo, run_repo=run_repo)
+        service = McpIngestService(
+            finding_repo=finding_repo, run_repo=run_repo, repo_repo=Mock()
+        )
         result = service.get_duplicate_candidates(run_id)
 
         assert result == {"groups": []}
@@ -103,7 +105,9 @@ class TestGetDuplicateCandidatesSameRuleId:
         ]
         finding_repo.insert_findings(run_id, normalize_test_findings(findings))
 
-        service = McpIngestService(finding_repo=finding_repo, run_repo=run_repo)
+        service = McpIngestService(
+            finding_repo=finding_repo, run_repo=run_repo, repo_repo=Mock()
+        )
         result = service.get_duplicate_candidates(run_id)
 
         assert "groups" in result
@@ -132,7 +136,9 @@ class TestGetDuplicateCandidatesSameRuleId:
         ]
         finding_repo.insert_findings(run_id, normalize_test_findings(findings))
 
-        service = McpIngestService(finding_repo=finding_repo, run_repo=run_repo)
+        service = McpIngestService(
+            finding_repo=finding_repo, run_repo=run_repo, repo_repo=Mock()
+        )
         result = service.get_duplicate_candidates(run_id)
 
         assert len(result["groups"]) == 1
@@ -159,7 +165,9 @@ class TestGetDuplicateCandidatesSameRuleId:
         ]
         finding_repo.insert_findings(run_id, normalize_test_findings(findings))
 
-        service = McpIngestService(finding_repo=finding_repo, run_repo=run_repo)
+        service = McpIngestService(
+            finding_repo=finding_repo, run_repo=run_repo, repo_repo=Mock()
+        )
         result = service.get_duplicate_candidates(run_id)
 
         assert result["groups"] == []
@@ -187,7 +195,9 @@ class TestGetDuplicateCandidatesDifferentFamilies:
         ]
         finding_repo.insert_findings(run_id, normalize_test_findings(findings))
 
-        service = McpIngestService(finding_repo=finding_repo, run_repo=run_repo)
+        service = McpIngestService(
+            finding_repo=finding_repo, run_repo=run_repo, repo_repo=Mock()
+        )
         result = service.get_duplicate_candidates(run_id)
 
         assert result["groups"] == []
@@ -215,7 +225,9 @@ class TestGetDuplicateCandidatesDifferentFiles:
         ]
         finding_repo.insert_findings(run_id, normalize_test_findings(findings))
 
-        service = McpIngestService(finding_repo=finding_repo, run_repo=run_repo)
+        service = McpIngestService(
+            finding_repo=finding_repo, run_repo=run_repo, repo_repo=Mock()
+        )
         result = service.get_duplicate_candidates(run_id)
 
         assert result["groups"] == []
@@ -243,7 +255,9 @@ class TestGetDuplicateCandidatesProximityBoundary:
         ]
         finding_repo.insert_findings(run_id, normalize_test_findings(findings))
 
-        service = McpIngestService(finding_repo=finding_repo, run_repo=run_repo)
+        service = McpIngestService(
+            finding_repo=finding_repo, run_repo=run_repo, repo_repo=Mock()
+        )
         result = service.get_duplicate_candidates(run_id)
 
         assert result["groups"] == []
@@ -276,7 +290,9 @@ class TestGetDuplicateCandidatesMultipleGroups:
         ]
         finding_repo.insert_findings(run_id, normalize_test_findings(findings))
 
-        service = McpIngestService(finding_repo=finding_repo, run_repo=run_repo)
+        service = McpIngestService(
+            finding_repo=finding_repo, run_repo=run_repo, repo_repo=Mock()
+        )
         result = service.get_duplicate_candidates(run_id)
 
         assert len(result["groups"]) == 1
@@ -307,7 +323,9 @@ class TestGetDuplicateCandidatesLineRanges:
         ]
         finding_repo.insert_findings(run_id, normalize_test_findings(findings))
 
-        service = McpIngestService(finding_repo=finding_repo, run_repo=run_repo)
+        service = McpIngestService(
+            finding_repo=finding_repo, run_repo=run_repo, repo_repo=Mock()
+        )
         result = service.get_duplicate_candidates(run_id)
 
         assert len(result["groups"]) == 1
@@ -336,7 +354,9 @@ class TestGetDuplicateCandidatesLineRanges:
         ]
         finding_repo.insert_findings(run_id, normalize_test_findings(findings))
 
-        service = McpIngestService(finding_repo=finding_repo, run_repo=run_repo)
+        service = McpIngestService(
+            finding_repo=finding_repo, run_repo=run_repo, repo_repo=Mock()
+        )
         result = service.get_duplicate_candidates(run_id)
 
         assert len(result["groups"]) == 1
@@ -360,7 +380,9 @@ class TestResolveDuplicates:
         survivor_id = inserted[0].id
         loser_id = inserted[1].id
 
-        service = McpIngestService(finding_repo=finding_repo, run_repo=run_repo)
+        service = McpIngestService(
+            finding_repo=finding_repo, run_repo=run_repo, repo_repo=Mock()
+        )
         result = service.resolve_duplicates(run_id, survivor_id, [loser_id])
 
         assert result == {"status": "resolved", "count": 1}
@@ -386,7 +408,9 @@ class TestResolveDuplicates:
         survivor_id = inserted[0].id
         loser_id = inserted[1].id
 
-        service = McpIngestService(finding_repo=finding_repo, run_repo=run_repo)
+        service = McpIngestService(
+            finding_repo=finding_repo, run_repo=run_repo, repo_repo=Mock()
+        )
         service.resolve_duplicates(run_id, survivor_id, [loser_id])
 
         reportable = finding_repo.get_reportable_findings()
@@ -401,7 +425,9 @@ class TestResolveDuplicates:
         run_repo: RunRepository,
     ) -> None:
         """Calling resolve_duplicates with non-existent survivor returns error."""
-        service = McpIngestService(finding_repo=finding_repo, run_repo=run_repo)
+        service = McpIngestService(
+            finding_repo=finding_repo, run_repo=run_repo, repo_repo=Mock()
+        )
         result = service.resolve_duplicates(run_id, 9999, [])
 
         assert result == {"status": "rejected", "error": "survivor not found"}
@@ -426,7 +452,9 @@ class TestResolveDuplicates:
 
         finding_repo.mark_as_duplicate(b_id, a_id)
 
-        service = McpIngestService(finding_repo=finding_repo, run_repo=run_repo)
+        service = McpIngestService(
+            finding_repo=finding_repo, run_repo=run_repo, repo_repo=Mock()
+        )
         result = service.resolve_duplicates(run_id, b_id, [c_id])
 
         assert result == {
@@ -451,7 +479,9 @@ class TestResolveDuplicates:
         inserted = finding_repo.get_findings_by_run_id(run_id)
         survivor_id = inserted[0].id
 
-        service = McpIngestService(finding_repo=finding_repo, run_repo=run_repo)
+        service = McpIngestService(
+            finding_repo=finding_repo, run_repo=run_repo, repo_repo=Mock()
+        )
         result = service.resolve_duplicates(run_id, survivor_id, [])
 
         assert result == {"status": "resolved", "count": 0}
