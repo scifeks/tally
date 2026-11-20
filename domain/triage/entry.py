@@ -21,6 +21,8 @@ class TriageBatchRow:
     created_at: str | None
     started_at: str | None
     completed_at: str | None
+    execution_id: int | None = None
+    attempt_number: int | None = None
 
 
 @dataclass(frozen=True)

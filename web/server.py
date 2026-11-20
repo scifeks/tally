@@ -159,9 +159,18 @@ def create_app(
         docker_available=app.state.runtime_dependency_service.is_installed("docker"),
         api_key=triage_api_key,
     )
+    background_availability = None
+    if cfg:
+        from application.anthropic.mode_availability import (
+            BackgroundModeAvailabilityService,
+        )
+
+        background_availability = BackgroundModeAvailabilityService(cfg).evaluate()
+
     app.state.capabilities_service = CapabilitiesService(
         base_path=base_path,
         triage_readiness=triage_readiness,
+        background_availability=background_availability,
     )
 
     app.include_router(auth_router, prefix="/api/v1/auth")

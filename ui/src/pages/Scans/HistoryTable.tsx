@@ -50,6 +50,7 @@ export function HistoryTable({ projectId }: { projectId: number }) {
                     'uppercase',
                     scan.status === 'done' && 'text-low',
                     (scan.status === 'failed' || scan.status === 'cancelled') && 'text-crit',
+                    scan.status === 'rate_limited' && 'text-high',
                     scan.status === 'cancelling' && 'text-high'
                   )}
                 >

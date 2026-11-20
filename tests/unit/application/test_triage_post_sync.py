@@ -36,10 +36,16 @@ class TestTriagePostSync:
 
         with (
             patch(
-                "application.triage.container.ensure_triage_image",
+                "application.agent_sandbox.image.ensure_image",
             ),
             patch(
-                "application.triage.container.ensure_triage_containers",
+                "application.agent_sandbox.container.ensure_containers",
+            ),
+            patch(
+                "application.triage.factory.resolve_triage_config",
+                return_value=MagicMock(
+                    provider_name="claude", base_url="", model="sonnet"
+                ),
             ),
             patch(
                 "application.triage.triage_service.run_triage_for_project",
@@ -82,10 +88,16 @@ class TestTriagePostSync:
 
         with (
             patch(
-                "application.triage.container.ensure_triage_image",
+                "application.agent_sandbox.image.ensure_image",
             ),
             patch(
-                "application.triage.container.ensure_triage_containers",
+                "application.agent_sandbox.container.ensure_containers",
+            ),
+            patch(
+                "application.triage.factory.resolve_triage_config",
+                return_value=MagicMock(
+                    provider_name="claude", base_url="", model="sonnet"
+                ),
             ),
             patch(
                 "application.triage.triage_service.run_triage_for_project",
@@ -128,10 +140,16 @@ class TestTriagePostSync:
 
         with (
             patch(
-                "application.triage.container.ensure_triage_image",
+                "application.agent_sandbox.image.ensure_image",
             ),
             patch(
-                "application.triage.container.ensure_triage_containers",
+                "application.agent_sandbox.container.ensure_containers",
+            ),
+            patch(
+                "application.triage.factory.resolve_triage_config",
+                return_value=MagicMock(
+                    provider_name="claude", base_url="", model="sonnet"
+                ),
             ),
             patch(
                 "application.triage.triage_service.run_triage_for_project",
@@ -159,3 +177,56 @@ class TestTriagePostSync:
             )
 
         assert future.result() == {"success": 5}
+
+    def test_rate_limited_result_skips_sync(
+        self,
+    ) -> None:
+        svc = _build_service()
+        future: Future[dict[str, int]] = Future()
+
+        with (
+            patch(
+                "application.agent_sandbox.image.ensure_image",
+            ),
+            patch(
+                "application.agent_sandbox.container.ensure_containers",
+            ),
+            patch(
+                "application.triage.factory.resolve_triage_config",
+                return_value=MagicMock(
+                    provider_name="claude", base_url="", model="sonnet"
+                ),
+            ),
+            patch(
+                "application.triage.triage_service.run_triage_for_project",
+                return_value={
+                    "sessions_run": 1,
+                    "success": 0,
+                    "failed": 1,
+                    "incomplete": 0,
+                    "status": "rate_limited",
+                    "last_error_class": "rate_limit_plan",
+                },
+            ),
+            patch("application.triage.triage_service.ConfigManager"),
+            patch(
+                "application.triage.triage_service.run_configured_syncs"
+            ) as mock_sync,
+        ):
+            svc._run_worker(
+                future=future,
+                holder_token="test",
+                base_path="/app",
+                project_id=1,
+                project_name="proj",
+                scan_run_id=42,
+                event_sink=None,
+                tool_registry=MagicMock(),
+                cancel_token=MagicMock(),
+                is_resume=False,
+            )
+
+            mock_sync.assert_not_called()
+
+        result = future.result()
+        assert result["status"] == "rate_limited"

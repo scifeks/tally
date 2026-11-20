@@ -1,6 +1,6 @@
 """Unit tests for OpenCodeTriageAgent.
 
-Pin the relay startup, framing protocol, verdict file-drop contract,
+Pin the relay startup, framing protocol, verdict file-drop contract
 and error translation of the OpenCode adapter.
 """
 
@@ -14,11 +14,13 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from application.triage.prompts.output_instructions import FILE_OUTPUT_INSTRUCTION
 from application.triage.prompts.triage_prompt import TriagePrompt
 from application.triage.verdict import (
     Verdict,
     VerdictParseError,
 )
+from infrastructure.agents import opencode_triage_agent
 from infrastructure.agents.opencode_triage_agent import (
     OpenCodeTriageAgent,
 )
@@ -76,7 +78,7 @@ def _mock_relay(response_line: str) -> MagicMock:
     return proc
 
 
-# -- session prep / relay startup -------------------------
+# session prep / relay startup
 
 
 def test_prepare_session_yields_cwd(tmp_path: Path) -> None:
@@ -155,7 +157,7 @@ def test_prepare_session_terminates_relay(tmp_path: Path) -> None:
     mock_proc.wait.assert_called_once()
 
 
-# -- happy path -------------------------------------------
+# happy path
 
 
 def test_happy_path_returns_verdict(tmp_path: Path) -> None:
@@ -254,7 +256,7 @@ def test_missing_file_triggers_retry_with_error_context(tmp_path: Path) -> None:
     assert verdict.finding_id == _FINDING_ID
     assert len(dispatches) == 2
     assert "Previous attempt failed" in dispatches[1]
-    assert "/workspace/out/verdict.json" in dispatches[1]
+    assert FILE_OUTPUT_INSTRUCTION in dispatches[1]
 
 
 def test_both_attempts_fail_raises(tmp_path: Path) -> None:
@@ -273,7 +275,7 @@ def test_both_attempts_fail_raises(tmp_path: Path) -> None:
                     )
 
 
-# -- dispatch/relay error handling -------------------------
+# dispatch/relay error handling
 
 
 def test_nonzero_exit_raises(tmp_path: Path) -> None:
@@ -324,7 +326,7 @@ def test_relay_death_raises(tmp_path: Path) -> None:
                 )
 
 
-# -- verdict content validation ----------------------------
+# verdict content validation
 
 
 def test_finding_id_mismatch_retries_then_raises(tmp_path: Path) -> None:
@@ -373,3 +375,10 @@ def test_missing_verdict_field_retries_then_raises(tmp_path: Path) -> None:
                         timeout_seconds=60,
                         cwd=tmp_path,
                     )
+
+
+def test_class_exposes_file_output_instruction() -> None:
+    assert (
+        opencode_triage_agent.OpenCodeTriageAgent.OUTPUT_INSTRUCTION
+        == FILE_OUTPUT_INSTRUCTION
+    )

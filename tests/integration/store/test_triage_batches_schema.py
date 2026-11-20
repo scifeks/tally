@@ -102,3 +102,42 @@ class TestTriageBatchesSchema:
             ).fetchone()
         assert row[0] is None
         assert row[1] is None
+
+
+class TestTriageBatchExecutionsSchema:
+    def test_table_exists(self, tmp_path: Path) -> None:
+        factory, _, _ = _make_store(tmp_path)
+        with factory.connect() as conn:
+            row = conn.execute(
+                "SELECT name FROM sqlite_master"
+                " WHERE type='table' AND name='triage_batch_executions'"
+            ).fetchone()
+        assert row is not None
+
+    def test_all_columns_exist(self, tmp_path: Path) -> None:
+        factory, _, _ = _make_store(tmp_path)
+        with factory.connect() as conn:
+            rows = conn.execute("PRAGMA table_info(triage_batch_executions)").fetchall()
+        col_names = {r[1] for r in rows}
+        expected = {
+            "id",
+            "batch_id",
+            "attempt_number",
+            "status",
+            "usage_pool",
+            "started_at",
+            "finished_at",
+            "error_class",
+            "error_detail_json",
+        }
+        assert expected == col_names
+
+    def test_view_exists(self, tmp_path: Path) -> None:
+        factory, _, _ = _make_store(tmp_path)
+        with factory.connect() as conn:
+            row = conn.execute(
+                "SELECT name FROM sqlite_master"
+                " WHERE type='view'"
+                " AND name='triage_batches_with_status'"
+            ).fetchone()
+        assert row is not None

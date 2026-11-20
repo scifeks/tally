@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from typing import TYPE_CHECKING, Any
 
 from application.ports.triage_batch_repository import TriageBatchRepositoryPort
@@ -11,6 +12,8 @@ from domain.triage.entry import TriageBatchRow, TriageRunSummary
 if TYPE_CHECKING:
     from infrastructure.store.connection import ConnectionFactory
 
+_log = logging.getLogger(__name__)
+
 
 TRIAGE_BATCH_STATUSES = (
     "pending",
@@ -18,7 +21,10 @@ TRIAGE_BATCH_STATUSES = (
     "completed",
     "failed",
     "cancelled",
+    "rate_limited",
 )
+
+_RESETABLE_STATUSES = ("in_progress", "failed", "rate_limited")
 
 
 class TriageBatchRepository(TriageBatchRepositoryPort):
@@ -136,10 +142,15 @@ class TriageBatchRepository(TriageBatchRepositoryPort):
                 result.append((batch_id, len(batch)))
         return result
 
-    def claim_batch(self, run_id: int) -> TriageBatchRow | None:
+    def claim_batch(
+        self, run_id: int, usage_pool: str | None = None
+    ) -> TriageBatchRow | None:
         """Atomically claim the next pending batch for *run_id*.
 
-        Returns ``None`` if no claimable batch exists.
+        Inserts a ``triage_batch_executions`` row alongside the legacy
+        ``triage_batches`` status update so both tables stay consistent
+        during the migration period. Returns ``None`` when no claimable
+        batch exists.
         """
         with self._factory.connect() as conn:
             row = conn.execute(
@@ -160,12 +171,58 @@ class TriageBatchRepository(TriageBatchRepositoryPort):
                 """,
                 (run_id,),
             ).fetchone()
-        if row is None:
-            return None
-        return _row_to_triage_batch(row)
+            if row is None:
+                return None
+            batch_id = row["id"]
+            exec_cur = conn.execute(
+                """
+                INSERT INTO triage_batch_executions
+                    (batch_id, attempt_number, status, usage_pool,
+                     started_at)
+                VALUES (
+                    ?,
+                    1 + COALESCE(
+                        (SELECT MAX(attempt_number)
+                         FROM triage_batch_executions
+                         WHERE batch_id = ?),
+                        0
+                    ),
+                    'in_progress',
+                    ?,
+                    datetime('now')
+                )
+                """,
+                (batch_id, batch_id, usage_pool),
+            )
+            execution_id: int = exec_cur.lastrowid  # type: ignore[assignment]
+            exec_row = conn.execute(
+                "SELECT attempt_number FROM triage_batch_executions WHERE id = ?",
+                (execution_id,),
+            ).fetchone()
+            attempt_number = exec_row["attempt_number"] if exec_row else None
+        return TriageBatchRow(
+            id=row["id"],
+            run_id=row["run_id"],
+            finding_ids=(json.loads(row["finding_ids"]) if row["finding_ids"] else []),
+            batch_data=(json.loads(row["batch_data"]) if row["batch_data"] else []),
+            status=row["status"],
+            run_attempts=int(row["run_attempts"] or 0),
+            created_at=row["created_at"],
+            started_at=row["started_at"],
+            completed_at=row["completed_at"],
+            execution_id=execution_id,
+            attempt_number=attempt_number,
+        )
 
-    def complete_batch(self, batch_id: int, status: str) -> None:
-        """Sets status and completed_at on the given batch."""
+    def complete_batch(
+        self, batch_id: int, status: str, *, error_class: str | None = None
+    ) -> None:
+        """Mark a batch (and its latest execution) as terminal.
+
+        Dual-writes to both ``triage_batches`` and the newest
+        ``in_progress`` execution row so legacy readers and the new
+        executions table stay in sync.
+        """
         with self._factory.connect() as conn:
             conn.execute(
                 """
@@ -175,20 +232,110 @@ class TriageBatchRepository(TriageBatchRepositoryPort):
                 """,
                 (status, batch_id),
             )
+            cur = conn.execute(
+                """
+                UPDATE triage_batch_executions
+                SET status = ?,
+                    finished_at = datetime('now'),
+                    error_class = ?
+                WHERE id = (
+                    SELECT id FROM triage_batch_executions
+                    WHERE batch_id = ? AND status = 'in_progress'
+                    ORDER BY attempt_number DESC
+                    LIMIT 1
+                )
+                """,
+                (status, error_class, batch_id),
+            )
+            if cur.rowcount == 0:
+                _log.warning(
+                    "complete_batch(%d, %r): no in_progress execution row found; "
+                    "legacy batch status updated but execution table unchanged",
+                    batch_id,
+                    status,
+                )
 
-    def reset_for_resume(self, run_id: int) -> int:
-        """Flip stranded ``in_progress`` and ``failed`` rows back
-        to ``pending`` so an explicit resume can pick them up.
+    def get_latest_usage_pool(self, run_id: int) -> str | None:
+        """Return the usage_pool from the most recent triage_batch_execution."""
+        with self._factory.connect() as conn:
+            row = conn.execute(
+                "SELECT e.usage_pool"
+                " FROM triage_batch_executions e"
+                " JOIN triage_batches b ON b.id = e.batch_id"
+                " WHERE b.run_id = ? AND e.usage_pool IS NOT NULL"
+                " ORDER BY e.id DESC LIMIT 1",
+                (run_id,),
+            ).fetchone()
+        return row["usage_pool"] if row else None
 
-        Returns the number of rows flipped.
+    def start_failover_execution(
+        self, batch_id: int, new_usage_pool: str
+    ) -> tuple[int, int]:
+        """Close the current in_progress execution as rate_limited and open a new one.
+
+        Used by plan-to-api failover to record the billing pool switch
+        on the same batch without losing the original attempt's audit trail.
+
+        Returns ``(execution_id, attempt_number)`` for the new row.
         """
         with self._factory.connect() as conn:
+            cur = conn.execute(
+                """
+                UPDATE triage_batch_executions
+                SET status = 'rate_limited',
+                    finished_at = datetime('now')
+                WHERE id = (
+                    SELECT id FROM triage_batch_executions
+                    WHERE batch_id = ? AND status = 'in_progress'
+                    ORDER BY attempt_number DESC
+                    LIMIT 1
+                )
+                RETURNING attempt_number
+                """,
+                (batch_id,),
+            )
+            closed = cur.fetchone()
+            prev_attempt = closed["attempt_number"] if closed else 0
+            new_attempt = prev_attempt + 1
+
+            new_cur = conn.execute(
+                """
+                INSERT INTO triage_batch_executions
+                    (batch_id, attempt_number, status, usage_pool, started_at)
+                VALUES (?, ?, 'in_progress', ?, datetime('now'))
+                """,
+                (batch_id, new_attempt, new_usage_pool),
+            )
+            new_exec_id: int = new_cur.lastrowid  # type: ignore[assignment]
+            return new_exec_id, new_attempt
+
+    def reset_for_resume(self, run_id: int) -> int:
+        """Flip stranded batches back to ``pending`` for resume.
+
+        Resets batches in any of ``_RESETABLE_STATUSES`` and closes
+        their active execution rows so attempt numbering stays
+        consistent on the next claim.
+        """
+        with self._factory.connect() as conn:
+            conn.execute(
+                """
+                UPDATE triage_batch_executions
+                SET status = 'cancelled', finished_at = datetime('now')
+                WHERE status = 'in_progress'
+                  AND batch_id IN (
+                      SELECT id FROM triage_batches
+                      WHERE run_id = ?
+                        AND status IN (?, ?, ?)
+                  )
+                """,
+                (run_id, *_RESETABLE_STATUSES),
+            )
             cur = conn.execute(
                 "UPDATE triage_batches"
                 " SET status = 'pending', started_at = NULL"
                 " WHERE run_id = ?"
-                "   AND status IN ('in_progress', 'failed')",
-                (run_id,),
+                "   AND status IN (?, ?, ?)",
+                (run_id, *_RESETABLE_STATUSES),
             )
             return cur.rowcount
 
@@ -215,13 +362,27 @@ class TriageBatchRepository(TriageBatchRepositoryPort):
         ]
 
     def cancel_remaining(self, run_id: int) -> int:
-        """Mark remaining pending/in_progress batches as cancelled.
+        """Mark remaining pending/in_progress batches as canceled.
 
         Sets ``status = 'cancelled'`` and stamps ``completed_at`` to now
         for every triage_batches row whose status is ``pending`` or
-        ``in_progress``. Returns the number of rows updated.
+        ``in_progress``. Also closes any open execution rows for those
+        batches. Returns the number of batch rows updated.
         """
         with self._factory.connect() as conn:
+            conn.execute(
+                """
+                UPDATE triage_batch_executions
+                SET status = 'cancelled', finished_at = datetime('now')
+                WHERE status = 'in_progress'
+                  AND batch_id IN (
+                      SELECT id FROM triage_batches
+                      WHERE run_id = ?
+                        AND status IN ('pending', 'in_progress')
+                  )
+                """,
+                (run_id,),
+            )
             cur = conn.execute(
                 "UPDATE triage_batches"
                 " SET status = 'cancelled', completed_at = datetime('now')"
@@ -288,17 +449,8 @@ class TriageBatchRepository(TriageBatchRepositoryPort):
 
         Returns ``None`` if no triage_batches rows exist for *run_id*.
 
-        - status: ``'cancelled'`` if any batch cancelled; else
-          ``'failed'`` if any batch failed; else ``'running'`` if any
-          batch still pending/in_progress; else ``'done'``.
-        - started_at: MIN(started_at) across batches, or None if not
-          yet started.
-        - finished_at: MAX(completed_at) iff terminal (no
-          pending/in_progress batches remain).
-        - total_findings: sum of ``len(finding_ids)`` across all
-          batches for this run.
-        - processed_findings: same sum but only over batches whose
-          status is ``'completed'``.
+        Status priority: ``cancelled`` > ``running`` (pending/in_progress) >
+        ``rate_limited`` > ``failed`` > ``done``.
 
         See ``list_for_run`` for what ``after_batch_id`` means.
         """
@@ -327,6 +479,8 @@ class TriageBatchRepository(TriageBatchRepositoryPort):
             status = "cancelled"
         elif counts.get("pending", 0) > 0 or counts.get("in_progress", 0) > 0:
             status = "running"
+        elif counts.get("rate_limited", 0) > 0:
+            status = "rate_limited"
         elif counts.get("failed", 0) > 0:
             status = "failed"
         else:

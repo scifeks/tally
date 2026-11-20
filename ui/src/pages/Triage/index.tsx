@@ -470,6 +470,7 @@ export default function Triage() {
     statusLabel === 'done' && 'text-low',
     statusLabel === 'cancelled' && 'text-muted-foreground',
     statusLabel === 'failed' && 'text-crit',
+    statusLabel === 'rate_limited' && 'text-high',
     statusLabel === 'idle' && 'text-muted-foreground'
   )
 

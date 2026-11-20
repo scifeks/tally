@@ -10,6 +10,7 @@ SCAN_RUN_STATUSES = (
     "running",
     "done",
     "failed",
+    "rate_limited",
     "cancelling",
     "cancelled",
 )

@@ -30,9 +30,9 @@ describe('Triage LogRow', () => {
 
   it.each([
     ['batch_started', '[*]'],
-    ['batch_completed', '[✓]'],
+    ['batch_completed', '[v]'],
     ['batch_failed', '[!]'],
-    ['batch_retry', '[↻]'],
+    ['batch_retry', '[~]'],
     ['run_cancelled', 'XXX'],
   ] as [TriageLogEventType, string][])(
     '%s renders prefix "%s"',

@@ -6,19 +6,22 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from application.agent_sandbox.compose import ComposeGenerationError
+from application.agent_sandbox.container import AgentContainerStartError
+from application.agent_sandbox.image import DockerNotAvailableError
 from application.repl.commands.triage_commands import TriageCommands
-from application.triage.compose import ComposeGenerationError
-from application.triage.container import (
-    DockerNotAvailableError,
-    TriageContainerStartError,
-)
 
-_RUNNING = "application.repl.commands.triage_commands.triage_containers_running"
-_ENSURE = "application.repl.commands.triage_commands.ensure_triage_containers"
+_RUNNING = "application.repl.commands.triage_commands.containers_running"
+_ENSURE = "application.repl.commands.triage_commands.ensure_containers"
+_RESOLVE_CONFIG = "application.repl.commands.triage_commands.resolve_triage_config"
 
 
 def _printed(repl: MagicMock) -> str:
     return " ".join(str(c) for c in repl.console.print.call_args_list)
+
+
+def _resolved() -> MagicMock:
+    return MagicMock(provider_name="claude", base_url="", model="sonnet")
 
 
 @pytest.fixture()
@@ -33,6 +36,7 @@ class TestEnsureContainers:
         cmds = TriageCommands(mock_repl)
         with (
             patch(_RUNNING, return_value=False),
+            patch(_RESOLVE_CONFIG, return_value=_resolved()),
             patch(_ENSURE, return_value=True),
         ):
             assert cmds._ensure_containers() is True
@@ -46,6 +50,7 @@ class TestEnsureContainers:
         cmds = TriageCommands(mock_repl)
         with (
             patch(_RUNNING, return_value=True),
+            patch(_RESOLVE_CONFIG, return_value=_resolved()),
             patch(_ENSURE, return_value=False),
         ):
             assert cmds._ensure_containers() is True
@@ -66,6 +71,7 @@ class TestEnsureContainers:
         cmds = TriageCommands(mock_repl)
         with (
             patch(_RUNNING, return_value=False),
+            patch(_RESOLVE_CONFIG, return_value=_resolved()),
             patch(
                 _ENSURE,
                 side_effect=ComposeGenerationError("bad oauth"),
@@ -78,9 +84,10 @@ class TestEnsureContainers:
         cmds = TriageCommands(mock_repl)
         with (
             patch(_RUNNING, return_value=False),
+            patch(_RESOLVE_CONFIG, return_value=_resolved()),
             patch(
                 _ENSURE,
-                side_effect=TriageContainerStartError("boom"),
+                side_effect=AgentContainerStartError("boom"),
             ),
         ):
             assert cmds._ensure_containers() is False

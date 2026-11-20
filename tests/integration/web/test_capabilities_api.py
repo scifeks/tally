@@ -34,6 +34,8 @@ class TestCapabilities:
             "max_report_history",
             "triage_backend_label",
             "triage_mode",
+            "background_mode",
+            "default_billing_method",
         }
 
     async def test_field_types(self, app_client) -> None:
@@ -50,6 +52,18 @@ class TestCapabilities:
             or data["triage_backend_label"] is None
         )
         assert isinstance(data["triage_mode"], str) or data["triage_mode"] is None
+
+    async def test_background_mode_populated(self, app_client) -> None:
+        """background_mode is a dict (not null) when config exists."""
+        client, *_ = app_client
+        resp = await client.get("/api/v1/capabilities")
+        assert resp.status_code == 200
+        bg = resp.json()["background_mode"]
+        assert bg is not None
+        assert isinstance(bg, dict)
+        assert "oauth_available" in bg
+        assert "api_key_available" in bg
+        assert "interactive_available" in bg
 
     async def test_report_retention_enabled_is_false(self, app_client) -> None:
         """Hardcoded False until a retention sweep mechanism exists."""

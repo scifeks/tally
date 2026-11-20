@@ -90,6 +90,11 @@ class StaleSavedScan(Conflict):
         )
 
 
+class BadRequest(APIError):
+    status = 400
+    default_code = "BAD_REQUEST"
+
+
 class ValidationError(APIError):
     status = 422
     default_code = "VALIDATION_ERROR"

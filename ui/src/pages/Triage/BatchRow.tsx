@@ -26,6 +26,7 @@ export function BatchRow({
     in_progress: 'text-high animate-pulse',
     completed: 'text-low',
     failed: 'text-crit',
+    rate_limited: 'text-high',
     cancelled: 'text-muted-foreground',
   }
 

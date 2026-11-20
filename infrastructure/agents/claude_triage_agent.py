@@ -8,10 +8,14 @@ import subprocess
 import threading
 from contextlib import contextmanager
 from pathlib import Path
+from typing import ClassVar
 
 from application.ports.triage_agent import (
     PreparedTriageSession,
     TriageSessionResult,
+)
+from application.triage.prompts.output_instructions import (
+    STDOUT_OUTPUT_INSTRUCTION,
 )
 from application.triage.prompts.triage_prompt import TriagePrompt
 from domain.triage.verdict import (
@@ -25,6 +29,8 @@ _TIMEOUT_EXIT_CODE = 124
 
 class ClaudeTriageAgent:
     """Claude-backed triage adapter with persistent relay."""
+
+    OUTPUT_INSTRUCTION: ClassVar[str] = STDOUT_OUTPUT_INSTRUCTION
 
     def __init__(self, *, model: str, compose_path: Path) -> None:
         self._model = model

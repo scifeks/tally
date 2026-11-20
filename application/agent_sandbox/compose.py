@@ -1,0 +1,567 @@
+"""Per-project Docker Compose file generation for the agent sandbox."""
+
+from __future__ import annotations
+
+import re
+from pathlib import Path
+from typing import TYPE_CHECKING, Any
+from urllib.parse import urlparse, urlunparse
+
+import yaml
+
+from application.agent_sandbox.image import AGENT_IMAGE_TAG
+from application.triage.credentials import (
+    ClaudeAuthMode,
+    ClaudeCredentials,
+    OpenCodeCredentials,
+    resolve_claude_credentials,
+)
+from core.config.manager import ConfigManager
+
+if TYPE_CHECKING:
+    from application.ports.agent_compose import AgentComposePort
+
+COMPOSE_RELATIVE_PATH = Path("docker/triage-agent/docker-compose.yaml")
+PROXY_CONFIG_DIR = Path("docker/triage-agent")
+PROXY_PORT = 8888
+
+_LOCALHOST_HOSTS = frozenset({"localhost", "127.0.0.1", "::1"})
+
+
+class ComposeGenerationError(RuntimeError):
+    """Raised when compose file generation fails."""
+
+
+def resolve_egress_target(
+    provider: str,
+    api_provider_url: str,
+) -> tuple[str, int]:
+    """Returns (host, port) for the proxy allowlist.
+
+    Claude targets api.anthropic.com:443. OpenCode targets
+    the configured inference endpoint parsed from the provider URL.
+    """
+    if provider in ("claude", "claude_sdk"):
+        return ("api.anthropic.com", 443)
+
+    if not api_provider_url:
+        raise ComposeGenerationError(
+            "triage_inference base_url must be set in "
+            "config/global.json for network sandboxing."
+        )
+    parsed = urlparse(api_provider_url)
+    if not parsed.hostname:
+        raise ComposeGenerationError(
+            f"Cannot parse hostname from opencode.api_provider: {api_provider_url}"
+        )
+    default_port = 443 if parsed.scheme == "https" else 80
+    port = parsed.port or default_port
+    return (parsed.hostname, port)
+
+
+def _dockerize_url(url: str) -> str:
+    """Rewrites localhost URLs to host.docker.internal.
+
+    Inside a Docker container, localhost refers to the
+    container's own loopback. This rewrites to the special
+    Docker hostname that resolves to the host machine.
+    Intended for inference endpoints that bind to localhost
+    on the host but must be reached from inside the container.
+    """
+    parsed = urlparse(url)
+    if parsed.hostname not in _LOCALHOST_HOSTS:
+        return url
+    port = parsed.port
+    new_host = "host.docker.internal"
+    if port:
+        new_netloc = f"{new_host}:{port}"
+    else:
+        new_netloc = new_host
+    return urlunparse(parsed._replace(netloc=new_netloc))
+
+
+def build_proxy_config(connect_ports: list[int]) -> str:
+    """Generates tinyproxy.conf content.
+
+    Deduplicates ports before writing ConnectPort directives
+    (a port only needs one directive even if requested multiple times).
+    """
+    port_lines = "\n".join(f"ConnectPort {p}" for p in sorted(set(connect_ports)))
+    return (
+        f"Port {PROXY_PORT}\n"
+        f"Listen 0.0.0.0\n"
+        f'LogFile "/dev/stdout"\n'
+        f'PidFile "/run/tinyproxy.pid"\n'
+        f"MaxClients 10\n"
+        f"FilterDefaultDeny Yes\n"
+        f'Filter "/etc/tinyproxy/filter"\n'
+        f"FilterURLs Off\n"
+        f"FilterExtended On\n"
+        f"{port_lines}\n"
+    )
+
+
+def build_proxy_filter(allowed_hosts: list[str]) -> str:
+    """Generates tinyproxy filter file content.
+
+    Each host becomes a regex line anchored with ^ and $.
+    Dots are escaped for literal matching. Anchoring ensures
+    exact hostname matching and prevents overly permissive
+    regexes (e.g., 'api.anthropic' would match 'api.anthropic-internal'
+    without anchors, creating a security gap).
+    """
+    lines: list[str] = []
+    for host in allowed_hosts:
+        escaped = re.escape(host)
+        lines.append(f"^{escaped}$")
+    return "\n".join(lines) + "\n"
+
+
+def build_opencode_config(
+    *,
+    provider_name: str,
+    base_url: str,
+    model: str,
+) -> str:
+    """Generates the opencode.json config with provider and permissions."""
+    import json
+
+    config: dict[str, Any] = {
+        "$schema": "https://opencode.ai/config.json",
+        "provider": {
+            provider_name: {
+                "npm": "@ai-sdk/openai-compatible",
+                "name": provider_name,
+                "options": {
+                    "baseURL": base_url.rstrip("/") + "/v1",
+                },
+                "models": {
+                    model: {
+                        "name": model,
+                        "limit": {
+                            "context": 32768,
+                            "output": 4096,
+                        },
+                        "reasoningEffort": "none",
+                    },
+                },
+            },
+        },
+        "permission": {
+            "edit": "allow",
+            "bash": {"*": "deny"},
+            "webfetch": "deny",
+            "read": {"*": "allow"},
+            "write": {
+                "*": "deny",
+                "/workspace/out/verdict.json": "allow",
+            },
+            "task": "deny",
+            "todowrite": "deny",
+        },
+    }
+    return json.dumps(config, indent=2) + "\n"
+
+
+def build_claude_settings(hook_script_path: str) -> str:
+    """Generates Claude Code settings.json for scope-restricted triage.
+
+    Registers a PreToolUse hook that validates Read, Grep, and Glob
+    paths against the allowed repository scope.
+    """
+    import json
+
+    config = {
+        "hooks": {
+            "PreToolUse": [
+                {
+                    "matcher": "Read|Grep|Glob",
+                    "hooks": [
+                        {
+                            "type": "command",
+                            "command": hook_script_path,
+                        }
+                    ],
+                }
+            ]
+        }
+    }
+    return json.dumps(config, indent=2) + "\n"
+
+
+def build_compose_dict(
+    *,
+    repo_paths: dict[str, Path],
+    claude_creds: ClaudeCredentials,
+    opencode_creds: OpenCodeCredentials,
+    image_tag: str,
+    proxy_config_path: Path,
+    proxy_filter_path: Path,
+    oauth_identity_path: Path | None = None,
+    oauth_credentials_path: Path | None = None,
+    opencode_config_path: Path | None = None,
+    claude_settings_path: Path | None = None,
+    claude_hook_script_path: Path | None = None,
+    opencode_share_path: Path | None = None,
+    verdict_out_dir: Path | None = None,
+    provider: str = "claude",
+) -> dict[str, Any]:
+    """Builds the compose file structure as a dict.
+
+    Pure function with no I/O. The ``claude_sdk`` provider emits an
+    ``sdk-sidecar`` service in place of ``triage-agent`` and never
+    mounts the verdict output directory, since verdicts travel over
+    stdout. The proxy's host and port allowlists are written to disk
+    by the caller before this function runs; they are not needed here.
+    """
+    is_sdk = provider == "claude_sdk"
+    volumes: list[dict[str, Any]] = []
+
+    for name, host_path in sorted(repo_paths.items()):
+        volumes.append(
+            {
+                "type": "bind",
+                "source": str(host_path),
+                "target": f"/workspace/repos/{name}",
+                "read_only": True,
+            }
+        )
+
+    volumes.append({"type": "tmpfs", "target": "/tmp"})
+    volumes.append(
+        {
+            "type": "tmpfs",
+            "target": "/home/agent/.claude",
+        }
+    )
+    for oc_dir in (
+        "/home/agent/.opencode",
+        "/home/agent/.local/state/opencode",
+        "/home/agent/.cache/opencode",
+        "/home/agent/.config/opencode",
+    ):
+        volumes.append(
+            {
+                "type": "tmpfs",
+                "target": oc_dir,
+                "tmpfs": {"mode": 0o1777},
+            }
+        )
+    if opencode_share_path is not None:
+        volumes.append(
+            {
+                "type": "bind",
+                "source": str(opencode_share_path),
+                "target": "/home/agent/.local/share/opencode",
+            }
+        )
+    else:
+        volumes.append(
+            {
+                "type": "tmpfs",
+                "target": "/home/agent/.local/share/opencode",
+                "tmpfs": {"mode": 0o1777},
+            }
+        )
+
+    if verdict_out_dir is not None and not is_sdk:
+        volumes.append(
+            {
+                "type": "bind",
+                "source": str(verdict_out_dir),
+                "target": "/workspace/out",
+            }
+        )
+
+    if oauth_identity_path is not None:
+        volumes.append(
+            {
+                "type": "bind",
+                "source": str(oauth_identity_path),
+                "target": "/home/agent/.claude.json",
+                "read_only": True,
+            }
+        )
+
+    if oauth_credentials_path is not None:
+        volumes.append(
+            {
+                "type": "bind",
+                "source": str(oauth_credentials_path),
+                "target": ("/home/agent/.claude/.credentials.json"),
+                "read_only": True,
+            }
+        )
+
+    if opencode_config_path is not None:
+        volumes.append(
+            {
+                "type": "bind",
+                "source": str(opencode_config_path),
+                "target": "/etc/opencode/opencode.json",
+                "read_only": True,
+            }
+        )
+
+    if claude_settings_path is not None:
+        volumes.append(
+            {
+                "type": "bind",
+                "source": str(claude_settings_path),
+                "target": "/home/agent/.claude/settings.json",
+                "read_only": True,
+            }
+        )
+
+    if claude_hook_script_path is not None:
+        volumes.append(
+            {
+                "type": "bind",
+                "source": str(claude_hook_script_path),
+                "target": ("/home/agent/.claude/hooks/scope-guard.sh"),
+                "read_only": True,
+            }
+        )
+
+    proxy_url = f"http://triage-proxy:{PROXY_PORT}"
+    environment: dict[str, str] = {
+        "HTTP_PROXY": proxy_url,
+        "HTTPS_PROXY": proxy_url,
+    }
+
+    if claude_creds.mode is ClaudeAuthMode.API_KEY:
+        environment["ANTHROPIC_API_KEY"] = claude_creds.api_key
+
+    if opencode_creds.api_key:
+        environment["OPENCODE_API_KEY"] = opencode_creds.api_key
+    if opencode_creds.api_provider:
+        environment["OPENCODE_API_PROVIDER"] = opencode_creds.api_provider
+        environment["OLLAMA_HOST"] = opencode_creds.api_provider
+
+    agent_service: dict[str, Any] = {
+        "image": image_tag,
+        "user": "agent",
+        "read_only": True,
+        "cap_drop": ["ALL"],
+        "security_opt": ["no-new-privileges:true"],
+        "command": ["sleep", "infinity"],
+        "networks": ["triage-internal"],
+        "depends_on": {
+            "triage-proxy": {"condition": "service_started"},
+        },
+        "volumes": volumes,
+        "environment": environment,
+    }
+
+    proxy_service: dict[str, Any] = {
+        "image": image_tag,
+        "user": "agent",
+        "read_only": True,
+        "cap_drop": ["ALL"],
+        "security_opt": ["no-new-privileges:true"],
+        "command": [
+            "tinyproxy",
+            "-d",
+            "-c",
+            "/etc/tinyproxy/tinyproxy.conf",
+        ],
+        "networks": ["triage-internal", "triage-external"],
+        "extra_hosts": ["host.docker.internal:host-gateway"],
+        "volumes": [
+            {
+                "type": "tmpfs",
+                "target": "/run",
+                "tmpfs": {"mode": 0o1777},
+            },
+            {
+                "type": "bind",
+                "source": str(proxy_config_path),
+                "target": "/etc/tinyproxy/tinyproxy.conf",
+                "read_only": True,
+            },
+            {
+                "type": "bind",
+                "source": str(proxy_filter_path),
+                "target": "/etc/tinyproxy/filter",
+                "read_only": True,
+            },
+        ],
+    }
+
+    agent_name = "sdk-sidecar" if is_sdk else "triage-agent"
+    return {
+        "services": {
+            agent_name: agent_service,
+            "triage-proxy": proxy_service,
+        },
+        "networks": {
+            "triage-internal": {"internal": True},
+            "triage-external": {},
+        },
+    }
+
+
+def _resolve_compose_port() -> AgentComposePort:
+    from infrastructure.docker.agent_compose import (
+        DockerAgentCompose,
+    )
+
+    return DockerAgentCompose()
+
+
+_ALLOWED_MCP_HOSTS = frozenset({"host.docker.internal", "127.0.0.1", "localhost"})
+
+
+def _validate_mcp_endpoint(mcp_host: str | None, mcp_port: int | None) -> None:
+    if mcp_host is None and mcp_port is None:
+        return
+    if mcp_host is None or mcp_port is None:
+        raise ValueError("mcp_host and mcp_port must be set together or both omitted")
+    if mcp_host not in _ALLOWED_MCP_HOSTS:
+        raise ValueError(
+            f"mcp_host {mcp_host!r} not allowed; expected one of "
+            f"{sorted(_ALLOWED_MCP_HOSTS)}"
+        )
+    if not isinstance(mcp_port, int) or not 1 <= mcp_port <= 65535:
+        raise ValueError(f"mcp_port must be an int in 1..65535, got {mcp_port!r}")
+
+
+def generate_compose(
+    app_root: Path,
+    repo_paths: dict[str, Path],
+    *,
+    provider: str,
+    base_url: str = "",
+    model: str = "",
+    mcp_host: str | None = None,
+    mcp_port: int | None = None,
+) -> Path:
+    """Resolves credentials, validates OAuth files, generates
+    and writes the compose file and proxy config. Returns the
+    compose file path.
+
+    ``provider`` is the provider name from ``triage_inference``
+    (e.g. ``ollama``, ``llama_cpp``, ``claude``). For non-Claude
+    providers, ``base_url`` and ``model`` are the merged values
+    from the resolved triage config.
+    """
+    _validate_mcp_endpoint(mcp_host, mcp_port)
+
+    app_root = app_root.resolve()
+    cfg = ConfigManager(str(app_root)).global_config
+    claude_creds = resolve_claude_credentials(cfg.claude)
+
+    is_sdk = provider == "claude_sdk"
+    is_claude = provider in ("claude", "claude_sdk")
+    api_provider_url = "" if is_claude else base_url
+    opencode_creds = OpenCodeCredentials(
+        api_key="",
+        api_provider=api_provider_url,
+        model=model,
+    )
+
+    oauth_identity: Path | None = None
+    oauth_credentials: Path | None = None
+
+    if is_claude and claude_creds.mode is ClaudeAuthMode.OAUTH:
+        home = Path.home()
+        oauth_identity = home / ".claude.json"
+        oauth_credentials = home / ".claude" / ".credentials.json"
+        _validate_oauth_file(oauth_identity)
+        _validate_oauth_file(oauth_credentials)
+
+    egress_host, egress_port = resolve_egress_target(provider, api_provider_url)
+
+    if not is_claude and api_provider_url:
+        rewritten = _dockerize_url(api_provider_url)
+        if rewritten != api_provider_url:
+            opencode_creds = OpenCodeCredentials(
+                api_key="",
+                api_provider=rewritten,
+                model=model,
+            )
+            rewritten_host = urlparse(rewritten).hostname
+            if rewritten_host:
+                egress_host = rewritten_host
+
+    connect_ports = [443]
+    if egress_port != 443:
+        connect_ports.append(egress_port)
+    if mcp_host is not None and mcp_port is not None:
+        connect_ports.append(mcp_port)
+
+    proxy_config_content = build_proxy_config(connect_ports)
+
+    if is_claude:
+        allowed_hosts = ["api.anthropic.com"]
+        if mcp_host is not None and mcp_port is not None:
+            allowed_hosts.append(mcp_host)
+    else:
+        allowed_hosts = [egress_host]
+    proxy_filter_content = build_proxy_filter(allowed_hosts)
+
+    proxy_config_path = app_root / PROXY_CONFIG_DIR / "tinyproxy.conf"
+    proxy_filter_path = app_root / PROXY_CONFIG_DIR / "filter"
+
+    oc_config_path: Path | None = None
+    oc_config_content: str = ""
+    if not is_claude and model:
+        oc_config_content = build_opencode_config(
+            provider_name=provider,
+            base_url=opencode_creds.api_provider,
+            model=model,
+        )
+        oc_config_path = app_root / PROXY_CONFIG_DIR / "opencode.json"
+
+    hook_container_path = "/home/agent/.claude/hooks/scope-guard.sh"
+    claude_settings_content = build_claude_settings(hook_container_path)
+    claude_settings_path = app_root / PROXY_CONFIG_DIR / "claude-settings.json"
+
+    hook_script_path = app_root / "docker" / "triage-agent" / "hooks" / "scope-guard.sh"
+
+    opencode_share_path = app_root / "logs" / "triage" / "opencode-workspace"
+    opencode_share_path.mkdir(parents=True, exist_ok=True)
+
+    verdict_out_dir = app_root / "logs" / "triage" / "verdicts"
+    verdict_out_dir.mkdir(parents=True, exist_ok=True)
+
+    compose_dict = build_compose_dict(
+        repo_paths=repo_paths,
+        claude_creds=claude_creds,
+        opencode_creds=opencode_creds,
+        image_tag=AGENT_IMAGE_TAG,
+        proxy_config_path=proxy_config_path,
+        proxy_filter_path=proxy_filter_path,
+        oauth_identity_path=oauth_identity,
+        oauth_credentials_path=oauth_credentials,
+        opencode_config_path=oc_config_path,
+        claude_settings_path=claude_settings_path,
+        claude_hook_script_path=hook_script_path,
+        opencode_share_path=opencode_share_path if not is_claude and model else None,
+        verdict_out_dir=verdict_out_dir if not is_claude and model else None,
+        provider="claude_sdk" if is_sdk else "claude",
+    )
+
+    content = yaml.dump(
+        compose_dict,
+        default_flow_style=False,
+        sort_keys=False,
+    )
+    compose_path = app_root / COMPOSE_RELATIVE_PATH
+    port = _resolve_compose_port()
+    port.write_compose_file(content, compose_path)
+    port.write_compose_file(proxy_config_content, proxy_config_path)
+    port.write_compose_file(proxy_filter_content, proxy_filter_path)
+    if oc_config_path is not None:
+        port.write_compose_file(oc_config_content, oc_config_path)
+    port.write_compose_file(claude_settings_content, claude_settings_path)
+    return compose_path
+
+
+def _validate_oauth_file(path: Path) -> None:
+    if not path.exists():
+        raise ComposeGenerationError(
+            f"OAuth file not found: {path}. "
+            "Run `claude` on the host to authenticate, "
+            "or set `claude.api_key` in config/global.json."
+        )

@@ -14,6 +14,8 @@ from infrastructure.store.migrations import (
     m0006_triage_provider,
     m0007_findings_duplicate_of,
     m0008_finding_history_cli_source,
+    m0009_triage_batch_executions,
+    m0010_scan_phase_executions,
 )
 from infrastructure.store.migrations._helpers import (
     add_column_if_missing,
@@ -35,6 +37,8 @@ MIGRATIONS: list[ModuleType] = [
     m0006_triage_provider,
     m0007_findings_duplicate_of,
     m0008_finding_history_cli_source,
+    m0009_triage_batch_executions,
+    m0010_scan_phase_executions,
 ]
 
 

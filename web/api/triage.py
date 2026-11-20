@@ -14,22 +14,30 @@ from application.locking import JobBusy
 from application.triage.run_registry import get_triage_run_registry
 from application.triage.runner import NoScanRunError
 from application.triage.triage_service import (
+    TriageConfigurationError,
+    TriageCredentialsError,
     TriageNotResumableError,
     TriageService,
 )
 from domain.pipeline.bus_event import EOS
 from domain.triage.entry import TriageBatchRow
 from domain.triage.entry import TriageRunSummary as TriageRunSummaryRow
-from domain.triage.errors import TriageModeError
 from factories.persistence import (
     ProjectNotFound,
     create_triage_service,
     load_active_repos,
 )
 from web.adapters.event_bus_triage_sink import EventBusTriageSink
-from web.api._errors import Conflict, Forbidden, JobBusyError, NotFound, ValidationError
+from web.api._errors import (
+    BadRequest,
+    Conflict,
+    JobBusyError,
+    NotFound,
+    ValidationError,
+)
 from web.api._project_resolver import _resolve_project
 from web.api.schemas import (
+    InteractiveTriageStartResponse,
     MaxBatchIdResponse,
     TriageBatchItem,
     TriageCancelResponse,
@@ -45,6 +53,31 @@ logger = logging.getLogger("tally.web.triage")
 
 # Single router mounted at /api/v1/projects.
 v1_router = APIRouter()
+
+_TRIAGE_BACKGROUND_ONLY_FIELDS = ("billing_method", "api_key_override")
+
+
+def _validate_triage_start_semantics(body: TriageStartRequest) -> None:
+    """Raise BadRequest for semantic violations between interaction_mode
+    and background-only fields."""
+    if body.interaction_mode == "interactive":
+        present = [
+            f for f in _TRIAGE_BACKGROUND_ONLY_FIELDS if _triage_field_is_set(body, f)
+        ]
+        if present:
+            raise BadRequest(
+                f"{', '.join(present)} require interaction_mode='background'"
+            )
+
+
+def _triage_field_is_set(body: TriageStartRequest, name: str) -> bool:
+    """True when the field carries a non-default value."""
+    val = getattr(body, name, None)
+    if val is None:
+        return False
+    if isinstance(val, (list, str)) and not val:
+        return False
+    return True
 
 
 def _service(
@@ -104,6 +137,42 @@ def _batch_to_item(batch: TriageBatchRow) -> TriageBatchItem:
         response_preview=None,
         error=None,
     )
+
+
+def _mint_interactive_mcp_connection(
+    request: Request,
+    run_id: int,
+) -> tuple[str, str]:
+    """Mint a bearer token and build the MCP URL for interactive triage.
+
+    Returns ``(mcp_url, bearer_token)``.
+    """
+    from application.mcp.token_minting import mint_bearer_token
+    from core.config import ConfigManager
+
+    base_path: str = request.app.state.base_path
+    token = mint_bearer_token(
+        f"triage-interactive-{run_id}",
+        base_path=Path(base_path),
+    )
+    cfg = ConfigManager(base_path).global_config
+    mcp_url = f"http://{cfg.mcp.host}:{cfg.mcp.port}/mcp"
+    return mcp_url, token
+
+
+def _handle_triage_service_errors(exc: Exception) -> None:
+    """Map triage service exceptions to HTTP errors.
+
+    Shared by start_triage and resume_triage to avoid duplicating the
+    except block.
+    """
+    if isinstance(exc, NoScanRunError):
+        raise NotFound(str(exc)) from exc
+    if isinstance(exc, JobBusy):
+        raise JobBusyError("triage", exc.current_holder) from exc
+    if isinstance(exc, (TriageConfigurationError, TriageCredentialsError)):
+        raise BadRequest(str(exc)) from exc
+    raise  # pragma: no cover
 
 
 # /api/v1/projects/{project_id}/triage: history (literal-segment first)
@@ -214,7 +283,7 @@ async def get_latest_triage(
             f"project {project_id} has no triage history",
         )
     summary = await asyncio.to_thread(triage_repo.summarize_for_run, run_ids[0])
-    if summary is None:  # pragma: no cover - defensive
+    if summary is None:  # pragma: no cover (defensive)
         raise NotFound(
             f"project {project_id} has no triage history",
         )
@@ -290,26 +359,31 @@ async def triage_events(
 
 @v1_router.post(
     "/{project_id}/triage",
-    response_model=TriageRunSummary,
+    response_model=TriageRunSummary | InteractiveTriageStartResponse,
     status_code=202,
 )
 async def start_triage(
     project_id: int,
     request: Request,
     body: TriageStartRequest,
-) -> TriageRunSummary:
+) -> TriageRunSummary | InteractiveTriageStartResponse:
     """Queue a new triage in a worker thread.
 
     The application core picks the latest scan_run_id for the project.
     Returns 409 ``JOB_ALREADY_RUNNING`` if another triage is in
     progress, 422 if ``acknowledge_injection_risk`` is missing/false
     or 404 if the project has no scan runs to triage.
+
+    Interactive mode returns MCP connection info (``mcp_url`` and
+    ``mcp_bearer_token``). Background mode returns a summary.
     """
     if not body.acknowledge_injection_risk:
         raise ValidationError(
             "acknowledge_injection_risk must be true to dispatch triage",
             details={"field": "acknowledge_injection_risk"},
         )
+
+    _validate_triage_start_semantics(body)
 
     row = _resolve_project(request, project_id)
     project_name: str = row.name
@@ -349,21 +423,44 @@ async def start_triage(
             event_sink=sink,
             finding_ids=finding_ids,
             scan_run_id=scan_run_id_to_use,
+            interaction_mode=body.interaction_mode,
+            billing_method=body.billing_method,
+            api_key=body.api_key_override,
         )
-    except NoScanRunError as exc:
-        raise NotFound(
-            f"project {project_name!r} has no scan runs; run a scan before triage",
-        ) from exc
-    except TriageModeError as exc:
-        raise Forbidden(str(exc)) from exc
-    except JobBusy as exc:
-        raise JobBusyError("triage", exc.current_holder) from exc
+    except (
+        NoScanRunError,
+        JobBusy,
+        TriageConfigurationError,
+        TriageCredentialsError,
+    ) as exc:
+        _handle_triage_service_errors(exc)
+
+    is_interactive = body.interaction_mode == "interactive"
+
+    if is_interactive:
+        mcp_url, bearer_token = _mint_interactive_mcp_connection(
+            request, handle.scan_run_id
+        )
 
     summary = await asyncio.to_thread(
         service.triage_repo.summarize_for_run, handle.scan_run_id
     )
+
+    if is_interactive:
+        return InteractiveTriageStartResponse(
+            scan_run_id=handle.scan_run_id,
+            project_id=project_id,
+            status=summary.status if summary else "queued",
+            started_at=summary.started_at if summary else None,
+            finished_at=summary.finished_at if summary else None,
+            total_findings=summary.total_findings if summary else 0,
+            processed_findings=summary.processed_findings if summary else 0,
+            previous_max_batch_id=previous_max,
+            mcp_url=mcp_url,
+            mcp_bearer_token=bearer_token,
+        )
+
     if summary is None:
-        # No batches yet; return a queued placeholder.
         return TriageRunSummary(
             scan_run_id=handle.scan_run_id,
             project_id=project_id,
@@ -443,7 +540,7 @@ async def cancel_triage(
 
 @v1_router.post(
     "/{project_id}/triage/{scan_run_id}/resume",
-    response_model=TriageRunSummary,
+    response_model=TriageRunSummary | InteractiveTriageStartResponse,
     status_code=202,
 )
 async def resume_triage(
@@ -451,7 +548,7 @@ async def resume_triage(
     scan_run_id: int,
     request: Request,
     body: TriageStartRequest,
-) -> TriageRunSummary:
+) -> TriageRunSummary | InteractiveTriageStartResponse:
     """Resume a previously failed or stranded triage run.
 
     Resumability rule: status must be ``'failed'`` or ``'running'``
@@ -461,12 +558,17 @@ async def resume_triage(
 
     The active-worker case (another live triage holding the lock)
     returns 409 ``JOB_ALREADY_RUNNING``.
+
+    Interactive mode returns MCP connection info (``mcp_url`` and
+    ``mcp_bearer_token``). Background mode returns a summary.
     """
     if not body.acknowledge_injection_risk:
         raise ValidationError(
             "acknowledge_injection_risk must be true to resume triage",
             details={"field": "acknowledge_injection_risk"},
         )
+
+    _validate_triage_start_semantics(body)
 
     row = _resolve_project(request, project_id)
     project_name: str = row.name
@@ -491,6 +593,9 @@ async def resume_triage(
             scan_run_id=scan_run_id,
             tool_registry=request.app.state.tool_registry,
             event_sink=sink,
+            interaction_mode=body.interaction_mode,
+            billing_method=body.billing_method,
+            api_key=body.api_key_override,
         )
     except TriageNotResumableError as exc:
         if exc.status is None:
@@ -503,13 +608,37 @@ async def resume_triage(
             code="TRIAGE_NOT_RESUMABLE",
             details={"status": exc.status},
         ) from exc
-    except JobBusy as exc:
-        raise JobBusyError("triage", exc.current_holder) from exc
+    except (
+        JobBusy,
+        TriageConfigurationError,
+        TriageCredentialsError,
+    ) as exc:
+        _handle_triage_service_errors(exc)
+
+    is_interactive = body.interaction_mode == "interactive"
+
+    if is_interactive:
+        mcp_url, bearer_token = _mint_interactive_mcp_connection(request, scan_run_id)
 
     refreshed = await asyncio.to_thread(
         service.triage_repo.summarize_for_run, scan_run_id
     )
-    if refreshed is None:  # pragma: no cover - defensive (we already checked)
+
+    if is_interactive:
+        return InteractiveTriageStartResponse(
+            scan_run_id=scan_run_id,
+            project_id=project_id,
+            status=refreshed.status if refreshed else "queued",
+            started_at=refreshed.started_at if refreshed else None,
+            finished_at=refreshed.finished_at if refreshed else None,
+            total_findings=refreshed.total_findings if refreshed else 0,
+            processed_findings=refreshed.processed_findings if refreshed else 0,
+            previous_max_batch_id=previous_max,
+            mcp_url=mcp_url,
+            mcp_bearer_token=bearer_token,
+        )
+
+    if refreshed is None:  # pragma: no cover (defensive, already checked)
         return TriageRunSummary(
             scan_run_id=scan_run_id,
             project_id=project_id,

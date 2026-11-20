@@ -124,6 +124,46 @@ class RunFailed(_ScanEventBase):
     message: str = ""
 
 
+@dataclass(frozen=True)
+class PhaseStarted(_ScanEventBase):
+    phase: str = ""
+    attempt_number: int = 0
+    usage_pool: str = ""
+    message: str = ""
+
+
+@dataclass(frozen=True)
+class PhaseCompleted(_ScanEventBase):
+    phase: str = ""
+    attempt_number: int = 0
+    usage_pool: str = ""
+    findings_count: int = 0
+    message: str = ""
+
+
+@dataclass(frozen=True)
+class PhaseFailed(_ScanEventBase):
+    phase: str = ""
+    attempt_number: int = 0
+    usage_pool: str = ""
+    error_class: str = ""
+    message: str = ""
+
+
+@dataclass(frozen=True)
+class PhaseRateLimited(_ScanEventBase):
+    phase: str = ""
+    attempt_number: int = 0
+    usage_pool: str = ""
+    message: str = ""
+
+
+@dataclass(frozen=True)
+class RunRateLimited(_ScanEventBase):
+    usage_pool: str = ""
+    message: str = ""
+
+
 type ScanEvent = (
     RunStarted
     | SegmentStarted
@@ -138,6 +178,11 @@ type ScanEvent = (
     | RunCompleted
     | RunCancelled
     | RunFailed
+    | PhaseStarted
+    | PhaseCompleted
+    | PhaseFailed
+    | PhaseRateLimited
+    | RunRateLimited
 )
 
 
@@ -155,6 +200,11 @@ _EVENT_TYPE_NAMES: dict[type, str] = {
     RunCompleted: "run_completed",
     RunCancelled: "run_cancelled",
     RunFailed: "run_failed",
+    PhaseStarted: "phase_started",
+    PhaseCompleted: "phase_completed",
+    PhaseFailed: "phase_failed",
+    PhaseRateLimited: "phase_rate_limited",
+    RunRateLimited: "run_rate_limited",
 }
 
 

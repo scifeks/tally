@@ -70,8 +70,8 @@ The web UI runs over HTTPS using a self-signed TLS certificate. The certificate 
 
 **Certificate files:**
 
-- `config/tls/cert.pem` - Self-signed certificate
-- `config/tls/key.pem` - Private key
+- `config/tls/cert.pem`: Self-signed certificate
+- `config/tls/key.pem`: Private key
 
 Your browser will show a security warning for self-signed certificates. Accept the warning to proceed (the certificate is only trusted for your local machine).
 
@@ -106,10 +106,11 @@ The `ollama` and `llama_cpp` provider configs share the same schema:
 
 | Field | Type | Default | Description |
 |---|---|---|---|
-| `api_key` | string | `""` | Anthropic API key. Leave empty to use the `ANTHROPIC_API_KEY` environment variable instead (recommended). Also used for triage when `triage_inference.provider` is `"claude"`: triage runs in auto mode when this key (or the environment variable) is set, and in MCP mode otherwise. See [Triage Availability](#triage-availability). |
-| `model` | string | `"claude-opus-4-6[1m]"` | Anthropic model ID (e.g. `claude-opus-4-6`, `claude-sonnet-5`). Also controls the triage model when using the Claude Code backend. |
+| `api_key` | string | `""` | Anthropic API key. Leave empty to use the `ANTHROPIC_API_KEY` environment variable instead (recommended). See [Credential and Billing Model](credential-and-billing-model.md) for how this key interacts with plan OAuth. |
+| `model` | string | `"claude-opus-4-6[1m]"` | Anthropic model ID (e.g. `claude-opus-4-6`, `claude-sonnet-5`). Also controls the triage model when using the Claude backend. |
 | `max_tokens` | int | `1024` | Maximum tokens in the model response. |
 | `timeout_seconds` | int | `60` | Request timeout in seconds for Anthropic API calls. |
+| `default_billing_method` | string or null | `null` | Default billing method for background runs when no `--billing-method` is passed. Accepted values: `"plan"`, `"api"`, or null/empty/absent (unset). Case-insensitive. Env-var fallback: `ANTHROPIC_DEFAULT_BILLING_METHOD`. When unset, Tally starts background triage on plan and auto-fails-over to API on `RATE_LIMIT_PLAN`. See [Credential and Billing Model](credential-and-billing-model.md). |
 
 ### OpenAI Provider Fields
 
@@ -226,30 +227,16 @@ Claude Code scanning and MCP triage.
 }
 ```
 
-### Triage Availability
+### Triage and scan availability
 
-The `triage_inference.provider` field determines both the model used for
-triage and whether triage runs automatically or through Claude Code.
+Interaction mode and billing method are two independent choices for every triage or scan run. The `triage_inference.provider` field picks the model and provider only; it does not pick the interaction mode.
 
-Local providers (`"ollama"`, `"llama_cpp"`) always run in **auto mode**:
-Tally runs the triage agent unattended inside a Docker container against
-your local server. No API key is required or checked.
+- **Interactive** runs are driven from your own Claude Code session, which calls into Tally's MCP server. The `mcp` block's `host` and `port` fields control where that server listens.
+- **Background** runs are spawned by Tally as an Agent SDK process. These runs require a billing method (`plan` or `api`), either explicitly or via `claude.default_billing_method`.
 
-The `"claude"` provider runs in one of two modes depending on whether an
-Anthropic API key is available:
+Local providers (`"ollama"`, `"llama_cpp"`) still run unattended inside a Docker container with no API key. The split above applies to the `"claude"` provider; local providers do not have a billing choice.
 
-- **Auto mode.** When `claude.api_key` is set (or the `ANTHROPIC_API_KEY`
-  environment variable is set), Tally runs Claude unattended inside the
-  Docker container using that key.
-- **MCP mode.** When neither is set, Tally cannot run Claude unattended
-  because Anthropic's terms reserve subscription sessions for direct
-  interactive use. Triage instead runs through the MCP server: you invoke
-  the `/tally-triage` skill from your own Claude Code session. The `mcp`
-  block's `host` and `port` fields control where that server listens.
-
-Mode selection happens automatically; it is not a setting you choose. See
-[docs/triage.md](triage.md#mcp-triage-mode) for the full mode
-determination table and setup steps for both modes.
+See [Credential and Billing Model](credential-and-billing-model.md) for the four supported credential configurations, auto-failover rules, and the rate-limit resume flow. See [docs/triage.md](triage.md) and [docs/claude-code-scanning.md](claude-code-scanning.md) for setup and usage of each mode.
 
 ### Example: Ollama Only
 

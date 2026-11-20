@@ -75,6 +75,8 @@ interface TriageEventPayloadApi {
   processed_count?: number
   total_count?: number
   attempt?: number
+  attempt_number?: number
+  usage_pool?: string
   error?: string
   failed_at_finding_id?: number | null
   resumable?: boolean
@@ -145,7 +147,7 @@ function mapTriageEvent(type: TriageLogEventType, data: TriageEventPayloadApi): 
     findingsCount: data.findings_count,
     processedCount: processed,
     totalCount: data.total_count,
-    attempt: data.attempt,
+    attempt: data.attempt ?? data.attempt_number,
     error: data.error,
     failedAtFindingId: data.failed_at_finding_id,
     resumable: data.resumable,
@@ -165,7 +167,7 @@ function mapSnapshot(data: TriageSnapshotApi): TriageSnapshotPayload {
   }
 }
 
-// History (paginated)────
+// History (paginated)
 
 export interface UseTriageHistoryOptions {
   limit?: number
@@ -438,8 +440,13 @@ const TRIAGE_EVENT_TYPES: readonly TriageLogEventType[] = [
   'batch_completed',
   'batch_failed',
   'batch_retry',
+  'batch_attempt_started',
+  'batch_attempt_completed',
+  'batch_attempt_failed',
+  'batch_attempt_rate_limited',
   'run_completed',
   'run_cancelled',
+  'run_rate_limited',
   'triage_failed',
 ] as const
 

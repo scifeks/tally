@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from typing import Literal
 
 from pydantic import (
     AliasChoices,
@@ -414,6 +415,14 @@ class RuntimeDependenciesResponse(BaseModel):
     dependencies: list[RuntimeDependencyItem]
 
 
+class BackgroundModeAvailabilityResponse(BaseModel):
+    oauth_available: bool
+    api_key_available: bool
+    interactive_available: bool
+    oauth_reason: str | None = None
+    api_key_reason: str | None = None
+
+
 class CapabilitiesResponse(BaseModel):
     chat_enabled: bool
     triage_enabled: bool
@@ -421,6 +430,8 @@ class CapabilitiesResponse(BaseModel):
     max_report_history: int
     triage_backend_label: str | None
     triage_mode: str | None = None
+    background_mode: BackgroundModeAvailabilityResponse | None = None
+    default_billing_method: str | None = None
 
 
 class FindingHistoryItem(BaseModel):
@@ -543,10 +554,17 @@ class ScanConfigTool(BaseModel):
     enabled: bool = True
 
 
+class ScannerSkillItem(BaseModel):
+    slug: str
+    family: str
+    description: str
+
+
 class ScanConfigResponse(BaseModel):
     repos: list[ScanConfigRepo]
     tools: list[ScanConfigTool]
     domains: list[str]
+    available_scanner_skills: list[ScannerSkillItem] = []
 
 
 class ScanStartRequest(BaseModel):
@@ -556,6 +574,15 @@ class ScanStartRequest(BaseModel):
     names are camelCase to match the SSE/HTTP contract; aliases accept
     snake_case for REPL/tooling parity. The argProfileIds field is
     additive: existing callers that omit it continue to work unchanged.
+
+    When ``interaction_mode`` is ``"background"``, the scan is dispatched
+    via the Agent SDK. The ``billing_method``, ``only_scanner_skills``,
+    ``exclude_scanner_skills``, and ``adversarial_verification`` fields
+    only apply to background mode.
+
+    Semantic validations (mutual exclusion, interaction/billing combos)
+    are enforced by the handler, not here, so violations return 400
+    rather than Pydantic's 422.
     """
 
     model_config = ConfigDict(populate_by_name=True, extra="ignore")
@@ -585,6 +612,63 @@ class ScanStartRequest(BaseModel):
         default=None,
         validation_alias=AliasChoices("sinceCommit", "since_commit"),
     )
+
+    # Background scan fields
+    interaction_mode: Literal["interactive", "background"] = Field(
+        default="interactive",
+        validation_alias=AliasChoices("interaction_mode", "interactionMode"),
+    )
+    billing_method: Literal["plan", "api"] | None = Field(
+        default=None,
+        validation_alias=AliasChoices("billing_method", "billingMethod"),
+    )
+    only_scanner_skills: list[str] = Field(
+        default_factory=list,
+        validation_alias=AliasChoices("only_scanner_skills", "onlyScannerSkills"),
+    )
+    exclude_scanner_skills: list[str] = Field(
+        default_factory=list,
+        validation_alias=AliasChoices("exclude_scanner_skills", "excludeScannerSkills"),
+    )
+    adversarial_verification: bool = Field(
+        default=False,
+        validation_alias=AliasChoices(
+            "adversarial_verification", "adversarialVerification"
+        ),
+    )
+    api_key_override: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("api_key_override", "apiKeyOverride"),
+    )
+
+
+class BackgroundScanResumeRequest(BaseModel):
+    """POST body for /api/v1/projects/{id}/scans/{run_id}/resume."""
+
+    model_config = ConfigDict(populate_by_name=True, extra="ignore")
+
+    interaction_mode: Literal["background"] = Field(
+        default="background",
+        validation_alias=AliasChoices("interaction_mode", "interactionMode"),
+    )
+    billing_method: Literal["plan", "api"] | None = Field(
+        default=None,
+        validation_alias=AliasChoices("billing_method", "billingMethod"),
+    )
+    api_key_override: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("api_key_override", "apiKeyOverride"),
+    )
+
+
+class BackgroundScanStartResponse(BaseModel):
+    """202 response for background scan start/resume."""
+
+    id: int
+    project_id: int | None
+    status: str | None
+    interaction_mode: str
+    started_at: str | None = None
 
 
 class BurpScanStartRequest(BaseModel):
@@ -681,12 +765,17 @@ class ScanProgressResponse(BaseModel):
 
 
 class TriageStartRequest(BaseModel):
-    """POST body for /api/v1/projects/{id}/triage.
+    """Shared POST body for triage start and resume endpoints.
 
     ``acknowledge_injection_risk`` must be ``true`` to confirm the risk.
     ``finding_ids`` is reserved for future finding-scoped triage; if
     omitted or null, the runner queues every untriaged active finding
     for the latest scan_run.
+
+    When ``interaction_mode`` is ``"background"``, the triage is dispatched
+    via the Claude SDK adapter. ``billing_method`` and ``api_key_override``
+    only apply to background mode. Semantic validations are enforced by
+    the handler so violations return 400 rather than Pydantic's 422.
     """
 
     model_config = ConfigDict(populate_by_name=True, extra="ignore")
@@ -706,6 +795,19 @@ class TriageStartRequest(BaseModel):
         validation_alias=AliasChoices("scan_run_id", "scanRunId"),
     )
 
+    interaction_mode: Literal["interactive", "background"] = Field(
+        default="interactive",
+        validation_alias=AliasChoices("interaction_mode", "interactionMode"),
+    )
+    billing_method: Literal["plan", "api"] | None = Field(
+        default=None,
+        validation_alias=AliasChoices("billing_method", "billingMethod"),
+    )
+    api_key_override: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("api_key_override", "apiKeyOverride"),
+    )
+
 
 class TriageRunSummary(BaseModel):
     scan_run_id: int
@@ -716,6 +818,25 @@ class TriageRunSummary(BaseModel):
     total_findings: int
     processed_findings: int
     previous_max_batch_id: int | None = None
+
+
+class InteractiveTriageStartResponse(BaseModel):
+    """202 response for interactive triage start/resume.
+
+    Includes MCP connection info so users can configure their Claude
+    Code client to connect to the running MCP server.
+    """
+
+    scan_run_id: int
+    project_id: int | None
+    status: str
+    started_at: str | None = None
+    finished_at: str | None = None
+    total_findings: int = 0
+    processed_findings: int = 0
+    previous_max_batch_id: int | None = None
+    mcp_url: str
+    mcp_bearer_token: str
 
 
 class TriagesListResponse(BaseModel):

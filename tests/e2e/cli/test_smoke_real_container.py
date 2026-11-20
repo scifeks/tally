@@ -24,18 +24,18 @@ _TALLY_ROOT = Path(__file__).resolve().parents[3]
 if str(_TALLY_ROOT) not in sys.path:
     sys.path.insert(0, str(_TALLY_ROOT))
 
-from application.triage.compose import (  # noqa: E402
+from application.agent_sandbox.compose import (  # noqa: E402
     COMPOSE_RELATIVE_PATH,
-    generate_triage_compose,
+    generate_compose,
 )
-from application.triage.container import TRIAGE_IMAGE_TAG  # noqa: E402
+from application.agent_sandbox.image import AGENT_IMAGE_TAG  # noqa: E402
 from application.triage.factory import (  # noqa: E402
     TriageAgentFactory,
 )
 from application.triage.runner import TriageRunner  # noqa: E402
 from domain.tools.constants import CONFIDENCE_LEVELS  # noqa: E402
-from infrastructure.docker.triage_container import (  # noqa: E402
-    DockerTriageContainer,
+from infrastructure.docker.agent_container import (  # noqa: E402
+    DockerAgentContainer,
 )
 from infrastructure.store import make_store  # noqa: E402
 from infrastructure.store.connection import (  # noqa: E402
@@ -53,7 +53,7 @@ pytestmark = pytest.mark.e2e
 def _triage_image_exists() -> bool:
     try:
         result = subprocess.run(
-            ["docker", "image", "inspect", TRIAGE_IMAGE_TAG],
+            ["docker", "image", "inspect", AGENT_IMAGE_TAG],
             capture_output=True,
             timeout=10,
         )
@@ -192,7 +192,7 @@ def triage_env(tmp_path: Path):
     on exit regardless of test outcome.
     """
     if not _triage_image_exists():
-        pytest.skip(f"{TRIAGE_IMAGE_TAG} image not built")
+        pytest.skip(f"{AGENT_IMAGE_TAG} image not built")
 
     detected = _detect_opencode_backend()
     if detected is None:
@@ -230,7 +230,7 @@ def triage_env(tmp_path: Path):
 
     repo_paths: dict[str, Path] = {"testrepo": repo_dir}
     compose_path = tmp_path / COMPOSE_RELATIVE_PATH
-    generate_triage_compose(
+    generate_compose(
         tmp_path,
         repo_paths,
         provider="ollama",
@@ -238,7 +238,7 @@ def triage_env(tmp_path: Path):
         model=model,
     )
 
-    container_port = DockerTriageContainer()
+    container_port = DockerAgentContainer()
     container_port.up(compose_path)
 
     yield {

@@ -84,6 +84,9 @@ class TestFetchBatch:
         assert result["completed_batches"] == 1
         assert len(result["findings"]) == 2
         assert result["findings"][0]["finding_id"] == 101
+        for finding in result["findings"]:
+            assert "submit_verdicts" in finding["prompt"]
+            assert "/workspace/out/verdict.json" not in finding["prompt"]
 
     def test_fetch_batch_no_pending_batches(self) -> None:
         """No pending batches for the run, returns null batch_id."""
