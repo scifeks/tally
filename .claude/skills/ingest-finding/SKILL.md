@@ -49,6 +49,10 @@ anything else.
    a commit message, an Artifact or any other external service. Only finding IDs go out.
 7. **No write without approval.** Show what will be recorded and wait for the user to
    approve it before running `finding-add`.
+8. **Never open a link in a report.** Links, including Claude Security finding links
+   (`https://claude.ai/security/findings/...`), are references that other team members
+   reach from a different account. Store them as text in `meta` and do not fetch them
+   with any tool or subagent.
 
 ## Running the tally CLI
 
@@ -90,16 +94,31 @@ attachments are not kept so they can hold on to the original.
 
 ### 3. Skip reports that are already recorded
 
-List every code already in the project:
+List every code already in the project, with what is needed to tell whether a matching
+code is the same report:
 
 ```bash
 sqlite3 -readonly -separator ' | ' projects/<project>/sqlite/findings.db \
-  "SELECT id, repo_id, status, json_extract(meta, '$.catalog_code') FROM findings
-   WHERE json_extract(meta, '$.catalog_code') IS NOT NULL ORDER BY id;"
+  "SELECT id, repo_id, status, json_extract(meta, '$.catalog_code'),
+     json_extract(meta, '$.source_report_sha256'), json_extract(meta, '$.title')
+   FROM findings WHERE json_extract(meta, '$.catalog_code') IS NOT NULL ORDER BY id;"
 ```
 
-A report whose code is already there is recorded. Skip it and list it with its finding
-ID. Never record it again.
+A matching code alone does not prove the report is recorded, because other sources
+(scanners, older imports) can use the same code for a different issue. For each report
+whose code is in the list:
+
+- **Same checksum** as the report file (`sha256sum <path>`): recorded. Skip it and list
+  it with its finding ID.
+- **No stored checksum, or a different one:** compare the report's title and "What's
+  wrong" text with the finding's title and description. If they describe the same issue,
+  it is recorded: skip it and list it with its finding ID. A different checksum on the
+  same issue means the report changed after it was recorded; tell the user, since
+  `finding-update` can only change the description.
+- **A different issue under the same code:** stop. Show both, and ask the user to give
+  the report a new code in the file and in any catalog that lists it. Never record two
+  findings with one code.
+- **The code on more than one finding:** stop and show them all to the user.
 
 ### 4. Scope the remaining reports
 
