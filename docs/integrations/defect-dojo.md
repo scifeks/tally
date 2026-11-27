@@ -19,16 +19,15 @@ repeated exports.
 
 Tally maps its data model to DefectDojo's hierarchy as follows:
 
-| Tally concept | DefectDojo entity | How it maps |
+| Tally concept | DefectDojo concept | Notes |
 |---|---|---|
-| Repo | **Product** | Each repo becomes its own Product, named `"{project} / {repo}"`. Isolates deduplication per repo. |
-| Global `product_type` config | **Product Type** | Configurable label that groups Products. Default: `"Tally Scan"`. |
-| Resolved `engagement_type` | **Engagement** | Configurable assessment label within each Product. Default: `"Tally Engagement"`. |
-| Tool run (semgrep, zap, etc.) | **Test** | Each tool creates a separate Test within the Engagement. |
-| Individual vulnerability | **Finding** | Each vulnerability becomes a Finding within the tool's Test. |
+| Project `company_name` | **Organization** (Product Type) | Groups every repo of the project. Falls back to the project name when `company_name` is empty. Projects with the same `company_name` share one Organization. |
+| Repository | **Product** (Asset) | Named `<project> / <repo>`. One per active repository. |
+| Resolved `engagement_name` | **Engagement** | One per Product. Type is always Interactive. If Tally cannot change the type (for example the API user lacks permission), the Engagement stays CI/CD, the sync still succeeds, and a warning is logged. Default name: `"Tally Engagement"`. |
+| Tool | **Test** | One per tool, titled with the tool name. |
+| Finding | **Finding** | One per Tally finding. |
 
-Findings without a repo association are grouped into a Product named
-`"{project} / Unassociated"`.
+DefectDojo 3.x labels a Product Type as an Organization and a Product as an Asset. The API names are unchanged.
 
 ---
 
@@ -37,7 +36,7 @@ Findings without a repo association are grouped into a Product named
 Configuration is split across two levels. Connection settings and
 defaults live in `config/global.json` (shared across all projects).
 An optional project-level override in `project.json` can set a
-per-project engagement type.
+per-project Engagement name.
 
 ### Global settings
 
@@ -49,8 +48,7 @@ Add a `defectdojo` block to `config/global.json`:
     "url": "https://defectdojo.internal.example.com",
     "api_token": "your-api-token-here",
     "verify_ssl": true,
-    "product_type": "Tally Scan",
-    "engagement_type": "Tally Engagement"
+    "engagement_name": "Tally Engagement"
   }
 }
 ```
@@ -62,34 +60,33 @@ Add a `defectdojo` block to `config/global.json`:
 | `url` | string | Yes | | Base URL of your DefectDojo instance. Must use `http://` or `https://`. |
 | `api_token` | string | Yes | | API v2 token from your DefectDojo user profile. |
 | `verify_ssl` | bool | No | `true` | Verify TLS certificates. Set to `false` for self-signed certificates. |
-| `product_type` | string | No | `"Tally Scan"` | Product Type label in DefectDojo. Groups all repo Products under a common type. |
-| `engagement_type` | string | No | `"Tally Engagement"` | Default Engagement name. Can be overridden per project or per invocation. |
-| `auto_create_context` | bool | No | `true` | Create the Product, Engagement, and Product Type in DefectDojo if they do not exist. |
+| `engagement_name` | string | No | `"Tally Engagement"` | Name of the Engagement created in each Product. Can be overridden per project and per command. |
+| `auto_create_context` | bool | No | `true` | Create the Organization, Product, and Engagement in DefectDojo if they do not exist. |
 | `scan_type` | string | No | `"Generic Findings Import"` | DefectDojo scan type (test type) used for the import. Controls the "Found By" label. See [Custom scan type](#custom-scan-type). |
 
 ### Project-level override (optional)
 
-You can override `engagement_type` per project by adding a `defectdojo`
+You can override `engagement_name` per project by adding a `defectdojo`
 block to `projects/<name>/project.json`:
 
 ```json
 {
   "project_name": "acme-audit",
   "defectdojo": {
-    "engagement_type": "CI/CD"
+    "engagement_name": "Q4 Audit"
   }
 }
 ```
 
-This is optional. If omitted, the global `engagement_type` is used.
+This is optional. If omitted, the global `engagement_name` is used.
 
-### Engagement type resolution
+### Engagement name resolution
 
-The engagement type follows a three-tier cascade:
+The Engagement name follows a three-tier cascade:
 
-1. **CLI/REPL `--engagement-type` flag** (highest priority)
-2. **Project config** `defectdojo.engagement_type`
-3. **Global config** `defectdojo.engagement_type` (default)
+1. **Command flag** `--engagement-name`
+2. **Project config** `defectdojo.engagement_name`
+3. **Global config** `defectdojo.engagement_name` (default)
 
 ---
 
@@ -113,22 +110,25 @@ Sync every finding in the active project:
 Sync complete: 142 exported
 ```
 
-### Sync findings from a specific scan run
+### Limit a sync to one scan run
 
-Sync only findings from a particular scan run by its ID:
+`--run-id` limits the sync to the repositories and tools that scan run
+touched. Tally still sends their current state, not that run's findings:
 
 ```
 [acme-audit]> sync --integration=defectdojo --run-id=3
 Sync complete: 28 exported
 ```
 
-### Override engagement type
+The automatic syncs after a scan or triage always sync the whole project.
 
-Pass `--engagement-type` to override the configured engagement type
+### Override the Engagement name
+
+Pass `--engagement-name` to override the configured Engagement name
 for a single sync:
 
 ```
-[acme-audit]> sync --integration=defectdojo --engagement-type="Manual Assessment"
+[acme-audit]> sync --integration=defectdojo --engagement-name="Manual Assessment"
 Sync complete: 142 exported
 ```
 
@@ -141,11 +141,11 @@ suitable for crontab or CI pipelines:
 # Export all findings
 python3 tally-cli.py --project myapp --command integration-sync
 
-# Export a specific scan run
+# Sync only the repositories and tools that scan run 5 touched
 python3 tally-cli.py --project myapp --command integration-sync --run-id 5
 
-# Override engagement type
-python3 tally-cli.py --project myapp --command integration-sync --engagement-type "CI/CD"
+# Override the Engagement name
+python3 tally-cli.py --project myapp --command integration-sync --engagement-name "Q4 Audit"
 ```
 
 Schedule it with cron to sync periodically:
@@ -159,6 +159,37 @@ See [docs/cli.md](../cli.md) for the full CLI reference.
 
 ---
 
+## What a sync sends
+
+Every sync sends the current state of the project. For each active repository, Tally sends one batch per tool, and each batch updates that tool's Test in the repository's Product.
+
+Tally syncs only active repositories. A finding with no repository is not sent, and a removed repository gets no batches.
+
+### Scanner tools
+
+For each service in a repository, Tally sends the findings from the most recent scan in which the tool finished on that service. When that scan found nothing, Tally still sends the empty result, and DefectDojo closes the findings that Test still holds open.
+
+A tool that was skipped, failed, or was not part of a scan has no effect. Tally keeps using the last scan in which the tool finished.
+
+### Accumulating tools
+
+Findings added by hand, findings from Claude Code and OpenCode scans, and Burp findings are never closed because a later scan did not report them. Tally sends every finding from these tools and collapses repeats to the newest copy. A finding from these tools closes in DefectDojo only when you change its status in Tally.
+
+### Statuses
+
+| Tally status | DefectDojo state |
+|---|---|
+| `active` | Active |
+| `false_positive` | Inactive, false positive |
+| `fixed` | Inactive, mitigated |
+| `wont_fix` | Inactive, risk accepted |
+
+### Known limitation
+
+A scan limited to the files changed since a commit is treated as a full scan. Syncing after one closes that tool's findings in files the scan did not read. Run a full scan before syncing to restore them.
+
+---
+
 ## How findings are mapped
 
 Each Tally finding is converted to a DefectDojo Generic Finding with
@@ -168,7 +199,7 @@ the following field mapping:
 |---|---|---|
 | `severity` | `severity` | Mapped to DefectDojo levels: Critical, High, Medium, Low, Info |
 | `description` | `description` | Falls back to synthesized title if absent |
-| `status` | `active`, `false_p`, `is_mitigated` | `active` maps to active, `false_positive` maps to false_p, `fixed` maps to is_mitigated |
+| `status` | `active`, `false_p`, `is_mitigated`, `risk_accepted` | `active` maps to active, `false_positive` maps to false_p, `fixed` maps to is_mitigated, `wont_fix` maps to risk accepted. See [Statuses](#statuses) |
 | `confidence` | `verified`, `scanner_confidence` | `confirmed` sets verified to true |
 | `fingerprint` | `unique_id_from_tool` | Used by DefectDojo for deduplication |
 | `cwe` | `cwe` | First CWE from the list, parsed as integer |
@@ -199,25 +230,27 @@ base mapping. No findings are dropped due to missing tool support.
 Tally groups findings by repo and tool, then creates a separate
 DefectDojo Product for each repo and a separate Test for each tool
 within the Engagement. When you sync, each (repo, tool) combination
-is reimported independently. Tools that ran but produced zero findings
-still appear as Tests with an empty finding list, giving full
-visibility into what was scanned.
+is reimported independently. A tool with no stored finding on a repo
+never gets a Test. Tally sends an empty batch only for a scanner tool
+that has findings on that repo and finished a newer scan with none,
+which closes them.
 
 Within each Test, DefectDojo matches findings by
 `unique_id_from_tool` (the Tally fingerprint) and updates existing
 records instead of creating duplicates.
 
 **Mitigation behavior.** When a finding's fingerprint is absent from
-a subsequent sync of the same tool against the same repo, DefectDojo
-automatically marks it as mitigated. This means:
+a batch sent for a scanner tool, DefectDojo automatically marks it as
+mitigated. This means:
 
 - Finding in scan 1, present in scan 2: stays active
-- Finding in scan 1, absent in scan 2: marked mitigated
-- Finding in scan 1, no scan 2 yet: stays in current state
+- Finding in scan 1, absent in a clean scan 2: marked mitigated
+- Finding in scan 1, tool skipped or failed in scan 2: stays in current state
 
 Because each repo is its own Product, scanning repo B never affects
 repo A's findings. Scanning with a new tool never affects existing
-tools' findings.
+tools' findings. See [What a sync sends](#what-a-sync-sends) for which
+findings each tool contributes.
 
 ---
 
@@ -300,11 +333,10 @@ successful scan. Add `"defectdojo"` to the `post_scan_sync` array in
 }
 ```
 
-When enabled, Tally syncs the findings from the completed scan run
-immediately after the scan finishes. The sync uses the same
-configuration (connection, product type, engagement type) as a manual
-`sync` command. Only findings from the scan run that triggered the
-hook are exported, not the full project history.
+When enabled, Tally syncs the project immediately after the scan
+finishes. The sync uses the same configuration (connection, Organization,
+Engagement name) as a manual `sync` command. Automatic syncs always
+sync the whole project, not only the scan run that triggered them.
 
 The sync is best-effort: if the DefectDojo instance is unreachable or
 misconfigured, the scan result is still reported as successful. Sync
@@ -327,9 +359,9 @@ completes. Add `"defectdojo"` to the `post_triage_sync` array in
 }
 ```
 
-When enabled, Tally re-exports findings for the triaged scan run
-immediately after triage finishes. The export uses the `reimport-scan`
-endpoint, which deduplicates on fingerprint. DefectDojo updates
+When enabled, Tally syncs the whole project immediately after triage
+finishes, not only the triaged scan run. The export uses the
+`reimport-scan` endpoint, which deduplicates on fingerprint. DefectDojo updates
 existing records with triage-enriched fields: confidence, severity,
 finding type, remediation guidance, and false positive status.
 
@@ -355,6 +387,17 @@ Tokens can be regenerated from the user profile page.
 the instance is reachable. If using a self-signed certificate, set
 `verify_ssl` to `false` in `config/global.json`.
 
-**Some findings show "failed to map."** The mapper was unable to convert
+**Some findings show "failed to map."** The mapper could not convert
 those findings to the DefectDojo format. Check the Tally log for
 details. This typically indicates a finding with missing required fields.
+
+---
+
+## Moving from the fixed Organization
+
+Earlier versions placed every Product under one Organization named `Tally Scan`. DefectDojo rejects a sync when a Product already exists under a different Organization.
+
+1. In DefectDojo, delete the `Tally Scan` Organization. This deletes its Products and findings.
+2. In `config/global.json`, remove `product_type` and rename `engagement_type` to `engagement_name`. Tally fails to load the config while either old name is present, so every Tally command that loads it fails.
+3. In each project's `config/project.json`, rename `engagement_type` to `engagement_name` under `defectdojo`. The project config fails to load while the old name is present.
+4. Run a sync. Tally creates the new Organizations.

@@ -70,8 +70,8 @@ The web UI runs over HTTPS using a self-signed TLS certificate. The certificate 
 
 **Certificate files:**
 
-- `config/tls/cert.pem` - Self-signed certificate
-- `config/tls/key.pem` - Private key
+- `config/tls/cert.pem`: Self-signed certificate
+- `config/tls/key.pem`: Private key
 
 Your browser will show a security warning for self-signed certificates. Accept the warning to proceed (the certificate is only trusted for your local machine).
 
@@ -167,12 +167,11 @@ Optional. Required only when using the `sync --integration=defectdojo` command.
 | `url` | string | Yes | | Base URL of your DefectDojo instance. Must use `http://` or `https://`. |
 | `api_token` | string | Yes | | API v2 token from your DefectDojo user profile. |
 | `verify_ssl` | bool | No | `true` | Verify TLS certificates. Set to `false` for self-signed certificates. |
-| `product_type` | string | No | `"Tally Scan"` | Product Type label in DefectDojo. Groups all repo Products under a common type. |
-| `engagement_type` | string | No | `"Tally Engagement"` | Default Engagement name. Can be overridden per project or per invocation. |
-| `auto_create_context` | bool | No | `true` | Create Product, Engagement, and Product Type in DefectDojo if they do not exist. |
+| `engagement_name` | string | No | `"Tally Engagement"` | Name of the Engagement created in each DefectDojo Product. Can be overridden per project and per command. |
+| `auto_create_context` | bool | No | `true` | Create the Organization, Product, and Engagement in DefectDojo if they do not exist. |
 | `scan_type` | string | No | `"Generic Findings Import"` | DefectDojo scan type used for the import. Controls the "Found By" label. |
 
-See [docs/integrations/defect-dojo.md](integrations/defect-dojo.md) for entity mapping, engagement type cascade, and usage.
+See [docs/integrations/defect-dojo.md](integrations/defect-dojo.md) for entity mapping, Engagement name cascade, and usage.
 
 ### Burp Suite Fields
 
@@ -520,7 +519,7 @@ Stores project metadata. The `repositories` list is kept in sync with `repositor
 |---|---|---|---|
 | `project_name` | string | yes | The project name as entered on creation. |
 | `created` | string | yes | ISO 8601 timestamp of when the project was created. |
-| `company_name` | string | no | Client company name shown in the report confidentiality blurb. Set during `project add` or `project edit`. |
+| `company_name` | string | no | Client company name shown in the report confidentiality blurb. Set during `project add` or `project edit`. Also names the project's Organization in DefectDojo. When empty, the project name is used. |
 | `department_name` | string | no | Optional department or team name, stored for reference. |
 | `abbreviation` | string | no | Short prefix (max 3 chars) used for finding IDs (e.g. `ACM` -> `ACM-001`). Overrides `report_finding_prefix` in `global.json` for this project. |
 | `defectdojo` | object | no | Optional DefectDojo overrides for this project. See [DefectDojo Project Fields](#defectdojo-project-fields). |
@@ -532,9 +531,9 @@ Optional. Overrides global DefectDojo defaults for this project.
 
 | Field | Type | Required | Default | Description |
 |---|---|---|---|---|
-| `engagement_type` | string | No | | Overrides the global `engagement_type` for this project. |
+| `engagement_name` | string | No | | Overrides the global `engagement_name` for this project. |
 
-See [docs/integrations/defect-dojo.md](integrations/defect-dojo.md) for the engagement type cascade and entity mapping.
+See [docs/integrations/defect-dojo.md](integrations/defect-dojo.md) for the Engagement name cascade and entity mapping.
 
 #### Example
 

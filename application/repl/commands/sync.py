@@ -25,7 +25,7 @@ class SyncCommand:
         if integration is None:
             self.repl.console.print(
                 "Usage: sync --integration=<name> [--run-id=<id>] "
-                "[--engagement-type=<type>] [--test-connection]"
+                "[--engagement-name=<name>] [--test-connection]"
             )
             return
 
@@ -61,12 +61,12 @@ class SyncCommand:
                 self.repl.console.print(f"[red]Invalid run ID:[/red] {run_id_str!r}")
                 return
 
-        engagement_type, args = self._parse_value_flag(args, "--engagement-type")
+        engagement_name, args = self._parse_value_flag(args, "--engagement-name")
 
         try:
             service = self._build_service(
                 run_id=run_id,
-                engagement_type_override=engagement_type,
+                engagement_name_override=engagement_name,
             )
         except Exception as exc:
             self.repl.console.print(f"[red]{exc}[/red]")
@@ -98,7 +98,7 @@ class SyncCommand:
     def _build_service(
         self,
         run_id: int | None = None,
-        engagement_type_override: str | None = None,
+        engagement_name_override: str | None = None,
     ) -> ExportService:
         from factories.export import create_export_service
 
@@ -108,7 +108,7 @@ class SyncCommand:
             project_id,
             self.repl.base_path,
             run_id=run_id,
-            engagement_type_override=engagement_type_override,
+            engagement_name_override=engagement_name_override,
         )
 
     def _resolve_project_id(self) -> int:

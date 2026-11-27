@@ -30,7 +30,7 @@ class DefectDojoClient:
         product_name: str,
         engagement_name: str,
         *,
-        product_type_name: str = "Tally Scan",
+        product_type_name: str,
         auto_create_context: bool = True,
         test_title: str | None = None,
     ) -> tuple[int, dict[str, Any]]:
@@ -114,6 +114,21 @@ class DefectDojoClient:
         except Exception:
             body = {"raw": response.text}
         return response.status_code, body
+
+    def set_engagement_type(self, engagement_id: int, engagement_type: str) -> bool:
+        """PATCH an Engagement's type. False on any failure."""
+        url = f"{self._base_url}/api/v2/engagements/{engagement_id}/"
+        try:
+            response = httpx.patch(
+                url,
+                headers=self._headers,
+                json={"engagement_type": engagement_type},
+                verify=self._verify_ssl,
+                timeout=_DEFAULT_TIMEOUT,
+            )
+        except httpx.HTTPError:
+            return False
+        return response.status_code < 400
 
     def test_connection(self) -> bool:
         """GET /api/v2/user_profile/ to verify credentials."""

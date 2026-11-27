@@ -33,7 +33,7 @@ class Finding:
     """Parsed row from the ``findings`` table.
 
     Severity is the lowercase label string (``critical``/``high``/...);
-    rank → label translation happens in ``from_row`` via
+    rank-to-label translation happens in ``from_row`` via
     ``Severity.from_rank``. JSON columns (``meta``, ``finding_type``,
     ``cwe``) are parsed.
     """
@@ -69,6 +69,7 @@ class Finding:
     tal_id: str | None = None
     duplicate_of: int | None = None
     repo_id: int | None = None
+    service: str | None = None
 
     @classmethod
     def from_row(cls, row: Any) -> Finding:
@@ -110,6 +111,7 @@ class Finding:
             tal_id=row["tal_id"],
             duplicate_of=row["duplicate_of"],
             repo_id=row["repo_id"],
+            service=row["service"],
         )
 
 

@@ -213,15 +213,15 @@ python3 tally-cli.py --project myapp --command stats
 Export findings to configured integrations. Currently supports DefectDojo.
 
 ```
-tally --project NAME --command integration-sync [--run-id ID] [--engagement-type TYPE]
+tally --project NAME --command integration-sync [--run-id ID] [--engagement-name NAME]
 ```
 
 | Flag | Description |
 |------|-------------|
-| `--run-id ID` | Export findings from a specific scan run only |
-| `--engagement-type TYPE` | Override the engagement type for this sync |
+| `--run-id ID` | Limit the sync to the repositories and tools that scan run touched |
+| `--engagement-name NAME` | Override the Engagement name for this sync |
 
-Requires DefectDojo connection settings in `config/global.json` and targeting settings in the project's `project.json`. See [docs/integrations/defect-dojo.md](integrations/defect-dojo.md) for configuration.
+Requires DefectDojo connection settings in `config/global.json`. An optional per-project Engagement name goes in the project's `project.json`. See [docs/integrations/defect-dojo.md](integrations/defect-dojo.md) for configuration.
 
 Exits 0 on success, 1 if the integration is not configured or the export fails, 3 if the project is not found.
 
@@ -229,7 +229,7 @@ Exits 0 on success, 1 if the integration is not configured or the export fails, 
 # Export all findings to DefectDojo
 python3 tally-cli.py --project myapp --command integration-sync
 
-# Export findings from a specific scan run
+# Sync only the repositories and tools that scan run 5 touched
 python3 tally-cli.py --project myapp --command integration-sync --run-id 5
 ```
 
@@ -258,7 +258,7 @@ tally --command project-create --project NAME [--company-name NAME]
 
 | Flag | Description |
 |------|-------------|
-| `--company-name NAME` | Company name for report headers |
+| `--company-name NAME` | Company name for report headers. Also names the project's DefectDojo Organization; the project name is the fallback when empty |
 | `--department-name NAME` | Department name (optional) |
 | `--abbreviation CODE` | Finding ID prefix, max 3 chars (optional) |
 
@@ -389,7 +389,7 @@ tally --project NAME --command finding-add --repo NAME --finding-file PATH
 
 The payload uses the same format as the MCP `submit_finding` tool. Required fields are `file`, `line_number`, `description`, `severity`, `confidence`, `cwe`, `finding_type`, `rule_id`, and `meta` with `title`, `owasp_name`, and `remediation`. `file` and `line_number` are optional when `segment` is `web`.
 
-The finding is stored as a manual finding: it is not attached to a scan run, it is included in reports, and you can delete it from the web UI. Because it has no scan run, it reaches DefectDojo only through `integration-sync` without `--run-id`.
+The finding is stored as a manual finding: it is not attached to a scan run, it is included in reports, and you can delete it from the web UI. Because it has no scan run, it reaches DefectDojo through `integration-sync` when the sync covers its repository, and manual findings are never closed by a later scan.
 
 On success the command prints the new finding ID:
 

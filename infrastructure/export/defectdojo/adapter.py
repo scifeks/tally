@@ -15,15 +15,18 @@ from infrastructure.export.defectdojo.mapper import (
 )
 
 if TYPE_CHECKING:
+    from application.ports.export import SyncBatch
     from application.ports.url_finding_repository import (
         UrlFindingRepositoryPort,
     )
     from core.config.schemas.defectdojo_config import (
         DefectDojoGlobalConfig,
     )
-    from domain.findings.entry import Finding
 
 log = logging.getLogger(__name__)
+
+# DefectDojo hard-codes CI/CD when it creates an Engagement on import.
+_ENGAGEMENT_TYPE = "Interactive"
 
 
 class DefectDojoExportAdapter:
@@ -32,18 +35,16 @@ class DefectDojoExportAdapter:
         config: DefectDojoGlobalConfig,
         repo_names: dict[int, str],
         project_name: str,
-        engagement_type: str,
-        run_to_repo_id: dict[int, int] | None = None,
-        all_tool_runs: set[tuple[int | None, str]] | None = None,
+        organization_name: str,
+        engagement_name: str,
         url_finding_repo: UrlFindingRepositoryPort | None = None,
         repo_base_urls: dict[int, list[str]] | None = None,
     ) -> None:
         self._config = config
         self._repo_names = repo_names
         self._project_name = project_name
-        self._engagement_type = engagement_type
-        self._run_to_repo_id = run_to_repo_id or {}
-        self._all_tool_runs = all_tool_runs or set()
+        self._organization_name = organization_name
+        self._engagement_name = engagement_name
         self._url_finding_repo = url_finding_repo
         self._repo_base_urls = repo_base_urls
         self._client = DefectDojoClient(
@@ -52,39 +53,23 @@ class DefectDojoExportAdapter:
             verify_ssl=config.verify_ssl,
         )
 
-    def export_findings(self, findings: list[Finding]) -> ExportResult:
-        repo_groups: dict[int | None, dict[str, list[Finding]]] = {}
-        for f in findings:
-            repo_id = self._effective_repo_id(f)
-            if repo_id not in repo_groups:
-                repo_groups[repo_id] = {}
-            tool_key = f.tool or "unknown"
-            repo_groups[repo_id].setdefault(tool_key, []).append(f)
-
+    def export_batches(self, batches: list[SyncBatch]) -> ExportResult:
         total_exported = 0
         total_failed = 0
         errors: list[str] = []
-        seen_pairs: set[tuple[int | None, str]] = set()
+        typed_repos: set[int] = set()
 
-        for repo_id, tool_groups in repo_groups.items():
-            product_name = self._product_name(repo_id)
-            for tool_name, tool_findings in tool_groups.items():
-                seen_pairs.add((repo_id, tool_name))
-                result = self._reimport_tool_group(
-                    tool_name, tool_findings, product_name
-                )
-                total_exported += result.findings_exported
-                total_failed += result.findings_failed
-                errors.extend(result.errors)
-                if self._is_auth_error(result):
-                    return result
-
-        for repo_id, tool_name in self._all_tool_runs - seen_pairs:
-            product_name = self._product_name(repo_id)
-            result = self._reimport_empty(tool_name, product_name)
+        for batch in batches:
+            product_name = self._product_name(batch.repo_id)
+            result, engagement_id = self._send_batch(batch, product_name)
+            total_exported += result.findings_exported
+            total_failed += result.findings_failed
             errors.extend(result.errors)
             if self._is_auth_error(result):
                 return result
+            if engagement_id is not None and batch.repo_id not in typed_repos:
+                typed_repos.add(batch.repo_id)
+                self._mark_interactive(engagement_id, product_name)
 
         self._export_endpoints()
 
@@ -95,41 +80,37 @@ class DefectDojoExportAdapter:
             errors=tuple(errors),
         )
 
-    def _effective_repo_id(self, f: Finding) -> int | None:
-        if f.repo_id is not None:
-            return f.repo_id
-        if f.run_id is not None:
-            return self._run_to_repo_id.get(f.run_id)
-        return None
+    def _product_name(self, repo_id: int) -> str:
+        return f"{self._project_name} / {self._repo_names[repo_id]}"
 
-    def _product_name(self, repo_id: int | None) -> str:
-        if repo_id is not None and repo_id in self._repo_names:
-            repo_name = self._repo_names[repo_id]
-        else:
-            repo_name = "Unassociated"
-        return f"{self._project_name} / {repo_name}"
+    def _mark_interactive(self, engagement_id: int, product_name: str) -> None:
+        if not self._client.set_engagement_type(engagement_id, _ENGAGEMENT_TYPE):
+            log.warning(
+                "Could not set the Engagement type to %s for %s",
+                _ENGAGEMENT_TYPE,
+                product_name,
+            )
 
-    def _reimport_tool_group(
-        self,
-        tool_name: str,
-        findings: list[Finding],
-        product_name: str,
-    ) -> ExportResult:
+    def _send_batch(
+        self, batch: SyncBatch, product_name: str
+    ) -> tuple[ExportResult, int | None]:
+        findings = list(batch.findings)
         mapped = map_findings(findings)
         map_failed = len(findings) - len(mapped)
 
-        if not mapped:
-            return ExportResult(
-                success=False,
-                findings_exported=0,
-                findings_failed=map_failed,
-                errors=(f"{tool_name}: all findings failed to map",),
+        # Sending nothing here would close every finding in the Test.
+        if findings and not mapped:
+            return (
+                ExportResult(
+                    success=False,
+                    findings_exported=0,
+                    findings_failed=map_failed,
+                    errors=(f"{batch.tool}: all findings failed to map",),
+                ),
+                None,
             )
 
-        return self._send_reimport(tool_name, mapped, product_name, map_failed)
-
-    def _reimport_empty(self, tool_name: str, product_name: str) -> ExportResult:
-        return self._send_reimport(tool_name, [], product_name, 0)
+        return self._send_reimport(batch.tool, mapped, product_name, map_failed)
 
     def _send_reimport(
         self,
@@ -137,43 +118,31 @@ class DefectDojoExportAdapter:
         mapped: list[dict],
         product_name: str,
         map_failed: int,
-    ) -> ExportResult:
+    ) -> tuple[ExportResult, int | None]:
         payload = json.dumps({"findings": mapped}).encode()
+        failed = len(mapped) + map_failed
 
         try:
             status, body = self._client.reimport_scan(
                 json_payload=payload,
                 scan_type=self._config.scan_type,
                 product_name=product_name,
-                engagement_name=self._engagement_type,
-                product_type_name=self._config.product_type,
+                engagement_name=self._engagement_name,
+                product_type_name=self._organization_name,
                 auto_create_context=self._config.auto_create_context,
                 test_title=tool_name,
             )
         except Exception as exc:
-            return ExportResult(
-                success=False,
-                findings_exported=0,
-                findings_failed=len(mapped) + map_failed,
-                errors=(f"{tool_name}: connection error: {exc}",),
-            )
+            return _failure(failed, f"{tool_name}: connection error: {exc}"), None
 
         if status == 401 or status == 403:
-            return ExportResult(
-                success=False,
-                findings_exported=0,
-                findings_failed=len(mapped) + map_failed,
-                errors=("Authentication failed: invalid or expired API token",),
-            )
+            error = "Authentication failed: invalid or expired API token"
+            return _failure(failed, error), None
 
         if status >= 400:
             detail = json.dumps(body) if body else str(status)
-            return ExportResult(
-                success=False,
-                findings_exported=0,
-                findings_failed=len(mapped) + map_failed,
-                errors=(f"{tool_name}: DefectDojo returned {status}: {detail}",),
-            )
+            error = f"{tool_name}: DefectDojo returned {status}: {detail}"
+            return _failure(failed, error), None
 
         log.info(
             "Exported %d %s findings to %s (%d failed to map)",
@@ -182,10 +151,14 @@ class DefectDojoExportAdapter:
             product_name,
             map_failed,
         )
-        return ExportResult(
-            success=True,
-            findings_exported=len(mapped),
-            findings_failed=map_failed,
+        engagement_id = body.get("engagement_id")
+        return (
+            ExportResult(
+                success=True,
+                findings_exported=len(mapped),
+                findings_failed=map_failed,
+            ),
+            engagement_id if isinstance(engagement_id, int) else None,
         )
 
     def _export_endpoints(self) -> None:
@@ -228,7 +201,7 @@ class DefectDojoExportAdapter:
                     endpoints_created += 1
 
                 if endpoints_created > 0:
-                    repo_name = self._repo_names.get(repo_id, "Unassociated")
+                    repo_name = self._repo_names[repo_id]
                     log.info(
                         "Exported %d endpoints for repo %s to DefectDojo",
                         endpoints_created,
@@ -245,3 +218,12 @@ class DefectDojoExportAdapter:
 
     def test_connection(self) -> bool:
         return self._client.test_connection()
+
+
+def _failure(findings_failed: int, error: str) -> ExportResult:
+    return ExportResult(
+        success=False,
+        findings_exported=0,
+        findings_failed=findings_failed,
+        errors=(error,),
+    )

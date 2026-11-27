@@ -75,7 +75,7 @@ Project name: acme-security-audit
 [acme-security-audit]>
 ```
 
-**Company Name** is required and is shown in the report's confidentiality blurb.
+**Company Name** is required and is shown in the report's confidentiality blurb. It also names the project's DefectDojo Organization; the project name is the fallback when empty.
 **Abbreviation** (optional, max 3 chars) is used as the finding ID prefix for reports generated for this project (for example, `ACM-001`). If left blank, the global `report_finding_prefix` from `config/global.json` is used instead (default: `TAL`).
 
 The new project becomes the active project immediately. The prompt changes to show `[acme-security-audit]>`.
@@ -892,17 +892,17 @@ Sync all findings in the active project to DefectDojo:
 Sync complete: 142 exported
 ```
 
-Sync findings from a specific scan run:
+Limit the sync to the repositories and tools that scan run 3 touched. Tally still sends their current state, not that run's findings:
 
 ```
 [acme-security-audit]> sync --integration=defectdojo --run-id=3
 Sync complete: 28 exported
 ```
 
-Override the engagement type for a single sync:
+Override the Engagement name for a single sync:
 
 ```
-[acme-security-audit]> sync --integration=defectdojo --engagement-type="Manual Assessment"
+[acme-security-audit]> sync --integration=defectdojo --engagement-name="Manual Assessment"
 Sync complete: 142 exported
 ```
 

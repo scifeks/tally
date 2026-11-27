@@ -17,7 +17,20 @@ class ExportResult:
     errors: tuple[str, ...] = ()
 
 
+@dataclass(frozen=True)
+class SyncRepo:
+    id: int
+    services: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class SyncBatch:
+    repo_id: int
+    tool: str
+    findings: tuple[Finding, ...]
+
+
 class ExportPort(Protocol):
-    def export_findings(self, findings: list[Finding]) -> ExportResult: ...
+    def export_batches(self, batches: list[SyncBatch]) -> ExportResult: ...
 
     def test_connection(self) -> bool: ...

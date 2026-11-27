@@ -44,7 +44,6 @@ def _sync_defectdojo(
     service = create_export_service_for_project(
         base_path=base_path,
         project_name=project_name,
-        run_id=run_id,
     )
     export_result = service.export()
 
