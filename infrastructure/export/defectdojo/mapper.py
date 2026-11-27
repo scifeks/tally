@@ -74,6 +74,7 @@ def _build_base(finding: Finding) -> dict[str, Any]:
     base["verified"] = finding.confidence == "confirmed"
     base["false_p"] = finding.status == "false_positive"
     base["is_mitigated"] = finding.status == "fixed"
+    base["risk_accepted"] = finding.status == "wont_fix"
     base["static_finding"] = finding.domain == "code"
     base["dynamic_finding"] = finding.domain == "web"
 

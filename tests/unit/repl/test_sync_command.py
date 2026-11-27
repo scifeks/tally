@@ -2,19 +2,11 @@
 
 from __future__ import annotations
 
-import sys
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-_TALLY_ROOT = Path(__file__).resolve().parents[3]
-if str(_TALLY_ROOT) not in sys.path:
-    sys.path.insert(0, str(_TALLY_ROOT))
-
-from application.ports.export import ExportResult  # noqa: E402
-from application.repl.commands.sync import (  # noqa: E402
-    SyncCommand,
-)
-from domain.projects.entry import ProjectRow  # noqa: E402
+from application.ports.export import ExportResult
+from application.repl.commands.sync import SyncCommand
+from domain.projects.entry import ProjectRow
 
 _PROJECT = "testproj"
 _PROJECT_ID = 7
@@ -216,8 +208,8 @@ class TestSyncServiceBuildFailure:
         assert "not configured" in printed
 
 
-class TestSyncEngagementType:
-    def test_passes_engagement_type_to_factory(self) -> None:
+class TestSyncEngagementName:
+    def test_passes_engagement_name_to_factory(self) -> None:
         repl = _mock_repl()
         cmd = SyncCommand(repl)
         svc = MagicMock()
@@ -227,12 +219,12 @@ class TestSyncEngagementType:
                 "sync",
                 [
                     "--integration=defectdojo",
-                    "--engagement-type=CI/CD",
+                    "--engagement-name=Audit 2026",
                 ],
             )
         factory.assert_called_once()
         call_kwargs = factory.call_args
-        assert call_kwargs.kwargs["engagement_type_override"] == "CI/CD"
+        assert call_kwargs.kwargs["engagement_name_override"] == "Audit 2026"
 
     def test_defaults_to_none_when_not_set(self) -> None:
         repl = _mock_repl()
@@ -243,4 +235,4 @@ class TestSyncEngagementType:
             cmd.cmd_sync("sync", ["--integration=defectdojo"])
         factory.assert_called_once()
         call_kwargs = factory.call_args
-        assert call_kwargs.kwargs["engagement_type_override"] is None
+        assert call_kwargs.kwargs["engagement_name_override"] is None

@@ -44,7 +44,7 @@ def cmd_integration_sync(
     )
 
     run_id: int | None = getattr(args, "run_id", None)
-    engagement_type: str | None = getattr(args, "engagement_type", None)
+    engagement_name: str | None = getattr(args, "engagement_name", None)
 
     try:
         service = create_export_service(
@@ -52,7 +52,7 @@ def cmd_integration_sync(
             project_id,
             base_path,
             run_id=run_id,
-            engagement_type_override=engagement_type,
+            engagement_name_override=engagement_name,
         )
     except ExportNotConfigured as exc:
         print(str(exc), file=sys.stderr)

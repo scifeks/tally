@@ -65,8 +65,7 @@
     "url": "https://defectdojo.example.com",
     "api_token": "",
     "verify_ssl": true,
-    "product_type": "Tally Scan",
-    "engagement_type": "Tally Engagement"
+    "engagement_name": "Tally Engagement"
   },
   "post_scan_sync": [],
   "post_triage_sync": [],

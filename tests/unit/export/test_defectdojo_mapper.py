@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from domain.findings.entry import Finding
 from infrastructure.export.defectdojo.mapper import (
     is_static_asset_path,
@@ -546,6 +548,39 @@ class TestDefectDojoMapper:
         result = map_finding(finding_fp)
         assert result["active"] is False
         assert result["false_p"] is True
+
+    @pytest.mark.parametrize(
+        ("status", "expected"),
+        [
+            ("active", (True, False, False, False)),
+            ("false_positive", (False, True, False, False)),
+            ("fixed", (False, False, True, False)),
+            ("wont_fix", (False, False, False, True)),
+        ],
+    )
+    def test_status_sets_exactly_one_state(
+        self, status: str, expected: tuple[bool, bool, bool, bool]
+    ) -> None:
+        finding = Finding(
+            id=1,
+            fingerprint="fp1",
+            run_id=1,
+            tool="test",
+            domain="code",
+            segment="sast",
+            severity="high",
+            description="Test",
+            status=status,
+        )
+
+        result = map_finding(finding)
+
+        assert (
+            result["active"],
+            result["false_p"],
+            result["is_mitigated"],
+            result["risk_accepted"],
+        ) == expected
 
     def test_tags_assembly(self) -> None:
         finding = Finding(

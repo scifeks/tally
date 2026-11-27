@@ -10,6 +10,7 @@ import os
 import httpx
 import pytest
 
+from application.ports.export import SyncBatch
 from core.config.schemas.defectdojo_config import (
     DefectDojoGlobalConfig,
 )
@@ -23,8 +24,11 @@ pytestmark = [pytest.mark.e2e, requires_defectdojo]
 
 _DD_URL = os.environ.get("DD_TEST_URL", "http://127.0.0.1:8080")
 _DD_TOKEN = os.environ.get("DD_TEST_TOKEN", "")
-_PROJECT = "e2e-test"
+_PROJECT = "e2e-sync"
+_ORGANIZATION = "E2E Sync Org"
 _ENGAGEMENT = "Export E2E"
+_PRODUCT = f"{_PROJECT} / e2e-repo"
+_HEADERS = {"Authorization": f"Token {_DD_TOKEN}"}
 
 
 def _build_config() -> DefectDojoGlobalConfig:
@@ -39,19 +43,31 @@ def _build_adapter() -> DefectDojoExportAdapter:
         config=_build_config(),
         repo_names={1: "e2e-repo"},
         project_name=_PROJECT,
-        engagement_type=_ENGAGEMENT,
+        organization_name=_ORGANIZATION,
+        engagement_name=_ENGAGEMENT,
     )
 
 
-def _query_dd_findings(product_name: str) -> dict:
+def _get(path: str, params: dict | None = None) -> dict:
     resp = httpx.get(
-        f"{_DD_URL}/api/v2/findings/",
-        headers={"Authorization": f"Token {_DD_TOKEN}"},
-        params={"test__engagement__product__name": product_name},
+        f"{_DD_URL}/api/v2/{path}",
+        headers=_HEADERS,
+        params=params,
         verify=False,
         timeout=30,
     )
     return resp.json()
+
+
+def _query_dd_findings(product_name: str) -> dict:
+    return _get("findings/", {"test__engagement__product__name": product_name})
+
+
+def _batches(findings: list[Finding]) -> list[SyncBatch]:
+    by_tool: dict[str, list[Finding]] = {}
+    for finding in findings:
+        by_tool.setdefault(finding.tool or "", []).append(finding)
+    return [SyncBatch(1, tool, tuple(group)) for tool, group in by_tool.items()]
 
 
 def _make_finding(
@@ -101,7 +117,7 @@ class TestDefectDojoExportE2E:
     def test_export_single_finding(self) -> None:
         adapter = _build_adapter()
         finding = _make_finding(1)
-        result = adapter.export_findings([finding])
+        result = adapter.export_batches(_batches([finding]))
 
         assert result.success is True
         assert result.findings_exported == 1
@@ -149,7 +165,7 @@ class TestDefectDojoExportE2E:
                 },
             ),
         ]
-        result = adapter.export_findings(findings)
+        result = adapter.export_batches(_batches(findings))
 
         assert result.success is True
         assert result.findings_exported == 4
@@ -159,18 +175,29 @@ class TestDefectDojoExportE2E:
         adapter = _build_adapter()
         finding = _make_finding(200, fingerprint="dedup-test-fixed")
 
-        product = f"{_PROJECT} / e2e-repo"
+        product = _PRODUCT
 
-        result1 = adapter.export_findings([finding])
+        result1 = adapter.export_batches(_batches([finding]))
         assert result1.success is True
 
         data_before = _query_dd_findings(product)
         count_before = data_before["count"]
 
-        result2 = adapter.export_findings([finding])
+        result2 = adapter.export_batches(_batches([finding]))
         assert result2.success is True
 
         data_after = _query_dd_findings(product)
         count_after = data_after["count"]
 
         assert count_after == count_before
+
+    def test_hierarchy_and_engagement_type(self) -> None:
+        result = _build_adapter().export_batches(_batches([_make_finding(300)]))
+        assert result.success is True
+
+        product = _get("products/", {"name": _PRODUCT})["results"][0]
+        organization = _get(f"product_types/{product['prod_type']}/")
+        engagements = _get("engagements/", {"product": product["id"]})["results"]
+
+        assert organization["name"] == _ORGANIZATION
+        assert [e["engagement_type"] for e in engagements] == ["Interactive"]

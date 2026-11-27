@@ -91,11 +91,14 @@ overrides are needed.
 ## Step 3: Port Interface
 
 If the integration exports findings, reuse `ExportPort` from
-`application/ports/export.py`:
+`application/ports/export.py`. A `SyncBatch` holds one repo ID, one tool and
+the findings for that pair. A `SyncSelector` in
+`application/export/selection.py` chooses the batches, so the adapter only
+sends what it is given:
 
 ```python
 class ExportPort(Protocol):
-    def export_findings(self, findings: list[Finding]) -> ExportResult: ...
+    def export_batches(self, batches: list[SyncBatch]) -> ExportResult: ...
     def test_connection(self) -> bool: ...
 ```
 
@@ -221,11 +224,10 @@ class <Service>ExportAdapter:
         )
         # Store context needed for grouping/routing
 
-    def export_findings(self, findings: list[Finding]) -> ExportResult:
-        # 1. Group findings by relevant dimension (repo, tool, etc.)
-        # 2. For each group: map, serialize, send via client
-        # 3. On 401/403: stop immediately, return error result
-        # 4. Aggregate counts into ExportResult
+    def export_batches(self, batches: list[SyncBatch]) -> ExportResult:
+        # 1. For each batch: map, serialize, send via client
+        # 2. On 401/403: stop immediately, return error result
+        # 3. Aggregate counts into ExportResult
         ...
 
     def test_connection(self) -> bool:
@@ -233,7 +235,8 @@ class <Service>ExportAdapter:
 ```
 
 Rules for the adapter:
-- Group findings before sending (avoid one HTTP call per finding).
+- Send one HTTP call per batch, not per finding. Do not regroup or filter
+  the batches; the selector owns that choice.
 - Short-circuit on auth errors (don't retry 401/403).
 - Aggregate partial results: some groups may succeed while others fail.
 - Never log the API token value.
@@ -248,13 +251,13 @@ integration has complex wiring):
 ```python
 def build_<service>_export_service(
     config: <Service>GlobalConfig,
-    finding_repo: FindingRepositoryPort,
+    selector: SyncSelector,
     project_name: str,
     run_id: int | None = None,
     # ... other resolved dependencies
 ) -> ExportService:
     adapter = <Service>ExportAdapter(config=config, ...)
-    return ExportService(finding_repo, adapter, run_id=run_id)
+    return ExportService(selector, adapter, run_id=run_id)
 
 
 def create_<service>_export_for_project(
@@ -298,10 +301,10 @@ Add the private sync function with a lazy import of the factory:
 def _sync_<service>(base_path, project_name, run_id):
     from factories.export import create_<service>_export_for_project
 
+    # No run_id: automatic syncs send the project's current state.
     service = create_<service>_export_for_project(
         base_path=base_path,
         project_name=project_name,
-        run_id=run_id,
     )
     result = service.export()
     if result.success:
@@ -327,11 +330,11 @@ calls the same factory function.
 2. Export correctness
    - Findings appear in external service with correct severity/title/fields
    - Tool-specific fields map correctly (spot-check semgrep, gitleaks, SCA)
-   - Empty finding set: no error, exported_count = 0
+   - Empty batch: sent as an empty import, no error
 
-3. Grouping behavior
-   - Findings from different repos land in correct targets
-   - Findings from different tools don't clobber each other
+3. Selection behavior (SyncSelector tests, not adapter tests)
+   - One batch per repo and tool
+   - Selection rules (accumulating tools, newer scans) live in the selector
 
 4. Error handling
    - Auth error (401/403): stops early, reports clearly
@@ -352,11 +355,12 @@ calls the same factory function.
 1. **Severity string mismatch.** External services often expect exact casing
    (`"Critical"` not `"critical"`). Map explicitly, don't pass through raw.
 
-2. **Forgetting empty tool groups.** If a tool ran but produced zero findings,
-   some services need an empty import to clear stale data. Handle this case.
+2. **Dropping empty batches.** The selector emits an empty batch when a tool
+   finished a newer scan with no findings. Send it; some services need an
+   empty import to clear stale data.
 
-3. **Not grouping by repo AND tool.** Sending all findings in one batch causes
-   overwrites when the service uses (product, tool) as a unique scope.
+3. **Regrouping or filtering batches in the adapter.** The selector owns
+   grouping and selection. Send each batch as given, scoped by repo and tool.
 
 4. **Leaking auth tokens.** Never `log.debug("sending to %s with token %s", ...)`
    or include tokens in error messages. Redact in all log output.

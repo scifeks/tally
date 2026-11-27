@@ -90,7 +90,7 @@ The top bar contains a project dropdown for switching between projects. All page
 Click the "+ new project" button in the project dropdown to open the project creation dialog. Fill in:
 
 1. **Project name** (required). Must start with a letter or digit. May contain letters, digits, spaces, and hyphens.
-2. **Company name.** Shown in report headers and the confidentiality blurb.
+2. **Company name.** Shown in report headers and the confidentiality blurb. It also names the project's DefectDojo Organization; the project name is the fallback when empty.
 3. **Department name** (optional).
 4. **Abbreviation** (optional, max 3 characters). Used as the finding ID prefix in reports (e.g. `ACM-001`). When blank, the global `report_finding_prefix` from `config/global.json` is used.
 

@@ -108,7 +108,6 @@ class TestSyncDefectdojo:
             mock_factory.assert_called_once_with(
                 base_path="/test",
                 project_name="proj1",
-                run_id=42,
             )
             mock_service.export.assert_called_once()
 

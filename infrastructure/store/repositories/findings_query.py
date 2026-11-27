@@ -13,7 +13,7 @@ from domain.findings.sort import FindingSortColumn, SortDirection
 
 
 class FindingQueryBuilder:
-    """Build a parameterised SQL query from a structured filters dict.
+    """Build a parameterized SQL query from a structured filters dict.
 
     ``filters`` format::
 
@@ -35,7 +35,7 @@ class FindingQueryBuilder:
 
     _BASE_SELECT = """
         SELECT id, fingerprint, run_id,
-               tool, domain, segment, repo_id,
+               tool, domain, segment, repo_id, service,
                finding_type, severity, confidence,
                file, rule_id, url,
                vulnerability_id, package_name, ecosystem,

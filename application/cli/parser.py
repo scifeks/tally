@@ -210,15 +210,15 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=None,
         metavar="ID",
-        help="Scan run ID to export (integration-sync only)",
+        help="Limit the sync to what this scan run touched (integration-sync only)",
     )
 
     parser.add_argument(
-        "--engagement-type",
+        "--engagement-name",
         type=str,
         default=None,
-        metavar="TYPE",
-        help="Engagement type override (integration-sync only)",
+        metavar="NAME",
+        help="Engagement name override (integration-sync only)",
     )
 
     parser.add_argument(

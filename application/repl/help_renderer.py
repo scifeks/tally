@@ -309,7 +309,13 @@ _HELP_REGISTRY = [
         "sync",
         "sync",
         "--run-id=<id>",
-        "Sync findings from a specific scan run",
+        "Limit the sync to what a scan run touched",
+    ),
+    (
+        "sync",
+        "sync",
+        "--engagement-name=<name>",
+        "Override the Engagement name",
     ),
     (
         "sync",
