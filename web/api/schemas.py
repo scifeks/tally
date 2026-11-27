@@ -626,10 +626,12 @@ class ScansListResponse(BaseModel):
 class ToolRunItem(BaseModel):
     id: int
     run_id: int
-    tool: str | None
+    tool: str
+    repo_id: int | None
     repo: str | None
+    service: str | None
     domain: str | None
-    status: str | None
+    status: str
     started_at: str | None
     finished_at: str | None
     duration: float | None
@@ -637,7 +639,7 @@ class ToolRunItem(BaseModel):
     enriched_count: int | None
     total_to_enrich: int | None
     exit_code: int | None
-    skip_reason: str | None
+    reason: str | None
 
 
 class ScanDetailResponse(BaseModel):
@@ -845,7 +847,7 @@ class ChatSessionSummary(BaseModel):
     """Per-session response payload for GET/POST /chat/sessions.
 
     ``last_message_at`` and ``message_count`` are derived from
-    ``chat_messages`` at read time; they are 0/null on a freshly-created
+    ``chat_messages`` at read time; they are 0/null on a freshly created
     session.
     """
 

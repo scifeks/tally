@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from application.mcp.duplicate_grouping import (
@@ -104,22 +105,43 @@ class McpIngestService:
         domains: list[str] | None = None,
     ) -> dict[str, int]:
         """Open a scan_run row for an external Claude Code scan."""
+        tools = tool_ids or ["claudecode"]
+        run_domains = domains or ["llm"]
         run_id = self._runs.create(
             project_id=project_id,
             repo_ids=repo_ids,
-            tool_ids=tool_ids or ["claudecode"],
-            domains=domains or ["llm"],
+            tool_ids=tools,
+            domains=run_domains,
             skip_enrichment=True,
             status="running",
         )
+        # An external session scans no single repo or service, so its
+        # row carries neither.
+        started_at = datetime.now(UTC).isoformat()
+        for tool in tools:
+            self._runs.add_tool_run(
+                run_id=run_id,
+                tool=tool,
+                domain=run_domains[0],
+                status="running",
+                started_at=started_at,
+            )
         return {"run_id": run_id}
 
     def end_scan(self, project_id: int, run_id: int) -> dict[str, str]:
-        """Mark a scan run finished.
-
-        ``project_id`` matches the MCP tool signature; repos are already
-        project-scoped through the connection factory.
-        """
+        """Mark a scan run and its tool rows finished."""
+        del project_id
+        finished_at = datetime.now(UTC).isoformat()
+        bundle = self._runs.get_with_tool_runs(run_id)
+        for row in bundle[1] if bundle else []:
+            if row.status != "running":
+                continue
+            self._runs.update_tool_run(
+                row.id,
+                status="done",
+                finished_at=finished_at,
+                findings_count=self._runs.count_findings_for_run_tool(run_id, row.tool),
+            )
         self._runs.set_status(run_id, "done")
         self._runs.set_finished_at(run_id)
         return {"status": "done"}

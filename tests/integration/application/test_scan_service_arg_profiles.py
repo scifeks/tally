@@ -70,7 +70,8 @@ def service(
         lock_registry=lock_registry,
         scan_run_registry=scan_run_registry,
     )
-    svc._run_worker = MagicMock()  # type: ignore[method-assign]
+    # The worker thread would run a real scan; these tests only inspect setup.
+    setattr(svc, "_run_worker", MagicMock())
     return svc
 
 
@@ -95,6 +96,14 @@ def _start_kwargs(
     )
     base.update(overrides)
     return base
+
+
+def _stored_snapshots(factory: ConnectionFactory, run_id: int) -> dict[str, Any]:
+    with factory.connect() as conn:
+        stored = conn.execute(
+            "SELECT arg_profile_snapshots FROM scan_runs WHERE id = ?", (run_id,)
+        ).fetchone()[0]
+    return json.loads(stored)
 
 
 class TestScanServiceArgProfiles:
@@ -205,29 +214,19 @@ class TestScanServiceArgProfiles:
             )
         )
 
-        with factory.connect() as conn:
-            rows = conn.execute(
-                "SELECT tool, arg_profile_snapshot FROM run_tools"
-                " WHERE run_id = ? ORDER BY tool",
-                (handle.run_id,),
-            ).fetchall()
+        snapshots = _stored_snapshots(factory, handle.run_id)
 
-        assert len(rows) == 2
-        assert rows[0]["tool"] == "gitleaks"
-        assert rows[0]["arg_profile_snapshot"] == json.dumps(
-            [{"name": "-v", "type": "flag"}]
-        )
-        assert rows[1]["tool"] == "semgrep"
-        assert rows[1]["arg_profile_snapshot"] == json.dumps(
-            [
+        assert snapshots == {
+            "gitleaks": [{"name": "-v", "type": "flag"}],
+            "semgrep": [
                 {
                     "name": "--config",
                     "value": "cfg.yaml",
                     "operator": "",
                     "type": "string",
                 }
-            ]
-        )
+            ],
+        }
 
     def test_start_scan_snapshot_collision_later_wins(
         self,
@@ -257,16 +256,10 @@ class TestScanServiceArgProfiles:
             )
         )
 
-        with factory.connect() as conn:
-            rows = conn.execute(
-                "SELECT tool, arg_profile_snapshot FROM run_tools WHERE run_id = ?",
-                (handle.run_id,),
-            ).fetchall()
+        snapshots = _stored_snapshots(factory, handle.run_id)
 
-        assert len(rows) == 1
-        assert rows[0]["tool"] == "gitleaks"
-        assert rows[0]["arg_profile_snapshot"] == json.dumps(
-            [
+        assert snapshots == {
+            "gitleaks": [
                 {
                     "name": "--config",
                     "value": "cfg.yaml",
@@ -274,9 +267,9 @@ class TestScanServiceArgProfiles:
                     "type": "string",
                 }
             ]
-        )
+        }
 
-    def test_start_scan_no_arg_profile_ids_writes_no_snapshot_rows(
+    def test_start_scan_no_arg_profile_ids_stores_no_snapshots(
         self,
         service: ScanService,
         run_repo: RunRepository,
@@ -289,8 +282,9 @@ class TestScanServiceArgProfiles:
         )
 
         with factory.connect() as conn:
-            rows = conn.execute(
-                "SELECT * FROM run_tools WHERE run_id = ?", (handle.run_id,)
-            ).fetchall()
+            stored = conn.execute(
+                "SELECT arg_profile_snapshots FROM scan_runs WHERE id = ?",
+                (handle.run_id,),
+            ).fetchone()[0]
 
-        assert len(rows) == 0
+        assert stored is None

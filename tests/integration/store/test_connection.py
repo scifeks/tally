@@ -3,16 +3,11 @@
 from __future__ import annotations
 
 import sqlite3
-import sys
 from pathlib import Path
 
 import pytest
 
-_TALLY_ROOT = Path(__file__).resolve().parents[3]
-if str(_TALLY_ROOT) not in sys.path:
-    sys.path.insert(0, str(_TALLY_ROOT))
-
-from infrastructure.store.connection import ConnectionFactory  # noqa: E402
+from infrastructure.store.connection import ConnectionFactory
 
 pytestmark = pytest.mark.integration
 
@@ -160,20 +155,3 @@ class TestSavedScansSchema:
                 "SELECT saved_scan_id FROM scan_runs WHERE id=?", (run_id,)
             ).fetchone()
             assert row["saved_scan_id"] is None
-
-    def test_run_tools_arg_profile_snapshot_nullable(self, tmp_path: Path) -> None:
-        factory = _factory(tmp_path)
-        cols = _columns(factory, "run_tools")
-        assert "arg_profile_snapshot" in cols
-        assert cols["arg_profile_snapshot"]["notnull"] == 0
-
-        with factory.connect() as conn:
-            cur = conn.execute(
-                "INSERT INTO run_tools (run_id, tool) VALUES (?, ?)",
-                (1, "gitleaks"),
-            )
-            row = conn.execute(
-                "SELECT arg_profile_snapshot FROM run_tools WHERE id=?",
-                (cur.lastrowid,),
-            ).fetchone()
-            assert row["arg_profile_snapshot"] is None

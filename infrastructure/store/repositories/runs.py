@@ -7,7 +7,12 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from application.ports.run_repository import RunRepositoryPort
-from domain.scans.entry import SCAN_RUN_STATUSES, ScanRunRow, ToolRunRow
+from domain.scans.entry import (
+    SCAN_RUN_STATUSES,
+    TOOL_RUN_STATUSES,
+    ScanRunRow,
+    ToolRunRow,
+)
 
 if TYPE_CHECKING:
     from infrastructure.store.connection import ConnectionFactory
@@ -36,17 +41,6 @@ class RunRepository(RunRepositoryPort):
             assert cur.lastrowid is not None
             return cur.lastrowid
 
-    def add_run_tools(self, run_id: int, tools: list[dict]) -> None:
-        """Insert one row per tool for a run (legacy minimal columns)."""
-        with self._factory.connect() as conn:
-            conn.executemany(
-                "INSERT INTO run_tools (run_id, tool, findings_count) VALUES (?, ?, ?)",
-                [
-                    (run_id, t.get("tool", ""), t.get("findings_count", 0))
-                    for t in tools
-                ],
-            )
-
     # Full scan run creation
     def create(
         self,
@@ -59,6 +53,7 @@ class RunRepository(RunRepositoryPort):
         args: dict[str, Any] | None = None,
         status: str = "queued",
         saved_scan_id: int | None = None,
+        arg_profile_snapshots: dict[str, str] | None = None,
     ) -> int:
         """Insert a fully-populated scan_runs row. Returns the new id."""
         created_at = datetime.now(UTC).isoformat()
@@ -67,8 +62,8 @@ class RunRepository(RunRepositoryPort):
                 "INSERT INTO scan_runs ("
                 "project_id, args, created_at, status,"
                 " repo_ids, tool_ids, domains, skip_enrichment,"
-                " saved_scan_id"
-                ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                " saved_scan_id, arg_profile_snapshots"
+                ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     project_id,
                     json.dumps(args or {}),
@@ -79,38 +74,11 @@ class RunRepository(RunRepositoryPort):
                     json.dumps(domains),
                     1 if skip_enrichment else 0,
                     saved_scan_id,
+                    _snapshots_json(arg_profile_snapshots),
                 ),
             )
             assert cur.lastrowid is not None
             return cur.lastrowid
-
-    def set_arg_profile_snapshot(
-        self, run_id: int, tool_name: str, snapshot_json: str
-    ) -> None:
-        """Freeze the arg-profile snapshot for one tool on one run.
-
-        Coexists with ``add_run_tools`` by reading first: if a row for
-        ``(run_id, tool)`` already exists it is updated in place, otherwise
-        a minimal row is inserted. Prevents duplicate ``run_tools`` rows
-        without depending on a UNIQUE constraint.
-        """
-        with self._factory.connect() as conn:
-            existing = conn.execute(
-                "SELECT id FROM run_tools WHERE run_id = ? AND tool = ?",
-                (run_id, tool_name),
-            ).fetchone()
-            if existing is not None:
-                conn.execute(
-                    "UPDATE run_tools SET arg_profile_snapshot = ? WHERE id = ?",
-                    (snapshot_json, existing["id"]),
-                )
-            else:
-                conn.execute(
-                    "INSERT INTO run_tools"
-                    " (run_id, tool, arg_profile_snapshot)"
-                    " VALUES (?, ?, ?)",
-                    (run_id, tool_name, snapshot_json),
-                )
 
     def set_status(self, run_id: int, status: str) -> None:
         if status not in SCAN_RUN_STATUSES:
@@ -153,11 +121,19 @@ class RunRepository(RunRepositoryPort):
         Returns the row count updated.
         """
         ts = datetime.now(UTC).isoformat()
+        stale = "status IN ('running', 'cancelling') AND finished_at IS NULL"
         with self._factory.connect() as conn:
+            conn.execute(
+                "UPDATE run_tools SET status = 'failed',"
+                " reason = 'scan interrupted',"
+                " finished_at = COALESCE(finished_at, ?)"
+                " WHERE status = 'running' AND run_id IN"
+                f" (SELECT id FROM scan_runs WHERE {stale})",
+                (ts,),
+            )
             cur = conn.execute(
                 "UPDATE scan_runs SET status = 'failed', finished_at = ?"
-                " WHERE status IN ('running', 'cancelling')"
-                "   AND finished_at IS NULL",
+                f" WHERE {stale}",
                 (ts,),
             )
             return cur.rowcount
@@ -220,7 +196,9 @@ class RunRepository(RunRepositoryPort):
             if scan_row is None:
                 return None
             tool_rows = conn.execute(
-                "SELECT * FROM run_tools WHERE run_id = ? ORDER BY id ASC",
+                "SELECT rt.*, r.name AS repo_name FROM run_tools rt"
+                " LEFT JOIN repositories r ON r.id = rt.repo_id"
+                " WHERE rt.run_id = ? ORDER BY rt.id ASC",
                 (run_id,),
             ).fetchall()
         return (
@@ -233,15 +211,31 @@ class RunRepository(RunRepositoryPort):
         *,
         run_id: int,
         tool: str,
-        repo: str | None = None,
+        repo_id: int | None = None,
+        service: str | None = None,
         domain: str | None = None,
-        status: str = "queued",
+        status: str = "running",
+        started_at: str | None = None,
+        finished_at: str | None = None,
+        reason: str | None = None,
     ) -> int:
+        _require_tool_run_status(status)
         with self._factory.connect() as conn:
             cur = conn.execute(
-                "INSERT INTO run_tools (run_id, tool, repo, domain, status)"
-                " VALUES (?, ?, ?, ?, ?)",
-                (run_id, tool, repo, domain, status),
+                "INSERT INTO run_tools (run_id, tool, repo_id, service, domain,"
+                " status, started_at, finished_at, reason)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    run_id,
+                    tool,
+                    repo_id,
+                    service,
+                    domain,
+                    status,
+                    started_at,
+                    finished_at,
+                    reason,
+                ),
             )
             assert cur.lastrowid is not None
             return cur.lastrowid
@@ -254,45 +248,88 @@ class RunRepository(RunRepositoryPort):
         started_at: str | None = None,
         finished_at: str | None = None,
         exit_code: int | None = None,
-        skip_reason: str | None = None,
+        reason: str | None = None,
         findings_count: int | None = None,
         enriched_count: int | None = None,
         total_to_enrich: int | None = None,
     ) -> None:
-        sets: list[str] = []
-        params: list[Any] = []
         if status is not None:
-            sets.append("status = ?")
-            params.append(status)
-        if started_at is not None:
-            sets.append("started_at = ?")
-            params.append(started_at)
-        if finished_at is not None:
-            sets.append("finished_at = ?")
-            params.append(finished_at)
-        if exit_code is not None:
-            sets.append("exit_code = ?")
-            params.append(exit_code)
-        if skip_reason is not None:
-            sets.append("skip_reason = ?")
-            params.append(skip_reason)
-        if findings_count is not None:
-            sets.append("findings_count = ?")
-            params.append(findings_count)
-        if enriched_count is not None:
-            sets.append("enriched_count = ?")
-            params.append(enriched_count)
-        if total_to_enrich is not None:
-            sets.append("total_to_enrich = ?")
-            params.append(total_to_enrich)
-        if not sets:
+            _require_tool_run_status(status)
+        given = {
+            "status": status,
+            "started_at": started_at,
+            "finished_at": finished_at,
+            "exit_code": exit_code,
+            "reason": reason,
+            "findings_count": findings_count,
+            "enriched_count": enriched_count,
+            "total_to_enrich": total_to_enrich,
+        }
+        changes = {col: val for col, val in given.items() if val is not None}
+        if not changes:
             return
-        params.append(tool_run_id)
+        assignments = ", ".join(f"{col} = ?" for col in changes)
         with self._factory.connect() as conn:
             conn.execute(
-                f"UPDATE run_tools SET {', '.join(sets)} WHERE id = ?",
-                tuple(params),
+                f"UPDATE run_tools SET {assignments} WHERE id = ?",
+                (*changes.values(), tool_run_id),
             )
+
+    def delete_tool_run(self, tool_run_id: int) -> None:
+        with self._factory.connect() as conn:
+            conn.execute("DELETE FROM run_tools WHERE id = ?", (tool_run_id,))
+
+    def fail_running_tool_runs(self, run_id: int, reason: str) -> int:
+        ts = datetime.now(UTC).isoformat()
+        with self._factory.connect() as conn:
+            cur = conn.execute(
+                "UPDATE run_tools SET status = 'failed', reason = ?,"
+                " finished_at = COALESCE(finished_at, ?)"
+                " WHERE run_id = ? AND status = 'running'",
+                (reason, ts, run_id),
+            )
+            return cur.rowcount
+
+    def count_findings_for_run_tool(self, run_id: int, tool: str) -> int:
+        with self._factory.connect() as conn:
+            row = conn.execute(
+                "SELECT COUNT(*) FROM findings WHERE run_id = ? AND tool = ?",
+                (run_id, tool),
+            ).fetchone()
+        return int(row[0])
+
+    def latest_done_run_id(
+        self, *, repo_id: int, service: str | None, tool: str
+    ) -> int | None:
+        # IS compares null-safely, so a null service matches null rows.
+        with self._factory.connect() as conn:
+            row = conn.execute(
+                "SELECT MAX(run_id) FROM run_tools"
+                " WHERE repo_id = ? AND service IS ? AND tool = ?"
+                " AND status = 'done'",
+                (repo_id, service, tool),
+            ).fetchone()
+        return None if row[0] is None else int(row[0])
+
+    def list_repo_tool_pairs(self, run_id: int) -> list[tuple[int | None, str]]:
+        with self._factory.connect() as conn:
+            rows = conn.execute(
+                "SELECT DISTINCT repo_id, tool FROM run_tools"
+                " WHERE run_id = ? ORDER BY repo_id, tool",
+                (run_id,),
+            ).fetchall()
+        return [(r["repo_id"], r["tool"]) for r in rows]
+
+
+def _snapshots_json(snapshots: dict[str, str] | None) -> str | None:
+    if not snapshots:
+        return None
+    return json.dumps({tool: json.loads(args) for tool, args in snapshots.items()})
+
+
+def _require_tool_run_status(status: str) -> None:
+    if status not in TOOL_RUN_STATUSES:
+        raise ValueError(f"unknown tool run status: {status!r}")
 
 
 def _parse_json_list(val: Any) -> list[str]:
@@ -338,13 +375,15 @@ def _row_to_tool_run(row: Any) -> ToolRunRow:
         run_id=row["run_id"],
         tool=row["tool"],
         findings_count=int(row["findings_count"] or 0),
-        repo=row["repo"],
+        repo_id=row["repo_id"],
+        repo_name=row["repo_name"],
+        service=row["service"],
         domain=row["domain"],
         status=row["status"],
         started_at=row["started_at"],
         finished_at=row["finished_at"],
         exit_code=row["exit_code"],
-        skip_reason=row["skip_reason"],
+        reason=row["reason"],
         enriched_count=row["enriched_count"],
         total_to_enrich=row["total_to_enrich"],
     )

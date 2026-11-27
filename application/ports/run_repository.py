@@ -10,7 +10,6 @@ if TYPE_CHECKING:
 
 class RunRepositoryPort(Protocol):
     def create_run(self, args: dict) -> int: ...
-    def add_run_tools(self, run_id: int, tools: list[dict]) -> None: ...
     def create(
         self,
         *,
@@ -22,10 +21,8 @@ class RunRepositoryPort(Protocol):
         args: dict[str, Any] | None = None,
         status: str = "queued",
         saved_scan_id: int | None = None,
+        arg_profile_snapshots: dict[str, str] | None = None,
     ) -> int: ...
-    def set_arg_profile_snapshot(
-        self, run_id: int, tool_name: str, snapshot_json: str
-    ) -> None: ...
     def set_status(self, run_id: int, status: str) -> None: ...
     def set_started_at(self, run_id: int, when: str | None = None) -> None: ...
     def set_finished_at(self, run_id: int, when: str | None = None) -> None: ...
@@ -49,9 +46,13 @@ class RunRepositoryPort(Protocol):
         *,
         run_id: int,
         tool: str,
-        repo: str | None = None,
+        repo_id: int | None = None,
+        service: str | None = None,
         domain: str | None = None,
-        status: str = "queued",
+        status: str = "running",
+        started_at: str | None = None,
+        finished_at: str | None = None,
+        reason: str | None = None,
     ) -> int: ...
     def update_tool_run(
         self,
@@ -61,8 +62,15 @@ class RunRepositoryPort(Protocol):
         started_at: str | None = None,
         finished_at: str | None = None,
         exit_code: int | None = None,
-        skip_reason: str | None = None,
+        reason: str | None = None,
         findings_count: int | None = None,
         enriched_count: int | None = None,
         total_to_enrich: int | None = None,
     ) -> None: ...
+    def delete_tool_run(self, tool_run_id: int) -> None: ...
+    def fail_running_tool_runs(self, run_id: int, reason: str) -> int: ...
+    def count_findings_for_run_tool(self, run_id: int, tool: str) -> int: ...
+    def latest_done_run_id(
+        self, *, repo_id: int, service: str | None, tool: str
+    ) -> int | None: ...
+    def list_repo_tool_pairs(self, run_id: int) -> list[tuple[int | None, str]]: ...

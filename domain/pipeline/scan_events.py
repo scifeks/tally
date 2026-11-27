@@ -20,6 +20,11 @@ def _utc_now() -> str:
     return datetime.now(UTC).isoformat()
 
 
+SKIP_COULD_NOT_RUN = "could_not_run"
+SKIP_NOT_APPLICABLE = "not_applicable"
+SKIP_DECLINED = "declined"
+
+
 @dataclass(frozen=True)
 class _ScanEventBase:
     run_id: int
@@ -45,6 +50,7 @@ class ToolStarted(_ScanEventBase):
     repo: str = ""
     tool: str = ""
     message: str = ""
+    service: str = ""
 
 
 @dataclass(frozen=True)
@@ -54,6 +60,10 @@ class ToolSkipped(_ScanEventBase):
     tool: str = ""
     message: str = ""
     skip_reason: str = ""
+    service: str = ""
+    # Defaults to the kind that blocks closing findings, so an
+    # unclassified skip can never look like a clean run.
+    kind: str = SKIP_COULD_NOT_RUN
 
 
 @dataclass(frozen=True)
@@ -65,6 +75,7 @@ class ToolCompleted(_ScanEventBase):
     findings_count: int = 0
     duration: float = 0.0
     exit_code: int = 0
+    service: str = ""
 
 
 @dataclass(frozen=True)
@@ -86,6 +97,7 @@ class ToolFailed(_ScanEventBase):
     message: str = ""
     exit_code: int = 0
     duration: float = 0.0
+    service: str = ""
 
 
 @dataclass(frozen=True)

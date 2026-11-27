@@ -8,6 +8,41 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 
+RUN_TOOLS_SCHEMA = """
+    CREATE TABLE IF NOT EXISTS run_tools (
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        run_id          INTEGER NOT NULL,
+        tool            TEXT    NOT NULL,
+        repo_id         INTEGER REFERENCES repositories(id) ON DELETE CASCADE,
+        service         TEXT,
+        domain          TEXT,
+        status          TEXT    NOT NULL CHECK (
+                            status IN ('running', 'done', 'failed', 'skipped')
+                        ),
+        started_at      TEXT,
+        finished_at     TEXT,
+        exit_code       INTEGER,
+        reason          TEXT,
+        findings_count  INTEGER NOT NULL DEFAULT 0,
+        enriched_count  INTEGER,
+        total_to_enrich INTEGER
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_run_tools_run_id
+        ON run_tools (run_id);
+    CREATE INDEX IF NOT EXISTS idx_run_tools_lookup
+        ON run_tools (repo_id, service, tool, status);
+"""
+
+
+def _require_per_service_run_tools(conn: sqlite3.Connection) -> None:
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(run_tools)")}
+    if columns and "service" not in columns:
+        raise RuntimeError(
+            "This project database predates per-service tool runs."
+            " Stop Tally and run: python scripts/migrate_tal_284.py"
+        )
+
 
 def _migrate_repositories_to_services(conn: sqlite3.Connection) -> None:
     """Collapse flat repo columns into services_json for legacy databases."""
@@ -197,7 +232,8 @@ class ConnectionFactory:
                     business_impact  TEXT,
                     tal_id           TEXT,
                     repo_id          INTEGER,
-                    duplicate_of     INTEGER
+                    duplicate_of     INTEGER,
+                    service          TEXT
     """
 
     _FINDINGS_INDEXES = """
@@ -233,6 +269,7 @@ class ConnectionFactory:
     def init_schema(self) -> None:
         """Create all tables and indexes if they do not exist."""
         with self.connect() as conn:
+            _require_per_service_run_tools(conn)
             conn.executescript(f"""
                 CREATE TABLE IF NOT EXISTS scan_runs (
                     id              INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -247,6 +284,7 @@ class ConnectionFactory:
                     domains         TEXT,
                     skip_enrichment INTEGER,
                     findings_count  INTEGER,
+                    arg_profile_snapshots TEXT,
                     saved_scan_id   INTEGER REFERENCES saved_scans(id)
                                       ON DELETE SET NULL
                 );
@@ -256,25 +294,7 @@ class ConnectionFactory:
                 CREATE INDEX IF NOT EXISTS idx_scan_runs_status
                     ON scan_runs (status);
 
-                CREATE TABLE IF NOT EXISTS run_tools (
-                    id                   INTEGER PRIMARY KEY AUTOINCREMENT,
-                    run_id               INTEGER,
-                    tool                 TEXT,
-                    findings_count       INTEGER DEFAULT 0,
-                    repo                 TEXT,
-                    domain               TEXT,
-                    status               TEXT,
-                    started_at           TEXT,
-                    finished_at          TEXT,
-                    exit_code            INTEGER,
-                    skip_reason          TEXT,
-                    enriched_count       INTEGER,
-                    total_to_enrich      INTEGER,
-                    arg_profile_snapshot TEXT
-                );
-
-                CREATE INDEX IF NOT EXISTS idx_run_tools_run_id
-                    ON run_tools (run_id);
+                {RUN_TOOLS_SCHEMA}
 
                 CREATE TABLE IF NOT EXISTS findings (
                     {self._FINDINGS_COLUMNS}

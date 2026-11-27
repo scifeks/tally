@@ -8,6 +8,7 @@ import pytest
 
 from application.tools.scan_types.execution import execute_tool_passes
 from application.tools.scan_types.models import ScanTypeConfig
+from domain.pipeline.scan_events import SKIP_DECLINED, SKIP_NOT_APPLICABLE
 from domain.tools.execution_config import ToolExecutionConfig
 
 
@@ -48,7 +49,7 @@ class TestExecuteToolPassesApproval:
 
         result = execute_tool_passes(tool, MagicMock(), config, executor)
 
-        assert result is None
+        assert result == SKIP_DECLINED
         executor.run.assert_not_called()
 
     def test_confirm_returns_true_runs_tool(self) -> None:
@@ -60,7 +61,7 @@ class TestExecuteToolPassesApproval:
 
         result = execute_tool_passes(tool, MagicMock(), config, executor)
 
-        assert result is not None
+        assert not isinstance(result, str)
         executor.run.assert_called_once()
 
     def test_no_remaining_tools_skips_approve_all(self) -> None:
@@ -107,8 +108,8 @@ class TestExecuteToolPassesApproval:
 
 
 class TestExecuteToolPassesSkip:
-    def test_empty_pass_list_returns_none(self) -> None:
-        """Empty pass list signals skip; execute_tool_passes returns None."""
+    def test_empty_pass_list_returns_not_applicable(self) -> None:
+        """Empty pass list signals skip; execute_tool_passes returns the kind."""
         config = _make_config()
         tool = _make_tool()
         tool.build_execution_passes.return_value = []
@@ -116,7 +117,7 @@ class TestExecuteToolPassesSkip:
 
         result = execute_tool_passes(tool, MagicMock(), config, executor)
 
-        assert result is None
+        assert result == SKIP_NOT_APPLICABLE
         executor.run.assert_not_called()
 
 

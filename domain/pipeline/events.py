@@ -21,6 +21,7 @@ class ToolCompleted:
     project_name: str
     base_path: str
     repo: str | None = None
+    service: str | None = None
 
 
 @dataclass
@@ -30,6 +31,10 @@ class IngestCompleted:
     run_id: int | None
     project_name: str
     base_path: str
+    tool: str = ""
+    repo: str | None = None
+    service: str | None = None
+    stored: bool = True
 
 
 @dataclass

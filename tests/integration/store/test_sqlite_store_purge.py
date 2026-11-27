@@ -256,8 +256,8 @@ class TestPurge:
 
         conn = store._connect()
         conn.execute(
-            "INSERT INTO run_tools (run_id, tool, findings_count) VALUES (?, ?, ?)",
-            (run_id, "semgrep", 2),
+            "INSERT INTO run_tools (run_id, tool, status) VALUES (?, ?, 'done')",
+            (run_id, "semgrep"),
         )
         conn.commit()
         conn.close()

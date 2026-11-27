@@ -92,7 +92,9 @@ def _tool_run_to_item(row: ToolRunRow) -> ToolRunItem:
         id=row.id,
         run_id=row.run_id,
         tool=row.tool,
-        repo=row.repo,
+        repo_id=row.repo_id,
+        repo=row.repo_name,
+        service=row.service,
         domain=row.domain,
         status=row.status,
         started_at=row.started_at,
@@ -102,7 +104,7 @@ def _tool_run_to_item(row: ToolRunRow) -> ToolRunItem:
         enriched_count=row.enriched_count,
         total_to_enrich=row.total_to_enrich,
         exit_code=row.exit_code,
-        skip_reason=row.skip_reason,
+        reason=row.reason,
     )
 
 

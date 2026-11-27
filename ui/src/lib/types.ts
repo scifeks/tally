@@ -86,7 +86,7 @@ export interface Finding {
 
 /**
  * Mirrors `ApiError` from `lib/api/client.ts` but in plain-object form so it
- * can live in the Zustand UI store without serialising an Error class. Used
+ * can live in the Zustand UI store without serializing an Error class. Used
  * by the global mutation-error modal to show the user when an optimistic
  * update was rolled back.
  */
@@ -223,9 +223,11 @@ export interface ToolRun {
   id: string
   runId: string
   tool: string
-  repo: string
+  repoId?: number
+  repo?: string
+  service?: string
   segment: Segment
-  status: 'queued' | 'running' | 'skipped' | 'done' | 'failed'
+  status: 'running' | 'skipped' | 'done' | 'failed'
   startedAt?: string
   finishedAt?: string
   duration?: number // seconds
@@ -233,7 +235,7 @@ export interface ToolRun {
   enrichedCount?: number
   totalToEnrich?: number
   exitCode?: number
-  skipReason?: string
+  reason?: string
 }
 
 export interface ScanRun {
@@ -527,8 +529,8 @@ export interface ReportDraftSnapshotPayload {
 // Used by the Chat page for RAG-powered LLM conversations.
 
 /**
- * Backend CHECK-constrains chat message roles to exactly these two values
- * (endpoints.md §12.4). No 'system' role on the wire.
+ * Backend CHECK-constrains chat message roles to exactly these two values;
+ * there is no 'system' role on the wire.
  */
 export type ChatMessageRole = 'user' | 'assistant'
 

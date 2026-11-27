@@ -99,6 +99,29 @@ class TestCreateScanRun:
 
 
 class TestEndScan:
+    def test_scan_run_row_opens_running_and_closes_done(
+        self, run_repo: RunRepository, finding_repo: FindingRepository
+    ) -> None:
+        service = McpIngestService(
+            finding_repo=finding_repo, run_repo=run_repo, repo_repo=Mock()
+        )
+        run_id = service.create_scan_run(1, ["shop"])["run_id"]
+
+        opening = run_repo.get_with_tool_runs(run_id)
+        assert opening is not None
+        opened = opening[1]
+        assert [(r.tool, r.repo_id, r.service, r.status) for r in opened] == [
+            ("claudecode", None, None, "running")
+        ]
+
+        service.end_scan(1, run_id)
+
+        closing = run_repo.get_with_tool_runs(run_id)
+        assert closing is not None
+        closed = closing[1]
+        assert [(r.status, r.findings_count) for r in closed] == [("done", 0)]
+        assert closed[0].finished_at is not None
+
     def test_marks_run_done(
         self, run_repo: RunRepository, finding_repo: FindingRepository
     ) -> None:

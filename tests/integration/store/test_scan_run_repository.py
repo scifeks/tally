@@ -11,7 +11,6 @@ _TALLY_ROOT = Path(__file__).resolve().parents[3]
 if str(_TALLY_ROOT) not in sys.path:
     sys.path.insert(0, str(_TALLY_ROOT))
 
-from domain.scans.entry import ScanRunRow, ToolRunRow  # noqa: E402
 from infrastructure.store.connection import ConnectionFactory  # noqa: E402
 from infrastructure.store.repositories.runs import RunRepository  # noqa: E402
 
@@ -181,31 +180,6 @@ class TestListForProject:
 
 
 class TestToolRunCRUD:
-    def test_add_and_get_with_tool_runs(self, repo: RunRepository) -> None:
-        run_id = repo.create(
-            project_id=1,
-            repo_ids=["dvwa"],
-            tool_ids=["gitleaks"],
-            domains=["code"],
-            skip_enrichment=False,
-        )
-        tr_id = repo.add_tool_run(
-            run_id=run_id,
-            tool="gitleaks",
-            repo="dvwa",
-            domain="code",
-        )
-        result = repo.get_with_tool_runs(run_id)
-        assert result is not None
-        scan, tool_runs = result
-        assert isinstance(scan, ScanRunRow)
-        assert len(tool_runs) == 1
-        assert isinstance(tool_runs[0], ToolRunRow)
-        assert tool_runs[0].id == tr_id
-        assert tool_runs[0].tool == "gitleaks"
-        assert tool_runs[0].repo == "dvwa"
-        assert tool_runs[0].status == "queued"
-
     def test_update_tool_run_partial(self, repo: RunRepository) -> None:
         run_id = repo.create(
             project_id=1,
@@ -255,50 +229,3 @@ class TestLegacyShim:
         assert row.project_id is None
         assert row.status is None
         assert row.repo_ids == []
-
-
-class TestArgProfileSnapshotWrites:
-    def test_set_arg_profile_snapshot_inserts_when_absent(
-        self, repo: RunRepository, factory: ConnectionFactory
-    ) -> None:
-        run_id = repo.create(
-            project_id=1,
-            repo_ids=[],
-            tool_ids=[],
-            domains=[],
-            skip_enrichment=False,
-        )
-        snapshot_json = '[{"name": "verbose", "type": "flag"}]'
-        repo.set_arg_profile_snapshot(run_id, "gitleaks", snapshot_json)
-        with factory.connect() as conn:
-            rows = conn.execute(
-                "SELECT tool, arg_profile_snapshot FROM run_tools WHERE run_id = ?",
-                (run_id,),
-            ).fetchall()
-        assert len(rows) == 1
-        assert rows[0]["tool"] == "gitleaks"
-        assert rows[0]["arg_profile_snapshot"] == snapshot_json
-
-    def test_set_arg_profile_snapshot_updates_when_present(
-        self, repo: RunRepository, factory: ConnectionFactory
-    ) -> None:
-        run_id = repo.create(
-            project_id=1,
-            repo_ids=[],
-            tool_ids=[],
-            domains=[],
-            skip_enrichment=False,
-        )
-        repo.add_run_tools(run_id, [{"tool": "gitleaks", "findings_count": 5}])
-        snapshot_json = '[{"name": "x", "type": "flag"}]'
-        repo.set_arg_profile_snapshot(run_id, "gitleaks", snapshot_json)
-        with factory.connect() as conn:
-            rows = conn.execute(
-                "SELECT tool, findings_count, arg_profile_snapshot"
-                " FROM run_tools WHERE run_id = ? AND tool = ?",
-                (run_id, "gitleaks"),
-            ).fetchall()
-        assert len(rows) == 1
-        assert rows[0]["tool"] == "gitleaks"
-        assert rows[0]["findings_count"] == 5
-        assert rows[0]["arg_profile_snapshot"] == snapshot_json

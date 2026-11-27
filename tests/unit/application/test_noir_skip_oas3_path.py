@@ -7,6 +7,7 @@ from unittest.mock import MagicMock, patch
 
 from application.tools.scan_types.models import ScanTypeConfig
 from application.tools.scan_types.resources import ExecutionResources
+from domain.pipeline.scan_events import SKIP_NOT_APPLICABLE
 from domain.tools.execution_config import ToolExecutionConfig
 
 
@@ -135,7 +136,7 @@ class TestLiveCrawlerSkipOnCrawlDisabled:
         config = _make_config(repo_repo=repo_repo)
         resources = _make_resources(noir)
 
-        with patch(_EXEC_PASSES, return_value=None) as mock_exec:
+        with patch(_EXEC_PASSES, return_value=SKIP_NOT_APPLICABLE) as mock_exec:
             RepoSegmentScan(["noir"]).execute(config, resources)
 
         mock_exec.assert_called_once()
@@ -171,7 +172,7 @@ class TestNoirSkipIncompatTechs:
         config = _make_config(repo_repo=repo_repo)
         resources = _make_resources(noir)
 
-        with patch(_EXEC_PASSES, return_value=None) as mock_exec:
+        with patch(_EXEC_PASSES, return_value=SKIP_NOT_APPLICABLE) as mock_exec:
             RepoSegmentScan(["noir"]).execute(config, resources)
 
         mock_exec.assert_called_once()
