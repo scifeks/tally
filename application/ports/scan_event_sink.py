@@ -13,9 +13,13 @@ state transition. Concrete adapters decide what to do with the event:
 
 from __future__ import annotations
 
+import logging
+from collections.abc import Sequence
 from typing import Protocol
 
 from domain.pipeline.scan_events import ScanEvent
+
+logger = logging.getLogger(__name__)
 
 
 class ScanEventSink(Protocol):
@@ -32,3 +36,17 @@ class NullScanEventSink:
     def emit(self, event: ScanEvent) -> None:
         del event
         return None
+
+
+class FanOutScanEventSink:
+    """Forwards each event to several sinks, isolating their failures."""
+
+    def __init__(self, sinks: Sequence[ScanEventSink]) -> None:
+        self._sinks = tuple(sinks)
+
+    def emit(self, event: ScanEvent) -> None:
+        for sink in self._sinks:
+            try:
+                sink.emit(event)
+            except Exception:
+                logger.exception("scan event sink %s raised", type(sink).__name__)

@@ -15,9 +15,14 @@ from typing import TYPE_CHECKING, Any
 from application.locking import HolderMismatch, LockRegistry, get_registry
 from application.locking.cancellation import CancellationToken
 from application.ports.progress_reporter import ProgressReporter
-from application.ports.scan_event_sink import ScanEventSink
+from application.ports.scan_event_sink import (
+    FanOutScanEventSink,
+    NullScanEventSink,
+    ScanEventSink,
+)
 from application.ports.tool_runner import CliToolRunnerPort
 from application.ports.user_prompt import UserPromptPort
+from application.scans.tool_run_recorder import ToolRunRecorder
 from application.tools.executor import ToolExecutor
 from application.tools.factory import ToolWrapperFactory
 from application.tools.orchestrator import ScanOrchestrator
@@ -135,9 +140,8 @@ class ScanService:
                 skip_enrichment=skip_enrichment,
                 args=run_args,
                 saved_scan_id=saved_scan_id,
+                arg_profile_snapshots=snapshots or None,
             )
-            for tool_name, snapshot_json in snapshots.items():
-                run_repo.set_arg_profile_snapshot(run_id, tool_name, snapshot_json)
         except Exception:
             self._lock_registry.release_job(SCAN_LOCK_KIND, holder_token)
             raise
@@ -226,6 +230,14 @@ class ScanService:
         from factories.scanning import reset_scan_scoped_state
 
         reset_scan_scoped_state()
+        from application.rag.ingestor import get_tool_domain
+
+        recorder = ToolRunRecorder(
+            run_repo, repo_repo, run_id=run_id, domain_of=get_tool_domain
+        )
+        # The recorder goes first so a row exists before the UI hears
+        # about the tool.
+        scan_sink = FanOutScanEventSink([recorder, event_sink or NullScanEventSink()])
         setup_ok = False
         pipeline_bus = None
         try:
@@ -243,8 +255,9 @@ class ScanService:
                 reporter=reporter,
                 skip_enrichment=skip_enrichment,
                 project_id=project_id,
-                event_sink=event_sink,
+                event_sink=scan_sink,
                 cancel_token=cancel_token,
+                ingest_observer=recorder.on_ingest_completed,
             )
             http_runner = None
             if burp_urls:
@@ -278,7 +291,7 @@ class ScanService:
                 prompt=prompt,
                 run_id=run_id,
                 factory=ToolWrapperFactory(),
-                event_sink=event_sink,
+                event_sink=scan_sink,
                 cancel_token=cancel_token,
                 run_repository=run_repo,
                 project_id=project_id,
@@ -306,7 +319,6 @@ class ScanService:
                     domains=list(domains) or None,
                     skip_tools=set(skip_tool_ids) or None,
                 )
-            _persist_tool_counts(run_repo, run_id, summary.findings_by_tool)
             future.set_result(summary)
             try:
                 from application.sync.integration_sync import (
@@ -421,24 +433,6 @@ def _safe_emit_run_failed(
         )
     except Exception:
         logger.exception("failed to emit RunFailed; suppressing")
-
-
-def _persist_tool_counts(
-    run_repo: RunRepositoryPort,
-    run_id: int,
-    findings_by_tool: dict[str, int],
-) -> None:
-    """Persist per-tool finding counts."""
-    if not findings_by_tool:
-        return
-    rows = [
-        {"tool": tool, "findings_count": count}
-        for tool, count in findings_by_tool.items()
-    ]
-    try:
-        run_repo.add_run_tools(run_id, rows)
-    except Exception:
-        logger.exception("failed to persist run_tools for run %d", run_id)
 
 
 def _utc_now_iso() -> str:

@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 from unittest.mock import MagicMock, patch
 
+from domain.pipeline.scan_events import SKIP_DECLINED, SKIP_NOT_APPLICABLE
 from domain.tools.base import ToolResult
 from domain.tools.scan_types.models import ScanSummary
 
@@ -106,10 +107,10 @@ class TestOrchestratorBurpRouting:
 
 
 class TestHttpTransportGuard:
-    """HTTP-transport tools return None from
+    """HTTP-transport tools return a skip kind from
     execute_tool_passes so full scans skip them."""
 
-    def test_http_tool_returns_none(self) -> None:
+    def test_http_tool_returns_not_applicable(self) -> None:
         from application.tools.scan_types.execution import execute_tool_passes
 
         tool = MagicMock()
@@ -124,7 +125,7 @@ class TestHttpTransportGuard:
             MagicMock(),
             MagicMock(),
         )
-        assert result is None
+        assert result == SKIP_NOT_APPLICABLE
 
     def test_cli_tool_proceeds_normally(self) -> None:
         from application.tools.scan_types.execution import execute_tool_passes
@@ -136,4 +137,4 @@ class TestHttpTransportGuard:
         config.prompt.confirm.return_value = False
 
         result = execute_tool_passes(tool, MagicMock(), config, MagicMock())
-        assert result is None
+        assert result == SKIP_DECLINED

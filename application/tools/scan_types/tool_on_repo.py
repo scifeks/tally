@@ -36,6 +36,9 @@ def _emit_skipped(
     tool_name: str,
     segment: str,
     skip_reason: str,
+    *,
+    service: str,
+    kind: str,
 ) -> None:
     resources.event_sink.emit(
         se.ToolSkipped(
@@ -46,6 +49,8 @@ def _emit_skipped(
             tool=tool_name,
             message=f"{tool_name} skipped: {skip_reason}",
             skip_reason=skip_reason,
+            service=service,
+            kind=kind,
         )
     )
 
@@ -58,11 +63,23 @@ def _skip_summary(
     resources: IExecutionResources,
     repo_name: str,
     segment: str,
+    *,
+    service: str,
+    kind: str,
 ) -> ScanSummary:
     resources.display.print_tool_line(
         ToolDisplayRow(tool_name, False, True, 0, 0.0, skip_reason)
     )
-    _emit_skipped(resources, config, repo_name, tool_name, segment, skip_reason)
+    _emit_skipped(
+        resources,
+        config,
+        repo_name,
+        tool_name,
+        segment,
+        skip_reason,
+        service=service,
+        kind=kind,
+    )
     return ScanSummary(
         total_tools_run=0,
         total_tools_skipped=1,
@@ -113,6 +130,8 @@ class ToolOnRepoScan(ScanType):
                 resources,
                 repo.name,
                 "",
+                service=service.name,
+                kind=se.SKIP_NOT_APPLICABLE,
             )
 
         tool_config = registry.get_tool_config(self.tool_name)
@@ -125,6 +144,8 @@ class ToolOnRepoScan(ScanType):
                 resources,
                 repo.name,
                 "",
+                service=service.name,
+                kind=se.SKIP_COULD_NOT_RUN,
             )
 
         try:
@@ -139,6 +160,8 @@ class ToolOnRepoScan(ScanType):
                 resources,
                 repo.name,
                 "",
+                service=service.name,
+                kind=se.SKIP_COULD_NOT_RUN,
             )
 
         if not tool.check_available():
@@ -150,6 +173,8 @@ class ToolOnRepoScan(ScanType):
                 resources,
                 repo.name,
                 "",
+                service=service.name,
+                kind=se.SKIP_COULD_NOT_RUN,
             )
 
         if tool.requires_base_urls and not service.base_urls:
@@ -161,6 +186,8 @@ class ToolOnRepoScan(ScanType):
                 resources,
                 repo.name,
                 getattr(tool, "scan_segment", "") or "",
+                service=service.name,
+                kind=se.SKIP_NOT_APPLICABLE,
             )
 
         skip_sca, skip_reason = should_skip_sca_tool(tool, service, repo.path)
@@ -186,6 +213,7 @@ class ToolOnRepoScan(ScanType):
                 repo=repo.name,
                 tool=self.tool_name,
                 message=f"{self.tool_name} on {repo.name} started",
+                service=service.name,
             )
         )
 
@@ -212,7 +240,7 @@ class ToolOnRepoScan(ScanType):
         total_run = total_skipped = total_failed = total_ingested = 0
         findings_by_tool: dict[str, int] = {}
 
-        if result is None:
+        if isinstance(result, str):
             resources.display.print_tool_line(
                 ToolDisplayRow(self.tool_name, False, True, 0, 0.0)
             )
@@ -225,6 +253,8 @@ class ToolOnRepoScan(ScanType):
                     tool=self.tool_name,
                     message=f"{self.tool_name} skipped: no result",
                     skip_reason="no result",
+                    service=service.name,
+                    kind=result,
                 )
             )
             total_skipped += 1
@@ -255,11 +285,12 @@ class ToolOnRepoScan(ScanType):
                         findings_count=findings,
                         duration=result.duration_seconds,
                         exit_code=0,
+                        service=service.name,
                     )
                 )
                 if self.tool_name == "noir" and findings == 0:
                     resources.display.print_status(
-                        "    [yellow]⚠ noir found 0 endpoints. "
+                        "    [yellow]WARNING: noir found 0 endpoints. "
                         "The framework may not be supported by noir.[/yellow]"
                     )
                     resources.display.print_status(
@@ -275,6 +306,7 @@ class ToolOnRepoScan(ScanType):
                         config.project_name,
                         config.base_path,
                         repo=repo.name,
+                        service=service.name,
                     ),
                 )
                 total_ingested += ingested
@@ -297,6 +329,7 @@ class ToolOnRepoScan(ScanType):
                         message=f"{self.tool_name} on {repo.name} failed",
                         exit_code=1,
                         duration=result.duration_seconds,
+                        service=service.name,
                     )
                 )
                 total_ingested += dispatch_and_count_ingested(
@@ -308,6 +341,7 @@ class ToolOnRepoScan(ScanType):
                         config.project_name,
                         config.base_path,
                         repo=repo.name,
+                        service=service.name,
                     ),
                 )
 

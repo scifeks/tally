@@ -37,6 +37,9 @@ def _emit_skipped(
     tool_name: str,
     segment: str,
     skip_reason: str,
+    *,
+    service: str,
+    kind: str,
 ) -> None:
     resources.event_sink.emit(
         se.ToolSkipped(
@@ -47,6 +50,8 @@ def _emit_skipped(
             tool=tool_name,
             message=f"{tool_name} skipped: {skip_reason}",
             skip_reason=skip_reason,
+            service=service,
+            kind=kind,
         )
     )
 
@@ -144,6 +149,8 @@ class RepoScan(ScanType):
                         tool_name,
                         seg,
                         "not registered",
+                        service=service.name,
+                        kind=se.SKIP_COULD_NOT_RUN,
                     )
                     total_skipped += 1
                     continue
@@ -162,6 +169,8 @@ class RepoScan(ScanType):
                         tool_name,
                         seg,
                         "factory error",
+                        service=service.name,
+                        kind=se.SKIP_COULD_NOT_RUN,
                     )
                     total_skipped += 1
                     continue
@@ -179,6 +188,8 @@ class RepoScan(ScanType):
                         tool_name,
                         seg,
                         "no base_urls configured",
+                        service=service.name,
+                        kind=se.SKIP_NOT_APPLICABLE,
                     )
                     total_skipped += 1
                     continue
@@ -194,6 +205,8 @@ class RepoScan(ScanType):
                         tool_name,
                         seg,
                         "not installed",
+                        service=service.name,
+                        kind=se.SKIP_COULD_NOT_RUN,
                     )
                     total_skipped += 1
                     continue
@@ -207,6 +220,7 @@ class RepoScan(ScanType):
                         repo=repo.name,
                         tool=tool_name,
                         message=f"{tool_name} on {repo.name} started",
+                        service=service.name,
                     )
                 )
                 context = make_context(
@@ -230,12 +244,19 @@ class RepoScan(ScanType):
                     command_config=tool_config,
                 )
 
-                if result is None:
+                if isinstance(result, str):
                     resources.display.print_tool_line(
                         ToolDisplayRow(tool_name, False, True, 0, 0.0)
                     )
                     _emit_skipped(
-                        resources, config, self.repo_name, tool_name, seg, "no result"
+                        resources,
+                        config,
+                        self.repo_name,
+                        tool_name,
+                        seg,
+                        "no result",
+                        service=service.name,
+                        kind=result,
                     )
                     total_skipped += 1
                 else:
@@ -265,11 +286,12 @@ class RepoScan(ScanType):
                                 findings_count=findings,
                                 duration=result.duration_seconds,
                                 exit_code=0,
+                                service=service.name,
                             )
                         )
                         if tool_name == "noir" and findings == 0:
                             resources.display.print_status(
-                                "    [yellow]⚠ noir found 0 endpoints. "
+                                "    [yellow]WARNING: noir found 0 endpoints. "
                                 "The framework may not be supported by noir.[/yellow]"
                             )
                             resources.display.print_status(
@@ -285,6 +307,7 @@ class RepoScan(ScanType):
                                 config.project_name,
                                 config.base_path,
                                 repo=repo.name,
+                                service=service.name,
                             ),
                         )
                         total_ingested += ingested
@@ -308,6 +331,7 @@ class RepoScan(ScanType):
                                 message=f"{tool_name} on {repo.name} failed",
                                 exit_code=1,
                                 duration=result.duration_seconds,
+                                service=service.name,
                             )
                         )
                         total_ingested += dispatch_and_count_ingested(
@@ -319,6 +343,7 @@ class RepoScan(ScanType):
                                 config.project_name,
                                 config.base_path,
                                 repo=repo.name,
+                                service=service.name,
                             ),
                         )
 

@@ -114,14 +114,7 @@ class ScansService:
         """Compute scan progress from tool run states."""
         counts = {"queued": 0, "running": 0, "done": 0, "failed": 0, "skipped": 0}
         for tr in tool_runs:
-            if tr.skip_reason:
-                counts["skipped"] += 1
-                continue
-            st = (tr.status or "queued").lower()
-            if st in counts:
-                counts[st] += 1
-            else:
-                counts["queued"] += 1
+            counts[tr.status] += 1
         total = len(tool_runs)
         finished = counts["done"] + counts["failed"] + counts["skipped"]
         progress = int(round(finished * 100 / total)) if total > 0 else 0
@@ -131,18 +124,6 @@ class ScansService:
             progress=progress,
             counts=ToolRunCounts(**counts),
         )
-
-    def record_run_tool_counts(
-        self, run_id: int, findings_by_tool: dict[str, int]
-    ) -> None:
-        """Persist aggregate per-tool finding counts for a completed run."""
-        if not findings_by_tool:
-            return
-        rows = [
-            {"tool": tool, "findings_count": count}
-            for tool, count in findings_by_tool.items()
-        ]
-        self._run_repo.add_run_tools(run_id, rows)
 
     def cancel_scan(self, run_id: int) -> None:
         """Signal cancellation for a single scan run owned by this project.

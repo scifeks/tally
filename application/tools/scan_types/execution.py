@@ -10,6 +10,7 @@ from application.tools.executor import ToolExecutor
 from application.tools.registry import ToolRegistry
 from application.tools.scan_types.models import ScanTypeConfig
 from domain.pipeline.events import EventBus, IngestCompleted, ToolCompleted
+from domain.pipeline.scan_events import SKIP_DECLINED, SKIP_NOT_APPLICABLE
 from domain.tools.base import ToolResult
 from domain.tools.execution_config import NoirProviderSnapshot, ToolExecutionConfig
 from domain.tools.interface import ExecutionContext, ToolInterface, TransportType
@@ -152,12 +153,12 @@ def execute_tool_passes(
     remaining_tools: int = 0,
     command_config: Any = None,
     changed_files: list[str] | None = None,
-) -> ToolResult | None:
-    """Prompt approval once, run all ExecutionPasses, return merged result."""
+) -> ToolResult | str:
+    """Run all passes after one approval; a string result is the skip kind."""
     if getattr(tool, "transport", TransportType.CLI) == TransportType.HTTP:
-        return None
+        return SKIP_NOT_APPLICABLE
     if not config.prompt.confirm(f"  Run {tool.name}?"):
-        return None
+        return SKIP_DECLINED
     if remaining_tools > 0:
         config.prompt.approve_all_remaining()
 
@@ -195,7 +196,7 @@ def execute_tool_passes(
 
     passes = tool.build_execution_passes(context)
     if not passes:
-        return None
+        return SKIP_NOT_APPLICABLE
     if changed_files and getattr(tool, "supports_include", False):
         for p in passes:
             p.kwargs["include"] = changed_files

@@ -136,6 +136,28 @@ class IngestHandler(BaseHandler):
                 row.setdefault("repo", name)
                 row.setdefault("repo_id", rid)
 
+    def _dispatch_completed(
+        self,
+        event: ToolCompleted,
+        *,
+        ids: list[int],
+        failed_tools: list[str],
+        stored: bool,
+    ) -> None:
+        self._bus.dispatch(
+            IngestCompleted(
+                ids=ids,
+                failed_tools=failed_tools,
+                run_id=event.run_id,
+                project_name=event.project_name,
+                base_path=event.base_path,
+                tool=event.result.tool_name,
+                repo=event.repo,
+                service=event.service,
+                stored=stored,
+            )
+        )
+
     def handle(self, event: ToolCompleted) -> None:
         result = event.result
         if (
@@ -143,14 +165,9 @@ class IngestHandler(BaseHandler):
             or not result.parsed_data
             or "error" in result.parsed_data
         ):
-            self._bus.dispatch(
-                IngestCompleted(
-                    ids=[],
-                    failed_tools=[],
-                    run_id=event.run_id,
-                    project_name=event.project_name,
-                    base_path=event.base_path,
-                )
+            nothing_found = result.success and not result.parsed_data
+            self._dispatch_completed(
+                event, ids=[], failed_tools=[], stored=nothing_found
             )
             return
 
@@ -159,15 +176,7 @@ class IngestHandler(BaseHandler):
         try:
             handler = ToolHandlerFactory.load(result.tool_name)
             if handler is None:
-                self._bus.dispatch(
-                    IngestCompleted(
-                        ids=[],
-                        failed_tools=[],
-                        run_id=event.run_id,
-                        project_name=event.project_name,
-                        base_path=event.base_path,
-                    )
-                )
+                self._dispatch_completed(event, ids=[], failed_tools=[], stored=True)
                 return
 
             rows: list[dict] = handler.normalize(result, event.profile)
@@ -204,8 +213,9 @@ class IngestHandler(BaseHandler):
             normalized = []
             for r in rows:
                 n = normalise_finding_for_insert(r)
+                columns = {**n.columns, "service": event.service or None}
                 normalized.append(
-                    NormalizedFinding(n.columns, n.meta, compute_fingerprint(r))
+                    NormalizedFinding(columns, n.meta, compute_fingerprint(r))
                 )
             self._finding_repo.insert_findings(event.run_id or 0, normalized)
             fingerprints = [compute_fingerprint(row) for row in rows]
@@ -220,12 +230,6 @@ class IngestHandler(BaseHandler):
             )
             failed_tools.append(result.tool_name)
 
-        self._bus.dispatch(
-            IngestCompleted(
-                ids=sqlite_ids,
-                failed_tools=failed_tools,
-                run_id=event.run_id,
-                project_name=event.project_name,
-                base_path=event.base_path,
-            )
+        self._dispatch_completed(
+            event, ids=sqlite_ids, failed_tools=failed_tools, stored=not failed_tools
         )

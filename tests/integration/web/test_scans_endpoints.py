@@ -1,4 +1,4 @@
-"""Integration tests for the Phase 5.3-5.8 scan endpoints."""
+"""Integration tests for the scan endpoints."""
 
 from __future__ import annotations
 
@@ -230,7 +230,7 @@ async def test_start_scan_409_when_busy(app_client, monkeypatch) -> None:
     )
     assert first.status_code == 202
 
-    # Second start hits the held lock → 409.
+    # Second start hits the held lock and returns 409.
     second = await client.post(
         f"/api/v1/projects/{project_id}/scans",
         json={"repoIds": [], "toolIds": [], "domains": []},
@@ -306,7 +306,7 @@ async def test_start_scan_unknown_repo_422(app_client, monkeypatch, tmp_path) ->
 async def test_start_scan_soft_deleted_repo_422(
     app_client, monkeypatch, tmp_path
 ) -> None:
-    """Soft-deleted repos are rejected with 422 (F4)."""
+    """Soft-deleted repos are rejected with 422."""
     from infrastructure.store.repositories.repositories import RepositoryRepository
 
     client, _fid, _rag, factory, muth, project_id = app_client
@@ -361,13 +361,28 @@ async def test_detail_returns_tool_runs(app_client) -> None:
     client, _fid, _rag, factory, _muth, project_id = app_client
     repo = RunRepository(factory)
     run_id = _seed_run(factory, project_id=project_id)
-    repo.add_tool_run(run_id=run_id, tool="gitleaks", repo="test-repo", domain="code")
+    with factory.connect() as conn:
+        repo_id = conn.execute(
+            "INSERT INTO repositories (name) VALUES ('test-repo')"
+        ).lastrowid
+    repo.add_tool_run(
+        run_id=run_id,
+        tool="gitleaks",
+        repo_id=repo_id,
+        service="default",
+        domain="code",
+    )
     resp = await client.get(f"/api/v1/projects/{project_id}/scans/{run_id}")
     assert resp.status_code == 200
     body = resp.json()
     assert body["id"] == run_id
     assert len(body["tool_runs"]) == 1
-    assert body["tool_runs"][0]["tool"] == "gitleaks"
+    tool_run = body["tool_runs"][0]
+    assert tool_run["tool"] == "gitleaks"
+    assert tool_run["repo"] == "test-repo"
+    assert tool_run["repo_id"] == repo_id
+    assert tool_run["service"] == "default"
+    assert tool_run["reason"] is None
 
 
 @pytest.mark.asyncio

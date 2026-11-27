@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 import pytest
@@ -118,13 +119,11 @@ class TestSavedScansRun:
         assert run_row["saved_scan_id"] == scan_id
 
         with factory.connect() as conn:
-            snap_row = conn.execute(
-                "SELECT arg_profile_snapshot FROM run_tools "
-                "WHERE run_id = ? AND tool = ?",
-                (run_id, "gitleaks"),
-            ).fetchone()
-        assert snap_row is not None
-        assert snap_row["arg_profile_snapshot"] == "[]"
+            stored = conn.execute(
+                "SELECT arg_profile_snapshots FROM scan_runs WHERE id = ?",
+                (run_id,),
+            ).fetchone()[0]
+        assert json.loads(stored)["gitleaks"] == []
 
     async def test_run_409_stale_repo(self, app_client, monkeypatch) -> None:
         """Soft-deleted repo on a saved scan returns 409 STALE_SAVED_SCAN."""

@@ -59,7 +59,7 @@ class FindingRepository(FindingRepositoryPort):
         insert_sql = """
             INSERT INTO findings (
                 fingerprint, run_id, tool, domain, segment,
-                repo_id, finding_type, severity,
+                repo_id, service, finding_type, severity,
                 confidence, file, rule_id, url,
                 vulnerability_id, package_name, ecosystem,
                 description, package_version, cwe,
@@ -68,7 +68,7 @@ class FindingRepository(FindingRepositoryPort):
                 status, should_report
             ) VALUES (
                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
             )
         """
 
@@ -96,6 +96,7 @@ class FindingRepository(FindingRepositoryPort):
                         columns.get("domain"),
                         columns.get("segment"),
                         repo_id_val,
+                        columns.get("service"),
                         columns.get("finding_type"),
                         columns.get("severity"),
                         columns.get("confidence"),

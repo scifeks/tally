@@ -15,6 +15,8 @@ from application.url_inventory.ingest_handler import UrlInventoryIngestHandler
 from domain.pipeline.events import EventBus, IngestCompleted, ToolCompleted
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from application.locking.cancellation import CancellationToken
     from application.ports.finding_repository import (
         FindingRepositoryPort,
@@ -43,6 +45,7 @@ class PipelineFactory:
         project_id: int | None = None,
         event_sink: ScanEventSink | None = None,
         cancel_token: CancellationToken | None = None,
+        ingest_observer: Callable[[IngestCompleted], None] | None = None,
     ) -> EventBus:
         """Return an EventBus wired with the post-ingest strategy."""
         bus = EventBus()
@@ -73,6 +76,10 @@ class PipelineFactory:
                 cancel_token=cancel_token,
             )
 
+        # Enrichment runs inside the strategy and can take minutes or
+        # raise; the observer must see the storage result first.
+        if ingest_observer is not None:
+            bus.subscribe(IngestCompleted, ingest_observer)
         bus.subscribe(IngestCompleted, strategy.handle)
         bus.register_cleanup_target(strategy)
 

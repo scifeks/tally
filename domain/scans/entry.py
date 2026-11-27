@@ -14,6 +14,8 @@ SCAN_RUN_STATUSES = (
     "cancelled",
 )
 
+TOOL_RUN_STATUSES = ("running", "done", "failed", "skipped")
+
 
 @dataclass(frozen=True)
 class ScanRunRow:
@@ -35,14 +37,16 @@ class ScanRunRow:
 class ToolRunRow:
     id: int
     run_id: int
-    tool: str | None
+    tool: str
     findings_count: int
-    repo: str | None
+    repo_id: int | None
+    repo_name: str | None
+    service: str | None
     domain: str | None
-    status: str | None
+    status: str
     started_at: str | None
     finished_at: str | None
     exit_code: int | None
-    skip_reason: str | None
+    reason: str | None
     enriched_count: int | None
     total_to_enrich: int | None

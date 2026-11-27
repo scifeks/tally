@@ -8,6 +8,7 @@ from unittest.mock import MagicMock, patch
 from application.tools.scan_types.execution import execute_tool_passes
 from application.tools.scan_types.models import ScanTypeConfig
 from core.config.schemas.repo_service import RepoService
+from domain.pipeline.scan_events import SKIP_DECLINED, SKIP_NOT_APPLICABLE
 from domain.tools.base import ToolResult
 from domain.tools.execution_config import ToolExecutionConfig
 from domain.tools.interface import ExecutionContext
@@ -254,7 +255,7 @@ class TestExecuteToolPassesSnapshot:
         assert "/etc/app.json" in cmd_arg
 
     def test_respects_confirm_rejection(self) -> None:
-        """Should return None if prompt.confirm() returns False."""
+        """Should return the declined kind if prompt.confirm() returns False."""
         config = self._make_config(arg_snapshots={})
         config.prompt.confirm.return_value = False  # type: ignore[attr-defined]
         context = self._make_context()
@@ -273,7 +274,7 @@ class TestExecuteToolPassesSnapshot:
             command_config=None,
         )
 
-        assert result is None
+        assert result == SKIP_DECLINED
         mock_executor.run_raw.assert_not_called()
         mock_executor.run.assert_not_called()
 
@@ -306,7 +307,7 @@ class TestExecuteToolPassesSnapshot:
         config.prompt.approve_all_remaining.assert_called_once()  # type: ignore[attr-defined]
 
     def test_with_empty_passes_list(self) -> None:
-        """Should return None if build_execution_passes returns
+        """Should return not-applicable if build_execution_passes returns
         empty list."""
         config = self._make_config(arg_snapshots={})
         context = self._make_context()
@@ -326,5 +327,5 @@ class TestExecuteToolPassesSnapshot:
             command_config=None,
         )
 
-        assert result is None
+        assert result == SKIP_NOT_APPLICABLE
         mock_executor.run.assert_not_called()
